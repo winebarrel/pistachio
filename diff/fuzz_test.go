@@ -1,10 +1,11 @@
-package diff
+package diff_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/internal/testutil/fuzzseed"
 	"github.com/winebarrel/pistachio/parser"
 )
@@ -74,31 +75,31 @@ func FuzzDiffSelf(f *testing.F) {
 // returns the statements they produced. A nil DropChecker denies every drop,
 // so nothing here depends on a drop policy.
 func diffEverything(current, desired *parser.ParseResult) ([]string, error) {
-	enums, err := DiffEnums(current.Enums, desired.Enums, nil)
+	enums, err := diff.DiffEnums(current.Enums, desired.Enums, nil)
 	if err != nil {
 		return nil, err
 	}
-	sequences, err := DiffSequences(current.Sequences, desired.Sequences, nil)
+	sequences, err := diff.DiffSequences(current.Sequences, desired.Sequences, nil)
 	if err != nil {
 		return nil, err
 	}
-	domains, err := DiffDomains(current.Domains, desired.Domains, nil)
+	domains, err := diff.DiffDomains(current.Domains, desired.Domains, nil)
 	if err != nil {
 		return nil, err
 	}
-	compositeTypes, err := DiffCompositeTypes(current.CompositeTypes, desired.CompositeTypes, nil)
+	compositeTypes, err := diff.DiffCompositeTypes(current.CompositeTypes, desired.CompositeTypes, nil)
 	if err != nil {
 		return nil, err
 	}
-	tables, err := DiffTables(current.Tables, desired.Tables, nil)
+	tables, err := diff.DiffTables(current.Tables, desired.Tables, nil)
 	if err != nil {
 		return nil, err
 	}
-	views, err := DiffViews(current.Views, desired.Views, nil)
+	views, err := diff.DiffViews(current.Views, desired.Views, nil)
 	if err != nil {
 		return nil, err
 	}
-	routines, err := DiffRoutines(current.Routines, desired.Routines, nil)
+	routines, err := diff.DiffRoutines(current.Routines, desired.Routines, nil)
 	if err != nil {
 		return nil, err
 	}

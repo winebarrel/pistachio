@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -24,7 +25,7 @@ func TestDiffEnums_CreateNew(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
@@ -38,7 +39,7 @@ func TestDiffEnums_DropExisting(t *testing.T) {
 		Values: []string{"active", "inactive"},
 	})
 	desired := newEnumMap()
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"DROP TYPE public.status;"}, result.DropStmts)
@@ -51,7 +52,7 @@ func TestDiffEnums_DropExisting_Denied(t *testing.T) {
 		Values: []string{"active", "inactive"},
 	})
 	desired := newEnumMap()
-	result, err := DiffEnums(current, desired, denyAllDrops{})
+	result, err := diff.DiffEnums(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -69,7 +70,7 @@ func TestDiffEnums_AddValue(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive", "pending"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';"}, result.Stmts)
 }
@@ -85,7 +86,7 @@ func TestDiffEnums_AddValueMiddle(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "pending", "closed"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'pending' AFTER 'active';"}, result.Stmts)
 }
@@ -101,7 +102,7 @@ func TestDiffEnums_AddValueBeginning(t *testing.T) {
 		Name:   "status",
 		Values: []string{"new", "active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'new' BEFORE 'active';"}, result.Stmts)
 }
@@ -117,7 +118,7 @@ func TestDiffEnums_AddMultipleValues(t *testing.T) {
 		Name:   "status",
 		Values: []string{"a", "b", "c", "d"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TYPE public.status ADD VALUE 'c' AFTER 'b';",
@@ -136,7 +137,7 @@ func TestDiffEnums_AddMultipleValuesMiddle(t *testing.T) {
 		Name:   "status",
 		Values: []string{"a", "b", "c", "d"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TYPE public.status ADD VALUE 'b' AFTER 'a';",
@@ -155,7 +156,7 @@ func TestDiffEnums_NoDiff(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -174,7 +175,7 @@ func TestDiffEnums_AddComment(t *testing.T) {
 		Values:  []string{"active"},
 		Comment: &comment,
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS 'User status';"}, result.Stmts)
 }
@@ -192,7 +193,7 @@ func TestDiffEnums_DropComment(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS NULL;"}, result.Stmts)
 }
@@ -206,7 +207,7 @@ func TestDiffEnums_CreateWithComment(t *testing.T) {
 		Values:  []string{"active"},
 		Comment: &comment,
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
@@ -224,7 +225,7 @@ func TestDiffEnums_RemoveValue_Error(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot remove enum value")
 	assert.Contains(t, err.Error(), "public.status")
@@ -241,7 +242,7 @@ func TestDiffEnums_Reorder_Error(t *testing.T) {
 		Name:   "status",
 		Values: []string{"inactive", "active", "pending"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot reorder enum values")
 	assert.Contains(t, err.Error(), "public.status")
@@ -260,7 +261,7 @@ func TestDiffEnums_Rename(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status RENAME TO user_status;"}, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -279,7 +280,7 @@ func TestDiffEnums_RenameAndAddValue(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active", "inactive", "pending"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 2)
 	assert.Equal(t, "ALTER TYPE public.status RENAME TO user_status;", result.Stmts[0])
@@ -299,7 +300,7 @@ func TestDiffEnums_RenameSelfRename_Skipped(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -317,7 +318,7 @@ func TestDiffEnums_RenameAlreadyApplied(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -336,7 +337,7 @@ func TestDiffEnums_RenameCrossSchema_Error(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
@@ -353,7 +354,7 @@ func TestDiffEnums_RenameDestinationExists_Error(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -370,7 +371,7 @@ func TestDiffEnums_RenameValue(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status RENAME VALUE 'inactive' TO 'disabled';"}, result.Stmts)
 }
@@ -387,7 +388,7 @@ func TestDiffEnums_RenameValueAlreadyApplied(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -404,7 +405,7 @@ func TestDiffEnums_RenameValueSelf_Skipped(t *testing.T) {
 		Values:          []string{"active"},
 		ValueRenameFrom: map[string]string{"active": "active"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -421,7 +422,7 @@ func TestDiffEnums_RenameValueAndAdd(t *testing.T) {
 		Values:          []string{"active", "disabled", "pending"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TYPE public.status RENAME VALUE 'inactive' TO 'disabled';",
@@ -443,7 +444,7 @@ func TestDiffEnums_RenameValueKeepsPosition_ReorderError(t *testing.T) {
 		Values:          []string{"b2", "a", "c"},
 		ValueRenameFrom: map[string]string{"b2": "b"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot reorder enum values")
 }
@@ -460,7 +461,7 @@ func TestDiffEnums_RenameValueSourceNotFound_Error(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "nonexistent"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source 'nonexistent' not found")
 	assert.Contains(t, err.Error(), "public.status")
@@ -478,7 +479,7 @@ func TestDiffEnums_RenameValueDestinationExists_Error(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -497,7 +498,7 @@ func TestDiffEnums_RenameValueDuplicateSource_Error(t *testing.T) {
 		Values:          []string{"b", "c"},
 		ValueRenameFrom: map[string]string{"b": "a", "c": "a"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source")
 }
@@ -514,7 +515,7 @@ func TestDiffEnums_RenameValueQuoted(t *testing.T) {
 		Values:          []string{"won't"},
 		ValueRenameFrom: map[string]string{"won't": "don't"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.status RENAME VALUE 'don''t' TO 'won''t';"}, result.Stmts)
 }
@@ -529,7 +530,7 @@ func TestDiffEnums_NewEnumIgnoresValueRenameDirective(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
@@ -549,7 +550,7 @@ func TestDiffEnums_RenameValueAndReAddOldName(t *testing.T) {
 		Values:          []string{"new", "old", "keep"},
 		ValueRenameFrom: map[string]string{"new": "old"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TYPE public.status RENAME VALUE 'old' TO 'new';",
@@ -571,7 +572,7 @@ func TestDiffEnums_RenameTypeAndValue(t *testing.T) {
 		Values:          []string{"active", "disabled"},
 		ValueRenameFrom: map[string]string{"disabled": "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TYPE public.status RENAME TO user_status;",
@@ -588,7 +589,7 @@ func TestDiffEnums_RenameSourceNotFound(t *testing.T) {
 		RenameFrom: &oldName,
 		Values:     []string{"active"},
 	})
-	_, err := DiffEnums(current, desired, allowAllDrops{})
+	_, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source")
 }
@@ -603,7 +604,7 @@ func TestDiffEnums_AddValuesToEmptyEnum(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	result, err := DiffEnums(current, desired, allowAllDrops{})
+	result, err := diff.DiffEnums(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	// With no existing value to anchor on, the first ADD VALUE carries
 	// neither AFTER nor BEFORE; the second anchors on the first.

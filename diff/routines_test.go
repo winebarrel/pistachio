@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -37,7 +38,7 @@ func newRoutine(mutate ...func(*model.Routine)) *model.Routine {
 }
 
 func TestDiffRoutines_CreateNew(t *testing.T) {
-	result, err := DiffRoutines(newRoutineMap(), newRoutineMap(newRoutine()), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(), newRoutineMap(newRoutine()), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE OR REPLACE FUNCTION public.f(a integer)")
@@ -46,14 +47,14 @@ func TestDiffRoutines_CreateNew(t *testing.T) {
 
 func TestDiffRoutines_CreateNewWithComment(t *testing.T) {
 	desired := newRoutine(func(r *model.Routine) { r.Comment = new("hi") })
-	result, err := DiffRoutines(newRoutineMap(), newRoutineMap(desired), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(), newRoutineMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 2)
 	assert.Equal(t, "COMMENT ON FUNCTION public.f(integer) IS 'hi';", result.Stmts[1])
 }
 
 func TestDiffRoutines_Unchanged(t *testing.T) {
-	result, err := DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(newRoutine()), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(newRoutine()), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -81,7 +82,7 @@ func TestDiffRoutines_ReplaceInPlace(t *testing.T) {
 		{"default added", func(r *model.Routine) { r.Args[0].Default = "1" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(newRoutine(tc.mutate)), allowAllDrops{})
+			result, err := diff.DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(newRoutine(tc.mutate)), allowAllDrops{})
 			require.NoError(t, err)
 			require.Len(t, result.Stmts, 1)
 			assert.Contains(t, result.Stmts[0], "CREATE OR REPLACE FUNCTION")
@@ -120,7 +121,7 @@ func TestDiffRoutines_DropAndCreate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			current := newRoutineMap(newRoutine(tc.current))
 			desired := newRoutineMap(newRoutine(tc.desired))
-			result, err := DiffRoutines(current, desired, allowAllDrops{})
+			result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 			require.NoError(t, err)
 			require.Len(t, result.Stmts, 2)
 			assert.Equal(t, "DROP FUNCTION public.f(integer);", result.Stmts[0])
@@ -140,7 +141,7 @@ func TestDiffRoutines_DropAndCreateReappliesComment(t *testing.T) {
 		r.ReturnType = "bigint"
 		r.Comment = new("v1")
 	}))
-	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 3)
 	assert.Equal(t, "COMMENT ON FUNCTION public.f(integer) IS 'v1';", result.Stmts[2])
@@ -151,7 +152,7 @@ func TestDiffRoutines_DropAndCreateReappliesComment(t *testing.T) {
 func TestDiffRoutines_DropAndCreateDisallowed(t *testing.T) {
 	current := newRoutineMap(newRoutine())
 	desired := newRoutineMap(newRoutine(func(r *model.Routine) { r.ReturnType = "bigint" }))
-	result, err := DiffRoutines(current, desired, denyAllDrops{})
+	result, err := diff.DiffRoutines(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"-- skipped: DROP FUNCTION public.f(integer);"}, result.DisallowedDropStmts)
@@ -172,7 +173,7 @@ func TestDiffRoutines_CommentChanges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			current := newRoutineMap(newRoutine(func(r *model.Routine) { r.Comment = tc.current }))
 			desired := newRoutineMap(newRoutine(func(r *model.Routine) { r.Comment = tc.desired }))
-			result, err := DiffRoutines(current, desired, allowAllDrops{})
+			result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 			require.NoError(t, err)
 			assert.Equal(t, []string{tc.want}, result.Stmts)
 		})
@@ -184,14 +185,14 @@ func TestDiffRoutines_Drop(t *testing.T) {
 		newRoutine(),
 		newRoutine(func(r *model.Routine) { r.Name = "p"; r.Procedure = true; r.ReturnType = ""; r.Args = nil }),
 	)
-	result, err := DiffRoutines(current, newRoutineMap(), allowAllDrops{})
+	result, err := diff.DiffRoutines(current, newRoutineMap(), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP FUNCTION public.f(integer);", "DROP PROCEDURE public.p();"}, result.DropStmts)
 	assert.Empty(t, result.DisallowedDropStmts)
 }
 
 func TestDiffRoutines_DropDisallowed(t *testing.T) {
-	result, err := DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(), denyAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(), diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Equal(t, []string{"-- skipped: DROP FUNCTION public.f(integer);"}, result.DisallowedDropStmts)
@@ -199,7 +200,7 @@ func TestDiffRoutines_DropDisallowed(t *testing.T) {
 
 // A nil DropChecker denies every drop rather than panicking.
 func TestDiffRoutines_NilDropChecker(t *testing.T) {
-	result, err := DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(), nil)
+	result, err := diff.DiffRoutines(newRoutineMap(newRoutine()), newRoutineMap(), nil)
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Len(t, result.DisallowedDropStmts, 1)
@@ -212,7 +213,7 @@ func TestDiffRoutines_ArgTypeChangeIsDropAndCreate(t *testing.T) {
 	desired := newRoutineMap(newRoutine(func(r *model.Routine) {
 		r.Args[0].Type = "bigint"
 	}))
-	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE OR REPLACE FUNCTION public.f(a bigint)")
@@ -234,7 +235,7 @@ func TestDiffRoutines_SchemaQualifiedTypeIsTheSameRoutine(t *testing.T) {
 
 	assert.Equal(t, bare.FQRN(), qualified.FQRN(), "the two spellings must key alike")
 
-	result, err := DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -257,7 +258,7 @@ func TestDiffRoutines_SchemaQualifiedTypeQuotedSchema(t *testing.T) {
 
 	assert.Equal(t, bare.FQRN(), qualified.FQRN(), "the two spellings must key alike")
 
-	result, err := DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -268,7 +269,7 @@ func TestDiffRoutines_SchemaQualifiedTypeQuotedSchema(t *testing.T) {
 // them under the same search_path the catalog reported them through.
 func TestDiffRoutines_DropNamesTypesAsRead(t *testing.T) {
 	qualified := newRoutine(func(r *model.Routine) { r.Args[0].Type = "public.dom" })
-	result, err := DiffRoutines(newRoutineMap(qualified), newRoutineMap(), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(qualified), newRoutineMap(), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP FUNCTION public.f(public.dom);"}, result.DropStmts)
 }
@@ -291,7 +292,7 @@ func TestDiffRoutines_ArgDefaultCast(t *testing.T) {
 		{"NULL::integer", "1", true},
 	} {
 		t.Run(tc.current+" "+tc.desired, func(t *testing.T) {
-			result, err := DiffRoutines(newRoutineMap(withDefault(tc.current)), newRoutineMap(withDefault(tc.desired)), allowAllDrops{})
+			result, err := diff.DiffRoutines(newRoutineMap(withDefault(tc.current)), newRoutineMap(withDefault(tc.desired)), allowAllDrops{})
 			require.NoError(t, err)
 			if tc.changed {
 				require.Len(t, result.Stmts, 1)
@@ -312,7 +313,7 @@ func TestDiffRoutines_ArgDefaultCastWithBodyChange(t *testing.T) {
 		r.Args[0].Default = "NULL"
 		r.Body = " SELECT a + 1 "
 	})
-	result, err := DiffRoutines(newRoutineMap(current), newRoutineMap(desired), allowAllDrops{})
+	result, err := diff.DiffRoutines(newRoutineMap(current), newRoutineMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "public.f(a integer DEFAULT NULL)")
@@ -343,7 +344,7 @@ func TestDiffRoutines_Atomic(t *testing.T) {
 		newRoutine(named("created"), atomic("RETURN a"), func(r *model.Routine) { r.Comment = new("hi") }),
 	)
 
-	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	require.Len(t, result.AtomicStmts, 4)
@@ -369,7 +370,7 @@ func TestDiffRoutines_AtomicRecreated(t *testing.T) {
 	current := newRoutineMap(newRoutine(atomic), newRoutine(named("g"), atomic), newRoutine(named("h")))
 	desired := newRoutineMap(newRoutine(atomic, bigint), newRoutine(named("g"), bigint), newRoutine(named("h"), atomic, bigint))
 
-	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	result, err := diff.DiffRoutines(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP FUNCTION public.f(integer);", "DROP FUNCTION public.g(integer);"}, result.AtomicDropStmts)
 	assert.Equal(t, []string{"function public.f(integer)", "function public.g(integer)"}, result.DroppedAtomic)

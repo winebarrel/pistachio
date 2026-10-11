@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -33,7 +34,7 @@ func TestDiffTables_newTable(t *testing.T) {
 	tbl.Constraints.Set("users_pkey", &model.Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
 	desired.Set("public.users", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.users")
@@ -49,7 +50,7 @@ func TestDiffTables_newTable_withExtras(t *testing.T) {
 	tbl.Comment = new("Users table")
 	desired.Set("public.users", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 3)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
@@ -68,7 +69,7 @@ func TestDiffTables_newTable_notValidCheck(t *testing.T) {
 	})
 	desired.Set("public.users", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.users")
@@ -85,7 +86,7 @@ func TestDiffTables_newTable_withExtras_perDirective(t *testing.T) {
 	tbl.Indexes.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Table: "users", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired.Set("public.users", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
@@ -106,7 +107,7 @@ func TestDiffTables_modifyTable_addIndex_perDirective(t *testing.T) {
 	dt.Indexes.Set("idx_id", &model.Index{Schema: "public", Name: "idx_id", Table: "users", Definition: "CREATE INDEX idx_id ON public.users USING btree (id)", Concurrently: true})
 	desired.Set("public.users", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -143,7 +144,7 @@ func TestDiffTables_newPartitionedTable_indexesAfterPartitions(t *testing.T) {
 	desired.Set("public.m_1", mid)
 	desired.Set("public.m_1_a", leaf)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 
 	// The table comment stays with the table, and the leaf's index with the
@@ -304,16 +305,16 @@ func TestParentIndexCopies(t *testing.T) {
 				desired.Set(tbl.FQTN(), tbl)
 			}
 			child := tt.desired[len(tt.desired)-1]
-			assert.Equal(t, tt.want, parentIndexCopies(current, desired, child))
+			assert.Equal(t, tt.want, diff.ParentIndexCopies(current, desired, child))
 		})
 	}
 }
 
 func TestIsPartitionIndexCopy(t *testing.T) {
 	parentIdx := logsIndex("logs", "logs_at_idx", "at")
-	assert.True(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at"), parentIdx))
-	assert.False(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_by_at", "at"), parentIdx))
-	assert.False(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at DESC"), parentIdx))
+	assert.True(t, diff.IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at"), parentIdx))
+	assert.False(t, diff.IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_by_at", "at"), parentIdx))
+	assert.False(t, diff.IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at DESC"), parentIdx))
 }
 
 // A new partition's copy of its parent's index is created with the partition,
@@ -328,7 +329,7 @@ func TestDiffTables_newPartition_parentIndexCopy(t *testing.T) {
 	copied.Comment = new("copy")
 	desired.Set("public.logs_1", logsTable("logs_1", "logs", copied))
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.logs_1 PARTITION OF public.logs")
@@ -344,7 +345,7 @@ func TestDiffTables_modifyPartitionedTable_addIndex(t *testing.T) {
 	current.Set("public.logs", ct)
 	desired.Set("public.logs", partitionedTable("logs", "", "logs_id_idx"))
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"CREATE INDEX logs_id_idx ON public.logs USING btree (id);"}, result.PartitionedIndexStmts)
@@ -363,17 +364,17 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	empty := orderedmap.New[string, *model.Index]()
 
 	t.Run("create", func(t *testing.T) {
-		_, err := diffIndexes(empty, concurrentIndexes(), nil, nil, true, allowAllDrops{})
+		_, err := diff.DiffIndexes(empty, concurrentIndexes(), nil, nil, true, allowAllDrops{})
 		require.EqualError(t, err, wantErr)
 	})
 
 	t.Run("drop", func(t *testing.T) {
-		_, err := diffIndexes(concurrentIndexes(), empty, nil, nil, true, allowAllDrops{})
+		_, err := diff.DiffIndexes(concurrentIndexes(), empty, nil, nil, true, allowAllDrops{})
 		require.EqualError(t, err, wantErr)
 	})
 
 	t.Run("skipped drop", func(t *testing.T) {
-		result, err := diffIndexes(concurrentIndexes(), empty, nil, nil, true, denyAllDrops{})
+		result, err := diff.DiffIndexes(concurrentIndexes(), empty, nil, nil, true, diff.DenyAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, result.Stmts)
 		assert.Equal(t, []string{"-- skipped: DROP INDEX CONCURRENTLY public.logs_id_idx;"}, result.DisallowedDropStmts)
@@ -382,7 +383,7 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	t.Run("new table", func(t *testing.T) {
 		tbl := partitionedTable("logs", "", "logs_id_idx")
 		tbl.Indexes = concurrentIndexes()
-		_, _, _, _, err := newTableExtras(tbl, nil)
+		_, _, _, _, err := diff.NewTableExtras(tbl, nil)
 		require.EqualError(t, err, wantErr)
 	})
 
@@ -391,12 +392,12 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 		tbl.Indexes = concurrentIndexes()
 		desired := orderedmap.New[string, *model.Table]()
 		desired.Set("public.logs", tbl)
-		_, err := DiffTables(orderedmap.New[string, *model.Table](), desired, allowAllDrops{})
+		_, err := diff.DiffTables(orderedmap.New[string, *model.Table](), desired, allowAllDrops{})
 		require.EqualError(t, err, wantErr)
 	})
 
 	t.Run("plain table", func(t *testing.T) {
-		result, err := diffIndexes(empty, concurrentIndexes(), nil, nil, false, allowAllDrops{})
+		result, err := diff.DiffIndexes(empty, concurrentIndexes(), nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY logs_id_idx ON public.logs USING btree (id);"}, result.Stmts)
 	})
@@ -454,7 +455,7 @@ func TestDiffTables_RenameSourceMissing(t *testing.T) {
 			desired := orderedmap.New[string, *model.Table]()
 			desired.Set(des.FQTN(), des)
 
-			_, err := DiffTables(current, desired, allowAllDrops{})
+			_, err := diff.DiffTables(current, desired, allowAllDrops{})
 			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}
@@ -467,11 +468,11 @@ func TestPartitionDepth(t *testing.T) {
 	tables.Set("public.m", top)
 	tables.Set("public.m_1", mid)
 
-	assert.Equal(t, 0, partitionDepth(tables, top))
-	assert.Equal(t, 1, partitionDepth(tables, mid))
+	assert.Equal(t, 0, diff.PartitionDepth(tables, top))
+	assert.Equal(t, 1, diff.PartitionDepth(tables, mid))
 	// A parent outside the map, as a filter leaves it, counts as one level
 	// and ends the count, so the partition still comes before a top level.
-	assert.Equal(t, 1, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
+	assert.Equal(t, 1, diff.PartitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
 }
 
 func TestIndexColumns(t *testing.T) {
@@ -485,11 +486,11 @@ func TestIndexColumns(t *testing.T) {
 	current := newTable("public", "m_1_a")
 	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "text", Collation: new(`"C"`)})
 
-	assert.Same(t, top.Columns, indexColumns(tables, top, top))
-	assert.Same(t, top.Columns, indexColumns(tables, leaf, current))
+	assert.Same(t, top.Columns, diff.IndexColumns(tables, top, top))
+	assert.Same(t, top.Columns, diff.IndexColumns(tables, leaf, current))
 	// A filter that leaves the parent out leaves the child's own columns.
 	orphan := partitionedTable("x_1", "x", "x_1_id_idx")
-	assert.Same(t, current.Columns, indexColumns(tables, orphan, current))
+	assert.Same(t, current.Columns, diff.IndexColumns(tables, orphan, current))
 }
 
 func TestDiffTables_retypedColumns(t *testing.T) {
@@ -525,9 +526,9 @@ func TestDiffTables_retypedColumns(t *testing.T) {
 	current.Set("public.t_1_x", cpp)
 	desired.Set("public.t_1_x", cpp)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []RetypedColumn{
+	assert.Equal(t, []diff.RetypedColumn{
 		{Name: "public.t.a", Current: "public.t.a"},
 		{Name: "public.t_1.a", Current: "public.t_1.a"},
 		{Name: "public.t_1_x.a", Current: "public.t_1_x.a"},
@@ -554,9 +555,9 @@ func TestDiffTables_retypedColumns_renamed(t *testing.T) {
 	dt.Columns.Set("k", &model.Column{Name: "k", TypeName: "bigint", RenameFrom: new("gone")})
 	desired.Set("public.u", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []RetypedColumn{
+	assert.Equal(t, []diff.RetypedColumn{
 		{Name: "public.u.m", Current: "public.t.n"},
 		{Name: "public.u.k", Current: "public.t.k"},
 	}, result.RetypedColumns)
@@ -568,7 +569,7 @@ func TestDiffTables_dropTable(t *testing.T) {
 
 	current.Set("public.users", newTable("public", "users"))
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP TABLE public.users;"}, result.DropStmts)
 }
@@ -588,7 +589,7 @@ func TestDiffTables_dropTable_withFK(t *testing.T) {
 	})
 	current.Set("public.posts", posts)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;"}, result.FKDropStmts)
 	assert.Equal(t, []string{"DROP TABLE public.users;", "DROP TABLE public.posts;"}, result.DropStmts)
@@ -609,7 +610,7 @@ func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 	})
 	current.Set("public.posts", posts)
 
-	result, err := DiffTables(current, desired, denyAllDrops{})
+	result, err := diff.DiffTables(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.FKDropStmts)
 	assert.Empty(t, result.DropStmts)
@@ -621,12 +622,12 @@ func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 }
 
 func TestNormalizeDropChecker_nil(t *testing.T) {
-	dc := normalizeDropChecker(nil)
+	dc := diff.NormalizeDropChecker(nil)
 	assert.False(t, dc.IsDropAllowed("table"))
 }
 
 func TestNormalizeDropChecker_nonNil(t *testing.T) {
-	dc := normalizeDropChecker(allowAllDrops{})
+	dc := diff.NormalizeDropChecker(allowAllDrops{})
 	assert.True(t, dc.IsDropAllowed("table"))
 }
 
@@ -637,7 +638,7 @@ func TestDiffTables_nilDropChecker(t *testing.T) {
 	current.Set("public.users", newTable("public", "users"))
 
 	// nil DropChecker should not panic, drops should be denied
-	result, err := DiffTables(current, desired, nil)
+	result, err := diff.DiffTables(current, desired, nil)
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -648,7 +649,7 @@ func TestDiffTables_dropTable_denied(t *testing.T) {
 
 	current.Set("public.users", newTable("public", "users"))
 
-	result, err := DiffTables(current, desired, denyAllDrops{})
+	result, err := diff.DiffTables(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -663,7 +664,7 @@ func TestDiffColumns_dropColumn_denied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts, _, drops, disallowed, err := diffColumns("public.users", current, desired, denyAllDrops{})
+	stmts, _, drops, disallowed, err := diff.DiffColumns("public.users", current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, drops)
@@ -682,7 +683,7 @@ func TestDiffTables_noChange(t *testing.T) {
 	tbl2.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	desired.Set("public.users", tbl2)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -699,7 +700,7 @@ func TestDiffColumns_serialWideningOrder(t *testing.T) {
 	desired.Set("id", &model.Column{Name: "id", TypeName: "bigserial", NotNull: true})
 	desired.Set("a", &model.Column{Name: "a", TypeName: "integer"})
 
-	stmts, _, _, _, err := diffColumns("public.t", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.t", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE bigint;",
@@ -724,7 +725,7 @@ func TestDiffColumns_generatedToggle(t *testing.T) {
 		TypeName: "numeric(10,2)",
 		NotNull:  true,
 	})
-	_, _, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.products", current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot toggle GENERATED")
 }
@@ -746,7 +747,7 @@ func TestDiffColumns_generatedExpressionChange(t *testing.T) {
 		Generated: 's',
 		Default:   new("price * quantity * 2"),
 	})
-	_, _, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.products", current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot change GENERATED expression")
 }
@@ -770,7 +771,7 @@ func TestDiffColumns_generatedExpressionTopLevelCastAdded(t *testing.T) {
 		Generated: 's',
 		Default:   new("(price * quantity)::numeric(10,2)"),
 	})
-	_, _, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.products", current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot change GENERATED expression")
 }
@@ -793,7 +794,7 @@ func TestDiffColumns_generatedExpressionEqualCastAsymmetric(t *testing.T) {
 		Generated: 's',
 		Default:   new("price * quantity"),
 	})
-	_, _, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.products", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 }
 
@@ -805,7 +806,7 @@ func TestDiffColumns_addColumn(t *testing.T) {
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN name text NOT NULL;", stmts[0])
@@ -819,7 +820,7 @@ func TestDiffColumns_dropColumn(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts, _, drops, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, drops, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"ALTER TABLE public.users DROP COLUMN name;"}, drops)
@@ -832,7 +833,7 @@ func TestDiffColumns_alterType(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;", stmts[0])
@@ -845,7 +846,7 @@ func TestDiffColumns_typeModCaseOnly_noChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("zone", &model.Column{Name: "zone", TypeName: "geometry(polygon,4326)"})
 
-	stmts, _, _, _, err := diffColumns("public.moderation_zones", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.moderation_zones", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -857,7 +858,7 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], `COLLATE "en_US"`)
@@ -870,7 +871,7 @@ func TestDiffColumns_alterCollation_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"fr_FR"`)})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{`ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text COLLATE "fr_FR";`}, stmts)
 }
@@ -882,7 +883,7 @@ func TestDiffColumns_alterCollation_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{`ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text COLLATE "en_US";`}, stmts)
 }
@@ -894,7 +895,7 @@ func TestDiffColumns_alterCollation_drop(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;"}, stmts)
 }
@@ -906,7 +907,7 @@ func TestDiffColumns_alterCollation_unchanged(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -918,7 +919,7 @@ func TestDiffColumns_alterDefault_set(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: new("0")})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN age SET DEFAULT 0;", stmts[0])
@@ -931,7 +932,7 @@ func TestDiffColumns_alterDefault_drop(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("age", &model.Column{Name: "age", TypeName: "integer"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN age DROP DEFAULT;", stmts[0])
@@ -944,7 +945,7 @@ func TestDiffColumns_alterNotNull_set(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;", stmts[0])
@@ -957,7 +958,7 @@ func TestDiffColumns_alterNotNull_drop(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, notNullDrops, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, notNullDrops, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name DROP NOT NULL;"}, notNullDrops)
@@ -973,7 +974,7 @@ func TestDiffColumns_renameNotNullConstraint(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &newName})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME CONSTRAINT users_name_nn_old TO users_name_nn_new;"}, stmts)
 }
@@ -987,7 +988,7 @@ func TestDiffColumns_notNullName_sameName_isNoOp(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1002,7 +1003,7 @@ func TestDiffColumns_notNullName_addOrDrop_isNoOp(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 
@@ -1013,7 +1014,7 @@ func TestDiffColumns_notNullName_addOrDrop_isNoOp(t *testing.T) {
 	desired = orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
 
-	stmts, _, _, _, err = diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err = diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1038,7 +1039,7 @@ func TestDiffColumns_renameNotNullConstraint_skipsIdentityColumn(t *testing.T) {
 		NotNullName: &newName, Identity: model.ColumnIdentity('a'),
 	})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1055,7 +1056,7 @@ func TestDiffColumns_setNotNull_withDesiredName_ignoresName(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;"}, stmts)
 }
@@ -1071,7 +1072,7 @@ func TestDiffColumns_dropNotNull_loseCurrentName(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, notNullDrops, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, notNullDrops, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name DROP NOT NULL;"}, notNullDrops)
@@ -1084,7 +1085,7 @@ func TestDiffColumns_addColumn_withNotNullName(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullName: &name})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users ADD COLUMN email text CONSTRAINT users_email_nn NOT NULL;"}, stmts)
 }
@@ -1096,7 +1097,7 @@ func TestDiffColumns_identitySkipsNotNull(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('a')})
 
-	stmts, notNullDrops, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, notNullDrops, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, notNullDrops)
@@ -1104,34 +1105,34 @@ func TestDiffColumns_identitySkipsNotNull(t *testing.T) {
 
 func TestAddColumnSQL_basic(t *testing.T) {
 	col := &model.Column{Name: "name", TypeName: "text", NotNull: true}
-	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN name text NOT NULL;", addColumnSQL("public.users", col))
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN name text NOT NULL;", diff.AddColumnSQL("public.users", col))
 }
 
 func TestAddColumnSQL_withDefault(t *testing.T) {
 	col := &model.Column{Name: "active", TypeName: "boolean", Default: new("true")}
-	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN active boolean DEFAULT true;", addColumnSQL("public.users", col))
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN active boolean DEFAULT true;", diff.AddColumnSQL("public.users", col))
 }
 
 func TestAddColumnSQL_withCollation(t *testing.T) {
 	col := &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)}
-	assert.Contains(t, addColumnSQL("public.users", col), `COLLATE "en_US"`)
+	assert.Contains(t, diff.AddColumnSQL("public.users", col), `COLLATE "en_US"`)
 }
 
 func TestAddColumnSQL_identityAlways(t *testing.T) {
 	col := &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('a')}
-	sql := addColumnSQL("public.users", col)
+	sql := diff.AddColumnSQL("public.users", col)
 	assert.Contains(t, sql, "GENERATED ALWAYS AS IDENTITY")
 	assert.NotContains(t, sql, "NOT NULL")
 }
 
 func TestAddColumnSQL_identityByDefault(t *testing.T) {
 	col := &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('d')}
-	assert.Contains(t, addColumnSQL("public.users", col), "GENERATED BY DEFAULT AS IDENTITY")
+	assert.Contains(t, diff.AddColumnSQL("public.users", col), "GENERATED BY DEFAULT AS IDENTITY")
 }
 
 func TestAddColumnSQL_generatedStored(t *testing.T) {
 	col := &model.Column{Name: "full", TypeName: "text", Generated: model.ColumnGenerated('s'), Default: new("first || last")}
-	assert.Contains(t, addColumnSQL("public.users", col), "GENERATED ALWAYS AS (first || last) STORED")
+	assert.Contains(t, diff.AddColumnSQL("public.users", col), "GENERATED ALWAYS AS (first || last) STORED")
 }
 
 func TestAddColumnSQL_identitySequenceOptions(t *testing.T) {
@@ -1145,7 +1146,7 @@ func TestAddColumnSQL_identitySequenceOptions(t *testing.T) {
 	}
 	assert.Equal(t,
 		"ALTER TABLE public.users ADD COLUMN id bigint GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2 CACHE 10);",
-		addColumnSQL("public.users", col))
+		diff.AddColumnSQL("public.users", col))
 }
 
 func TestIdentitySeqClauses(t *testing.T) {
@@ -1194,7 +1195,7 @@ func TestIdentitySeqClauses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, identitySeqClauses(tt.current, tt.desired))
+			assert.Equal(t, tt.expected, diff.IdentitySeqClauses(tt.current, tt.desired))
 		})
 	}
 }
@@ -1224,7 +1225,7 @@ func TestDiffConstraints_drop_denied(t *testing.T) {
 	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
 
-	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, denyAllDrops{})
+	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"-- skipped: ALTER TABLE public.users DROP CONSTRAINT chk_age;"}, disallowed)
@@ -1238,7 +1239,7 @@ func TestDiffConstraints_change_denied_alwaysExecutes(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: true})
 
-	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, denyAllDrops{})
+	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{
@@ -1391,27 +1392,27 @@ func TestSameConstraintDef_usingIndex(t *testing.T) {
 	// the desired form names never survives to compare against: an existing
 	// constraint of the same name, type and deferral satisfies the form.
 	usingIndex := &model.Constraint{Name: "users_email_key", Type: model.ConstraintType('u'), Definition: "UNIQUE USING INDEX users_email_idx", IndexName: "users_email_idx", Validated: true}
-	assert.True(t, sameConstraintDef(current, usingIndex))
+	assert.True(t, diff.SameConstraintDef(current, usingIndex))
 
 	primaryKey := &model.Constraint{Name: "users_email_key", Type: model.ConstraintType('p'), Definition: "PRIMARY KEY USING INDEX users_email_idx", IndexName: "users_email_idx", Validated: true}
-	assert.False(t, sameConstraintDef(current, primaryKey))
+	assert.False(t, diff.SameConstraintDef(current, primaryKey))
 
 	deferrable := &model.Constraint{Name: "users_email_key", Type: model.ConstraintType('u'), Definition: "UNIQUE USING INDEX users_email_idx DEFERRABLE", IndexName: "users_email_idx", Deferrable: true, Validated: true}
-	assert.False(t, sameConstraintDef(current, deferrable))
+	assert.False(t, diff.SameConstraintDef(current, deferrable))
 }
 
 func TestUsingIndexNames(t *testing.T) {
 	cons := orderedmap.New[string, *model.Constraint]()
 	cons.Set("users_pkey", &model.Constraint{Name: "users_pkey", Type: model.ConstraintType('p'), Definition: "PRIMARY KEY (id)"})
-	assert.Nil(t, usingIndexNames(orderedmap.New[string, *model.Constraint](), cons))
+	assert.Nil(t, diff.UsingIndexNames(orderedmap.New[string, *model.Constraint](), cons))
 
 	cons.Set("users_email_key", &model.Constraint{Name: "users_email_key", Type: model.ConstraintType('u'), Definition: "UNIQUE USING INDEX users_email_key", IndexName: "users_email_key"})
-	assert.Equal(t, map[string]bool{"users_email_key": false}, usingIndexNames(orderedmap.New[string, *model.Constraint](), cons))
+	assert.Equal(t, map[string]bool{"users_email_key": false}, diff.UsingIndexNames(orderedmap.New[string, *model.Constraint](), cons))
 
 	// Once the constraint exists, it has taken the index over.
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("users_email_key", &model.Constraint{Name: "users_email_key", Type: model.ConstraintType('u'), Definition: "UNIQUE (email)"})
-	assert.Equal(t, map[string]bool{"users_email_key": true}, usingIndexNames(current, cons))
+	assert.Equal(t, map[string]bool{"users_email_key": true}, diff.UsingIndexNames(current, cons))
 }
 
 func TestDiffConstraints_usingIndexAddApart(t *testing.T) {
@@ -1434,7 +1435,7 @@ func TestDiffIndexes_addTakenOverInPlan(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("users_email_idx", &model.Index{Schema: "public", Name: "users_email_idx", Definition: "CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, map[string]bool{"users_email_idx": false}, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, map[string]bool{"users_email_idx": false}, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email);"}, idxResult.Stmts)
 }
@@ -1446,7 +1447,7 @@ func TestDiffIndexes_dropConsumedByUsingIndex(t *testing.T) {
 	current.Set("users_email_key", &model.Index{Schema: "public", Name: "users_email_key", Definition: "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, map[string]bool{"users_email_key": true}, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, map[string]bool{"users_email_key": true}, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
@@ -1460,7 +1461,7 @@ func TestDiffIndexes_addConsumedByUsingIndex(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("users_email_idx", &model.Index{Schema: "public", Name: "users_email_idx", Definition: "CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, map[string]bool{"users_email_idx": true}, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, map[string]bool{"users_email_idx": true}, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -1470,7 +1471,7 @@ func TestDiffIndexes_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1480,7 +1481,7 @@ func TestDiffIndexes_drop(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
@@ -1494,7 +1495,7 @@ func TestDiffIndexes_dropAttached(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("logs_2025_id_idx", &model.Index{Schema: "public", Name: "logs_2025_id_idx", Definition: "CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at);"}, idxResult.Stmts)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
@@ -1505,7 +1506,7 @@ func TestDiffIndexes_drop_denied(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 	assert.Equal(t, []string{"-- skipped: DROP INDEX public.idx_name;"}, idxResult.DisallowedDropStmts)
@@ -1519,7 +1520,7 @@ func TestDiffIndexes_change_denied_alwaysExecutes(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
 	assert.Len(t, idxResult.Stmts, 2)
@@ -1532,7 +1533,7 @@ func TestDiffIndexes_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX public.idx_name;", idxResult.Stmts[0])
@@ -1548,7 +1549,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
 
-		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+		idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS 'Lookup by name';"}, idxResult.Stmts)
 	})
@@ -1559,7 +1560,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def})
 
-		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+		idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS NULL;"}, idxResult.Stmts)
 	})
@@ -1570,7 +1571,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
 
-		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+		idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, idxResult.Stmts)
 	})
@@ -1587,7 +1588,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 			Comment:    new("Lookup by name"),
 		})
 
-		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+		idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"DROP INDEX public.idx_name;",
@@ -1602,7 +1603,7 @@ func TestDiffIndexes_add_uniqueConcurrently_perDirective(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE UNIQUE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1612,7 +1613,7 @@ func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1624,7 +1625,7 @@ func TestDiffIndexes_drop_pureDrop_neverConcurrently(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
@@ -1637,7 +1638,7 @@ func TestDiffIndexes_drop_pureDrop_currentConcurrentlyForced(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, idxResult.Stmts)
 	assert.True(t, idxResult.HasConcurrently)
@@ -1649,7 +1650,7 @@ func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", idxResult.Stmts[0])
@@ -1662,7 +1663,7 @@ func TestDiffIndexes_mixedConcurrently(t *testing.T) {
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired.Set("idx_email", &model.Index{Schema: "public", Name: "idx_email", Definition: "CREATE INDEX idx_email ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", idxResult.Stmts[0])
@@ -1677,7 +1678,7 @@ func TestDiffIndexes_rename_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	// Rename should NOT use CONCURRENTLY even with per-index directive
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
@@ -1689,7 +1690,7 @@ func TestDiffIndexes_partialIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_active", &model.Index{Schema: "public", Name: "idx_active", Definition: "CREATE INDEX idx_active ON public.users USING btree (name) WHERE (active = true)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -1702,7 +1703,7 @@ func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_lower", &model.Index{Schema: "public", Name: "idx_lower", Definition: "CREATE INDEX idx_lower ON public.users USING btree (lower(name))", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -1715,31 +1716,31 @@ func TestDiffIndexes_hasConcurrently_directive(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.True(t, idxResult.HasConcurrently)
 }
 
 func TestCreateIndexSQL_parseError(t *testing.T) {
-	_, err := createIndexSQL("NOT VALID SQL {{{{", true)
+	_, err := diff.CreateIndexSQL("NOT VALID SQL {{{{", true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse index definition")
 }
 
 func TestCreateIndexSQL_notIndexStmt(t *testing.T) {
-	_, err := createIndexSQL("SELECT 1", true)
+	_, err := diff.CreateIndexSQL("SELECT 1", true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected IndexStmt")
 }
 
 func TestDropIndexSQL_concurrently(t *testing.T) {
-	stmt, err := dropIndexSQL("public", "idx_name", true)
+	stmt, err := diff.DropIndexSQL("public", "idx_name", true)
 	require.NoError(t, err)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", stmt)
 }
 
 func TestDropIndexSQL_noConcurrently(t *testing.T) {
-	stmt, err := dropIndexSQL("public", "idx_name", false)
+	stmt, err := diff.DropIndexSQL("public", "idx_name", false)
 	require.NoError(t, err)
 	assert.Equal(t, "DROP INDEX public.idx_name;", stmt)
 }
@@ -1753,7 +1754,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	_, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -1769,7 +1770,7 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	_, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -1785,7 +1786,7 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1802,7 +1803,7 @@ func TestDiffForeignKeys_drop_denied(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1825,7 +1826,7 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
@@ -1850,7 +1851,7 @@ func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_old;"}, dropStmts)
@@ -1868,7 +1869,7 @@ func TestDiffConstraints_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: new("chk_old")})
 
-	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, denyAllDrops{})
+	stmts, _, disallowed, _, err := diffConstraintStmts("public.users", current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	require.Len(t, stmts, 2)
@@ -1883,7 +1884,7 @@ func TestDiffComments_tableComment_add(t *testing.T) {
 	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Comment = new("Users table")
 
-	stmts := diffComments(current, desired)
+	stmts := diff.DiffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON TABLE public.users IS 'Users table';"}, stmts)
 }
 
@@ -1894,7 +1895,7 @@ func TestDiffComments_tableComment_drop(t *testing.T) {
 	desired := newTable("public", "users")
 	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts := diffComments(current, desired)
+	stmts := diff.DiffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON TABLE public.users IS NULL;"}, stmts)
 }
 
@@ -1904,7 +1905,7 @@ func TestDiffComments_columnComment_add(t *testing.T) {
 	desired := newTable("public", "users")
 	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: new("User name")})
 
-	stmts := diffComments(current, desired)
+	stmts := diff.DiffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.users.name IS 'User name';"}, stmts)
 }
 
@@ -1914,7 +1915,7 @@ func TestDiffComments_columnComment_drop(t *testing.T) {
 	desired := newTable("public", "users")
 	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts := diffComments(current, desired)
+	stmts := diff.DiffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.users.name IS NULL;"}, stmts)
 }
 
@@ -1923,126 +1924,126 @@ func TestDiffComments_newColumn(t *testing.T) {
 	desired := newTable("public", "users")
 	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: new("new col comment")})
 
-	stmts := diffComments(current, desired)
+	stmts := diff.DiffComments(current, desired)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "COMMENT ON COLUMN")
 }
 
 func TestEqualPtr(t *testing.T) {
-	assert.True(t, equalPtr[string](nil, nil))
-	assert.False(t, equalPtr(new("a"), nil))
-	assert.False(t, equalPtr(nil, new("a")))
-	assert.True(t, equalPtr(new("a"), new("a")))
-	assert.False(t, equalPtr(new("a"), new("b")))
+	assert.True(t, diff.EqualPtr[string](nil, nil))
+	assert.False(t, diff.EqualPtr(new("a"), nil))
+	assert.False(t, diff.EqualPtr(nil, new("a")))
+	assert.True(t, diff.EqualPtr(new("a"), new("a")))
+	assert.False(t, diff.EqualPtr(new("a"), new("b")))
 }
 
 func TestEqualTypeName(t *testing.T) {
-	assert.True(t, equalTypeName("integer", "integer", "public"))
-	assert.True(t, equalTypeName("serial", "integer", "public"))
-	assert.True(t, equalTypeName("integer", "serial", "public"))
-	assert.True(t, equalTypeName("bigserial", "bigint", "public"))
-	assert.True(t, equalTypeName("smallserial", "smallint", "public"))
-	assert.False(t, equalTypeName("integer", "text", "public"))
+	assert.True(t, diff.EqualTypeName("integer", "integer", "public"))
+	assert.True(t, diff.EqualTypeName("serial", "integer", "public"))
+	assert.True(t, diff.EqualTypeName("integer", "serial", "public"))
+	assert.True(t, diff.EqualTypeName("bigserial", "bigint", "public"))
+	assert.True(t, diff.EqualTypeName("smallserial", "smallint", "public"))
+	assert.False(t, diff.EqualTypeName("integer", "text", "public"))
 	// A schema-qualified user type matches the unqualified form the catalog
 	// reports for a type in the search path.
-	assert.True(t, equalTypeName("public.addr", "addr", "public"))
-	assert.True(t, equalTypeName("addr", "public.addr", "public"))
-	assert.True(t, equalTypeName("public.addr[]", "addr[]", "public"))
+	assert.True(t, diff.EqualTypeName("public.addr", "addr", "public"))
+	assert.True(t, diff.EqualTypeName("addr", "public.addr", "public"))
+	assert.True(t, diff.EqualTypeName("public.addr[]", "addr[]", "public"))
 	// A different-named type still differs.
-	assert.False(t, equalTypeName("public.addr", "public.other", "public"))
+	assert.False(t, diff.EqualTypeName("public.addr", "public.other", "public"))
 	// A quoted schema qualifier is stripped too.
-	assert.True(t, equalTypeName(`"My Schema".addr`, "addr", `"My Schema"`))
+	assert.True(t, diff.EqualTypeName(`"My Schema".addr`, "addr", `"My Schema"`))
 	// The catalog reports a modifier the way the type writes it back, which
 	// need not match the case PostgreSQL parsed the declaration with.
-	assert.True(t, equalTypeName("geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
-	assert.True(t, equalTypeName("geometry(Polygon,4326)[]", "geometry(polygon,4326)[]", "public"))
-	assert.True(t, equalTypeName("public.geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
-	assert.False(t, equalTypeName("geometry(Polygon,4326)", "geometry(point,4326)", "public"))
+	assert.True(t, diff.EqualTypeName("geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
+	assert.True(t, diff.EqualTypeName("geometry(Polygon,4326)[]", "geometry(polygon,4326)[]", "public"))
+	assert.True(t, diff.EqualTypeName("public.geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
+	assert.False(t, diff.EqualTypeName("geometry(Polygon,4326)", "geometry(point,4326)", "public"))
 	// The type name is not folded, so two quoted names differing in case are
 	// still two types.
-	assert.False(t, equalTypeName(`"Addr"`, `"addr"`, "public"))
+	assert.False(t, diff.EqualTypeName(`"Addr"`, `"addr"`, "public"))
 }
 
 func TestEqualTypeName_Exported(t *testing.T) {
-	assert.True(t, EqualTypeName("serial", "integer", "public"))
-	assert.False(t, EqualTypeName("integer", "text", "public"))
+	assert.True(t, diff.EqualTypeName("serial", "integer", "public"))
+	assert.False(t, diff.EqualTypeName("integer", "text", "public"))
 }
 
 func TestNormalizeCheckExpr_Exported(t *testing.T) {
 	result, con, err := pgast.ParseConstraintDefStrict("CHECK (iv = ANY (ARRAY['01:00:00'::interval, '02:00:00'::interval]))")
 	require.NoError(t, err)
-	con.RawExpr = NormalizeCheckExpr(con.RawExpr)
+	con.RawExpr = diff.NormalizeCheckExpr(con.RawExpr)
 	def, err := pgast.DeparseConstraintDef(result)
 	require.NoError(t, err)
 	assert.Equal(t, "CHECK (iv IN ('01:00:00'::interval, '02:00:00'::interval))", def)
 }
 
 func TestFoldTypeMod(t *testing.T) {
-	assert.Equal(t, "geometry(polygon,4326)", foldTypeMod("geometry(Polygon,4326)"))
+	assert.Equal(t, "geometry(polygon,4326)", diff.FoldTypeMod("geometry(Polygon,4326)"))
 	// A type name without a modifier is untouched, quoted or not.
-	assert.Equal(t, "integer", foldTypeMod("integer"))
-	assert.Equal(t, `"MyType"`, foldTypeMod(`"MyType"`))
+	assert.Equal(t, "integer", diff.FoldTypeMod("integer"))
+	assert.Equal(t, `"MyType"`, diff.FoldTypeMod(`"MyType"`))
 	// Only the modifier is folded; the type name keeps its case.
-	assert.Equal(t, `"MyType"(3)`, foldTypeMod(`"MyType"(3)`))
+	assert.Equal(t, `"MyType"(3)`, diff.FoldTypeMod(`"MyType"(3)`))
 	// An array bound follows the modifier and is folded with it.
-	assert.Equal(t, "geometry(polygon,4326)[]", foldTypeMod("geometry(Polygon,4326)[]"))
+	assert.Equal(t, "geometry(polygon,4326)[]", diff.FoldTypeMod("geometry(Polygon,4326)[]"))
 }
 
 func TestSchemaOf(t *testing.T) {
-	assert.Equal(t, "public", schemaOf("public.people"))
-	assert.Equal(t, `"My Schema"`, schemaOf(`"My Schema".people`))
+	assert.Equal(t, "public", diff.SchemaOf("public.people"))
+	assert.Equal(t, `"My Schema"`, diff.SchemaOf(`"My Schema".people`))
 	// A quoted schema containing a dot: the dot inside quotes is not a separator.
-	assert.Equal(t, `"a.b"`, schemaOf(`"a.b".people`))
+	assert.Equal(t, `"a.b"`, diff.SchemaOf(`"a.b".people`))
 	// No top-level dot yields "".
-	assert.Empty(t, schemaOf("people"))
+	assert.Empty(t, diff.SchemaOf("people"))
 }
 
 func TestEqualDefault(t *testing.T) {
-	assert.True(t, equalDefault(nil, nil))
-	assert.False(t, equalDefault(new("0"), nil))
-	assert.False(t, equalDefault(nil, new("0")))
-	assert.True(t, equalDefault(new("0"), new("0")))
-	assert.True(t, equalDefault(new("'hello'::text"), new("'hello'")))
-	assert.False(t, equalDefault(new("0"), new("1")))
+	assert.True(t, diff.EqualDefault(nil, nil))
+	assert.False(t, diff.EqualDefault(new("0"), nil))
+	assert.False(t, diff.EqualDefault(nil, new("0")))
+	assert.True(t, diff.EqualDefault(new("0"), new("0")))
+	assert.True(t, diff.EqualDefault(new("'hello'::text"), new("'hello'")))
+	assert.False(t, diff.EqualDefault(new("0"), new("1")))
 }
 
 func TestEqualDefault_nullMatchesNone(t *testing.T) {
 	// PostgreSQL stores no default for a NULL constant of the column's type.
-	assert.True(t, equalDefault(nil, new("NULL")))
-	assert.True(t, equalDefault(nil, new("NULL::integer")))
-	assert.False(t, equalDefault(new("NULL::character varying"), nil))
-	assert.False(t, equalDefault(nil, new("'NULL'")))
+	assert.True(t, diff.EqualDefault(nil, new("NULL")))
+	assert.True(t, diff.EqualDefault(nil, new("NULL::integer")))
+	assert.False(t, diff.EqualDefault(new("NULL::character varying"), nil))
+	assert.False(t, diff.EqualDefault(nil, new("'NULL'")))
 }
 
 func TestEqualDefault_Exported(t *testing.T) {
-	assert.True(t, EqualDefault(new("nextval('s'::regclass)"), new("nextval('s'::regclass)")))
-	assert.False(t, EqualDefault(new("nextval('s'::regclass)"), new("0")))
+	assert.True(t, diff.EqualDefault(new("nextval('s'::regclass)"), new("nextval('s'::regclass)")))
+	assert.False(t, diff.EqualDefault(new("nextval('s'::regclass)"), new("0")))
 }
 
 func TestEqualDefault_distinctFromNull(t *testing.T) {
 	// A DEFAULT is stored through the same rewrite. It cannot name a column,
 	// so both operands are constants.
-	assert.True(t, equalDefault(new("('x' IS NOT NULL)"), new("('x' IS DISTINCT FROM NULL)")))
+	assert.True(t, diff.EqualDefault(new("('x' IS NOT NULL)"), new("('x' IS DISTINCT FROM NULL)")))
 }
 
 func TestEqualDefault_currentTimeCastStripped(t *testing.T) {
 	// pg_get_expr emits `'00:00:00'::time without time zone` on a time column
 	// DEFAULT; user typically writes the bare literal.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'00:00:00'::time without time zone"),
 		new("'00:00:00'"),
 	))
 }
 
 func TestEqualDefault_currentDateCastStripped(t *testing.T) {
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'2020-01-01'::date"),
 		new("'2020-01-01'"),
 	))
 }
 
 func TestEqualDefault_currentTimestampCastStripped(t *testing.T) {
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'2020-01-01 00:00:00'::timestamp without time zone"),
 		new("'2020-01-01 00:00:00'"),
 	))
@@ -2051,14 +2052,14 @@ func TestEqualDefault_currentTimestampCastStripped(t *testing.T) {
 func TestEqualDefault_currentNegativeIntCastStripped(t *testing.T) {
 	// Negative integer DEFAULT: DB emits `'-40'::integer`, user writes `-40`.
 	// Requires the numeric Sval->Ival coercion alongside the cast strip.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'-40'::integer"),
 		new("-40"),
 	))
 }
 
 func TestEqualDefault_currentNumericFloatCastStripped(t *testing.T) {
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'12.34'::numeric"),
 		new("12.34"),
 	))
@@ -2068,14 +2069,14 @@ func TestEqualDefault_currentNestedCastStripped(t *testing.T) {
 	// Cast nested inside an expression (e.g. `(now() - '18 years'::interval)`):
 	// top-level is AExpr, not TypeCast, so the old parseDefault top-level strip
 	// didn't reach this position.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("now() - '18 years'::interval"),
 		new("now() - '18 years'"),
 	))
 }
 
 func TestEqualDefault_bothExplicitCastsMatch(t *testing.T) {
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'0'::integer"),
 		new("'0'::integer"),
 	))
@@ -2088,7 +2089,7 @@ func TestEqualDefault_currentStringCastVsDesiredNumericCast(t *testing.T) {
 	// look through the peer's still-present TypeCast to decide that the
 	// peer "will be" numeric after its own strip; otherwise the surviving
 	// Sval `'0'` diffs against the desired bare `0`.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'0'::integer"),
 		new("0::integer"),
 	))
@@ -2100,7 +2101,7 @@ func TestEqualDefault_castsDifferTypesStillEqual(t *testing.T) {
 	// to both sides (pg_get_expr always wraps DEFAULTs in a cast, and the
 	// column type; not the literal's cast; drives the eventual storage),
 	// so the two collapse to the same `'0'` and compare equal.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'0'::bigint"),
 		new("'0'::integer"),
 	))
@@ -2111,7 +2112,7 @@ func TestEqualDefault_desiredCastCurrentBareStillEqual(t *testing.T) {
 	// user wrote `0::integer` but DB stored the value natively without a
 	// cast (pg_get_expr returns just `0`). They compare equal so this case
 	// does not produce a perpetual SET DEFAULT diff loop on every apply.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("0"),
 		new("0::integer"),
 	))
@@ -2121,7 +2122,7 @@ func TestEqualDefault_currentBigintCastStripped(t *testing.T) {
 	// Bigint values that don't fit in int32 take the Fval fallback path
 	// inside numericAConstFromString; verify the coerce still matches
 	// the user's bare numeric.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'9000000000'::bigint"),
 		new("9000000000"),
 	))
@@ -2130,7 +2131,7 @@ func TestEqualDefault_currentBigintCastStripped(t *testing.T) {
 func TestEqualDefault_currentLargeNumericCastStripped(t *testing.T) {
 	// Numeric literals beyond float64 range exercise the ErrRange-accept
 	// branch in numericAConstFromString.
-	assert.True(t, equalDefault(
+	assert.True(t, diff.EqualDefault(
 		new("'1e400'::numeric"),
 		new("1e400"),
 	))
@@ -2141,7 +2142,7 @@ func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// matching a built-in numeric name does not gate the Sval->numeric
 	// coercion, so the surviving Sval still compares unequal to a
 	// desired bare integer.
-	assert.False(t, equalDefault(
+	assert.False(t, diff.EqualDefault(
 		new("'0'::myapp.int4"),
 		new("0"),
 	))
@@ -2153,62 +2154,62 @@ func TestEqualDefault_expressionCast(t *testing.T) {
 	cur := "(now())::timestamp(0) with time zone"
 
 	t.Run("same cast", func(t *testing.T) {
-		assert.True(t, equalDefault(new(cur), new("now()::timestamp(0) with time zone")))
-		assert.True(t, equalDefault(new(cur), new("now()::timestamptz(0)")))
+		assert.True(t, diff.EqualDefault(new(cur), new("now()::timestamp(0) with time zone")))
+		assert.True(t, diff.EqualDefault(new(cur), new("now()::timestamptz(0)")))
 	})
 
 	t.Run("time zone dropped", func(t *testing.T) {
-		assert.False(t, equalDefault(new(cur), new("now()::timestamp(0)")))
+		assert.False(t, diff.EqualDefault(new(cur), new("now()::timestamp(0)")))
 	})
 
 	t.Run("precision changed", func(t *testing.T) {
-		assert.False(t, equalDefault(new(cur), new("now()::timestamp(3) with time zone")))
+		assert.False(t, diff.EqualDefault(new(cur), new("now()::timestamp(3) with time zone")))
 	})
 
 	t.Run("internal type name", func(t *testing.T) {
-		assert.True(t, equalDefault(new("(length('x'::text))::bigint"), new("length('x')::int8")))
+		assert.True(t, diff.EqualDefault(new("(length('x'::text))::bigint"), new("length('x')::int8")))
 	})
 
 	t.Run("user-defined type", func(t *testing.T) {
 		// The catalog leaves out a schema on the search_path.
-		assert.True(t, equalDefault(new("(lower('X'::text))::status"), new("lower('X')::public.status")))
-		assert.False(t, equalDefault(new("(lower('X'::text))::status"), new("lower('X')::public.mood")))
+		assert.True(t, diff.EqualDefault(new("(lower('X'::text))::status"), new("lower('X')::public.status")))
+		assert.False(t, diff.EqualDefault(new("(lower('X'::text))::status"), new("lower('X')::public.mood")))
 	})
 
 	t.Run("other type", func(t *testing.T) {
-		assert.False(t, equalDefault(new("(now())::date"), new("now()::timestamp")))
+		assert.False(t, diff.EqualDefault(new("(now())::date"), new("now()::timestamp")))
 	})
 
 	t.Run("cast removed", func(t *testing.T) {
-		assert.False(t, equalDefault(new("(now())::date"), new("now()")))
+		assert.False(t, diff.EqualDefault(new("(now())::date"), new("now()")))
 	})
 
 	t.Run("literal on one side", func(t *testing.T) {
-		assert.False(t, equalDefault(new("(now())::date"), new("'2020-01-01'::date")))
-		assert.False(t, equalDefault(new("'2020-01-01'::date"), new("now()::date")))
+		assert.False(t, diff.EqualDefault(new("(now())::date"), new("'2020-01-01'::date")))
+		assert.False(t, diff.EqualDefault(new("'2020-01-01'::date"), new("now()::date")))
 	})
 
 	t.Run("cast on a cast", func(t *testing.T) {
-		assert.True(t, equalDefault(new("('now'::text)::date"), new("'now'::text::date")))
+		assert.True(t, diff.EqualDefault(new("('now'::text)::date"), new("'now'::text::date")))
 	})
 
 	t.Run("cast that changes nothing", func(t *testing.T) {
 		// PostgreSQL drops it, so the catalog has none.
-		assert.True(t, equalDefault(new("now()"), new("now()::timestamptz")))
+		assert.True(t, diff.EqualDefault(new("now()"), new("now()::timestamptz")))
 	})
 }
 
 func TestCompareFKDef_formatting(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	equal, _ := compareFKDef(a, b, "public", "public", "public")
+	equal, _ := diff.CompareFKDef(a, b, "public", "public", "public")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	equal, deferralOnly := compareFKDef(a, b, "public", "public", "public")
+	equal, deferralOnly := diff.CompareFKDef(a, b, "public", "public", "public")
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 }
@@ -2226,7 +2227,7 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	})
 	desired.Set("public.orders", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
@@ -2237,21 +2238,21 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 func TestCompareFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	equal, _ := compareFKDef(a, b, "public", "public", "public")
+	equal, _ := diff.CompareFKDef(a, b, "public", "public", "public")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_implicitNonPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
-	equal, _ := compareFKDef(a, b, "myapp", "myapp", "myapp")
+	equal, _ := diff.CompareFKDef(a, b, "myapp", "myapp", "myapp")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_implicitNonPublicSchema_different(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
-	equal, _ := compareFKDef(a, b, "myapp", "myapp", "myapp")
+	equal, _ := diff.CompareFKDef(a, b, "myapp", "myapp", "myapp")
 	assert.False(t, equal)
 }
 
@@ -2261,39 +2262,39 @@ func TestCompareFKDef_bareDeferralOnly(t *testing.T) {
 	const bare = "FOREIGN KEY (base_id) REFERENCES base(id)"
 	const deferred = "FOREIGN KEY (base_id) REFERENCES public.base(id) DEFERRABLE"
 
-	equal, deferralOnly := compareFKDef(bare, deferred, "public", "public", "app")
+	equal, deferralOnly := diff.CompareFKDef(bare, deferred, "public", "public", "app")
 	assert.False(t, equal)
 	assert.True(t, deferralOnly)
 
-	equal, deferralOnly = compareFKDef(deferred, bare, "public", "app", "public")
+	equal, deferralOnly = diff.CompareFKDef(deferred, bare, "public", "app", "public")
 	assert.False(t, equal)
 	assert.True(t, deferralOnly)
 
-	equal, deferralOnly = compareFKDef(bare, "FOREIGN KEY (base_id) REFERENCES other.base(id) DEFERRABLE", "public", "other", "app")
+	equal, deferralOnly = diff.CompareFKDef(bare, "FOREIGN KEY (base_id) REFERENCES other.base(id) DEFERRABLE", "public", "other", "app")
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 }
 
 func TestCompareFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	equal, deferralOnly := compareFKDef("not sql", "not sql", "public", "public", "public")
+	equal, deferralOnly := diff.CompareFKDef("not sql", "not sql", "public", "public", "public")
 	assert.True(t, equal)
 	assert.False(t, deferralOnly)
 
-	equal, _ = compareFKDef("not sql", "other", "public", "public", "public")
+	equal, _ = diff.CompareFKDef("not sql", "other", "public", "public", "public")
 	assert.False(t, equal)
 }
 
 func TestEqualDefault_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalDefault(new(")))invalid"), new(")))invalid")))
-	assert.False(t, equalDefault(new(")))invalid"), new(")))other")))
+	assert.True(t, diff.EqualDefault(new(")))invalid"), new(")))invalid")))
+	assert.False(t, diff.EqualDefault(new(")))invalid"), new(")))other")))
 }
 
 func TestEqualViewDef_parseError(t *testing.T) {
 	// When normalization fails, falls back to string comparison
-	assert.True(t, equalViewDef(")))invalid", ")))invalid"))
-	assert.False(t, equalViewDef(")))invalid", ")))other"))
+	assert.True(t, diff.EqualViewDef(")))invalid", ")))invalid"))
+	assert.False(t, diff.EqualViewDef(")))invalid", ")))other"))
 }
 
 func TestDiffForeignKeys_change(t *testing.T) {
@@ -2310,7 +2311,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, append(dropStmts, addStmts...), 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -2352,7 +2353,7 @@ func TestDiffForeignKeys_crossSchemaRef(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dropStmts, addStmts, _, err := diffForeignKeys("app.item", "app", false, tt.current, tt.desired, allowAllDrops{})
+			dropStmts, addStmts, _, err := diff.DiffForeignKeys("app.item", "app", false, tt.current, tt.desired, allowAllDrops{})
 			require.NoError(t, err)
 			if tt.changed {
 				assert.Equal(t, []string{"ALTER TABLE app.item DROP CONSTRAINT item_base_id_fkey;"}, dropStmts)
@@ -2378,7 +2379,7 @@ func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -2400,7 +2401,7 @@ func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -2426,7 +2427,7 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 		current.Set("fk_user", currentFk)
 		desired := orderedmap.New[string, *model.ForeignKey]()
 		desired.Set("fk_user", desiredFk)
-		dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+		dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		return dropStmts, addStmts
 	}
@@ -2512,7 +2513,7 @@ func TestDiffForeignKeys_partitionCopy(t *testing.T) {
 		changed.Definition = "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
 		desired.Set("fk_user", changed)
 
-		drop, add, _, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
+		drop, add, _, err := diff.DiffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, drop)
 		assert.Empty(t, add)
@@ -2523,7 +2524,7 @@ func TestDiffForeignKeys_partitionCopy(t *testing.T) {
 		current.Set("fk_user", copyFk())
 		desired := orderedmap.New[string, *model.ForeignKey]()
 
-		drop, add, disallowed, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
+		drop, add, disallowed, err := diff.DiffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, drop)
 		assert.Empty(t, add)
@@ -2537,7 +2538,7 @@ func TestDiffForeignKeys_partitionCopy(t *testing.T) {
 		current.Set("fk_user", copyFk())
 		desired := orderedmap.New[string, *model.ForeignKey]()
 
-		drop, add, disallowed, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, denyAllDrops{})
+		drop, add, disallowed, err := diff.DiffForeignKeys("public.orders_2025", "public", false, current, desired, diff.DenyAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, drop)
 		assert.Empty(t, add)
@@ -2551,17 +2552,17 @@ func TestCompareFKDef_deferralOnly(t *testing.T) {
 	const plain = "FOREIGN KEY (user_id) REFERENCES users(id)"
 	const deferred = "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED"
 
-	equal, deferralOnly := compareFKDef(plain, deferred, "public", "public", "public")
+	equal, deferralOnly := diff.CompareFKDef(plain, deferred, "public", "public", "public")
 	assert.False(t, equal)
 	assert.True(t, deferralOnly)
 
-	equal, deferralOnly = compareFKDef(plain, "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE", "public", "public", "public")
+	equal, deferralOnly = diff.CompareFKDef(plain, "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE", "public", "public", "public")
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 
 	// Two identical definitions are equal, which is not the same answer as
 	// the deferral clause being all that differs.
-	equal, deferralOnly = compareFKDef(deferred, deferred, "public", "public", "public")
+	equal, deferralOnly = diff.CompareFKDef(deferred, deferred, "public", "public", "public")
 	assert.True(t, equal)
 	assert.False(t, deferralOnly)
 }
@@ -2580,7 +2581,7 @@ func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -2600,7 +2601,7 @@ func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -2623,7 +2624,7 @@ func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 2)
@@ -2645,7 +2646,7 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -2666,7 +2667,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -2691,7 +2692,7 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
@@ -2714,7 +2715,7 @@ func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -2736,7 +2737,7 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	desired.PartitionBound = &bound
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
+	tableResult, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, tableResult.Stmts, 1)
 	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
@@ -2751,7 +2752,7 @@ func TestWithInheritedColumns(t *testing.T) {
 	desired := newTable("public", "events_2024")
 	desired.Columns.Set("ghost", &model.Column{Name: "ghost"})
 
-	got := withInheritedColumns(current, desired)
+	got := diff.WithInheritedColumns(current, desired)
 
 	// The child's own column set comes from the current side, with no comment
 	// attached, so a comment that was dropped from the desired side is diffed.
@@ -2779,7 +2780,7 @@ func TestWithInheritedColumns_keepsDesiredComment(t *testing.T) {
 	desired := newTable("public", "events_2024")
 	desired.Columns.Set("id", &model.Column{Name: "id", Comment: &want})
 
-	got := withInheritedColumns(current, desired)
+	got := diff.WithInheritedColumns(current, desired)
 
 	require.Equal(t, 1, got.Columns.Len())
 	col, ok := got.Columns.GetOk("id")
@@ -2802,7 +2803,7 @@ func TestDiffTable_partitionChild_comments(t *testing.T) {
 	desired.PartitionOf = &parent
 	desired.PartitionBound = &bound
 
-	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
+	tableResult, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, tableResult.Stmts, 2)
 	assert.Equal(t, "COMMENT ON TABLE public.events_2024 IS NULL;", tableResult.Stmts[0])
@@ -2823,7 +2824,7 @@ func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	_, err := diffTable(current, desired, nil, allowAllDrops{})
+	_, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2846,7 +2847,7 @@ func TestDiffTable_partitionChild_fkRenameError(t *testing.T) {
 		Table:  "events_2024",
 	})
 
-	_, err := diffTable(current, desired, nil, allowAllDrops{})
+	_, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2860,7 +2861,7 @@ func TestDiffTable_constraintRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Constraints.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (id)"})
 
-	_, err := diffTable(current, desired, nil, allowAllDrops{})
+	_, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source constraint")
 }
@@ -2874,7 +2875,7 @@ func TestDiffTable_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.users (id)"})
 
-	_, err := diffTable(current, desired, nil, allowAllDrops{})
+	_, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2892,7 +2893,7 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 		Table:  "users",
 	})
 
-	_, err := diffTable(current, desired, nil, allowAllDrops{})
+	_, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2925,7 +2926,7 @@ func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (display_name)",
 	})
 
-	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
+	tableResult, err := diff.DiffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 
 	// Only the RENAME COLUMN should be emitted; no redundant DROP/CREATE
@@ -2936,7 +2937,7 @@ func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 }
 
 func TestEqualConstraintDef_same(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"PRIMARY KEY (id)",
 		"PRIMARY KEY (id)",
 	))
@@ -2944,14 +2945,14 @@ func TestEqualConstraintDef_same(t *testing.T) {
 
 func TestEqualConstraintDef_formattingDiff(t *testing.T) {
 	// pg_get_constraintdef may return extra parentheses compared to pg_query deparse
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((kind = ANY (ARRAY['a'::text, 'b'::text])))",
 		"CHECK (kind = ANY(ARRAY['a'::text, 'b'::text]))",
 	))
 }
 
 func TestEqualConstraintDef_castFormattingDiff(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (((color)::text = ANY ((ARRAY['red'::character varying, 'blue'::character varying])::text[])))",
 		"CHECK (color::text = ANY(ARRAY['red'::varchar, 'blue'::varchar]::text[]))",
 	))
@@ -2960,7 +2961,7 @@ func TestEqualConstraintDef_castFormattingDiff(t *testing.T) {
 func TestEqualConstraintDef_notDistinctFrom(t *testing.T) {
 	// pg_get_constraintdef returns the operator as the negation of
 	// IS DISTINCT FROM, whichever way the definition was written.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS DISTINCT FROM b)))",
 		"CHECK (a IS NOT DISTINCT FROM b)",
 	))
@@ -2969,7 +2970,7 @@ func TestEqualConstraintDef_notDistinctFrom(t *testing.T) {
 func TestEqualConstraintDef_notDistinctFromDoubleNegation(t *testing.T) {
 	// The negation PostgreSQL leaves in place stays on both sides, so only
 	// the inner one folds.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (NOT (a IS DISTINCT FROM b))))",
 		"CHECK (NOT (a IS NOT DISTINCT FROM b))",
 	))
@@ -2978,7 +2979,7 @@ func TestEqualConstraintDef_notDistinctFromDoubleNegation(t *testing.T) {
 func TestEqualConstraintDef_distinctFromNotFolded(t *testing.T) {
 	// The fold is one-way: IS DISTINCT FROM is stored as written and must
 	// not compare equal to its negation.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((a IS DISTINCT FROM b))",
 		"CHECK (a IS NOT DISTINCT FROM b)",
 	))
@@ -2986,11 +2987,11 @@ func TestEqualConstraintDef_distinctFromNotFolded(t *testing.T) {
 
 func TestEqualConstraintDef_notOverOtherOperatorKept(t *testing.T) {
 	// Only IS DISTINCT FROM folds; NOT over anything else is left alone.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a = b)))",
 		"CHECK (NOT (a = b))",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a = b)))",
 		"CHECK (a = b)",
 	))
@@ -3001,15 +3002,15 @@ func TestEqualConstraintDef_distinctFromNull(t *testing.T) {
 	// an IS NULL test, so pg_get_constraintdef hands back the test whichever
 	// way the definition was written. The literal is rewritten on either
 	// side of the operator.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((a IS NULL))",
 		"CHECK (a IS NOT DISTINCT FROM NULL)",
 	))
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((a IS NOT NULL))",
 		"CHECK (a IS DISTINCT FROM NULL)",
 	))
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((a IS NULL))",
 		"CHECK (NULL IS NOT DISTINCT FROM a)",
 	))
@@ -3017,7 +3018,7 @@ func TestEqualConstraintDef_distinctFromNull(t *testing.T) {
 
 func TestEqualConstraintDef_distinctFromNullOppositeTestKept(t *testing.T) {
 	// The rewrite must not swallow the opposite test.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((a IS NOT NULL))",
 		"CHECK (a IS NOT DISTINCT FROM NULL)",
 	))
@@ -3026,17 +3027,17 @@ func TestEqualConstraintDef_distinctFromNullOppositeTestKept(t *testing.T) {
 func TestEqualConstraintDef_distinctFromTypedNullKept(t *testing.T) {
 	// PostgreSQL rewrites a bare NULL literal only, so a cast one stays an
 	// operator on both sides and folds the way any other operand does.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS DISTINCT FROM NULL::integer)))",
 		"CHECK (a IS NOT DISTINCT FROM NULL::integer)",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((a IS NULL))",
 		"CHECK (a IS NOT DISTINCT FROM NULL::integer)",
 	))
 	// A text-like cast is stripped on both sides first, so the stored
 	// negation reaches the rewrite as the operator.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS DISTINCT FROM NULL::text)))",
 		"CHECK (a IS NULL)",
 	))
@@ -3045,21 +3046,21 @@ func TestEqualConstraintDef_distinctFromTypedNullKept(t *testing.T) {
 func TestEqualConstraintDef_notOverNullTest(t *testing.T) {
 	// PostgreSQL rewrites the comparison inside a negation the definition
 	// wrote and keeps the negation, so the two sides can differ by a NOT.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS NOT NULL)))",
 		"CHECK (NOT (a IS DISTINCT FROM NULL))",
 	))
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS NULL)))",
 		"CHECK (NOT (a IS NOT DISTINCT FROM NULL))",
 	))
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a IS NOT NULL)))",
 		"CHECK (a IS NULL)",
 	))
 	// A row value is left alone, since neither test is the other's negation
 	// there.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (ROW(a, b) IS NOT NULL)))",
 		"CHECK (ROW(a, b) IS NULL)",
 	))
@@ -3069,7 +3070,7 @@ func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
 	// Nothing is left to test when both operands are the literal, so it is
 	// left as written. PostgreSQL stores that one as a test on a cast
 	// literal, which the operator does not compare equal to.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((NULL::unknown IS NULL))",
 		"CHECK (NULL IS NOT DISTINCT FROM NULL)",
 	))
@@ -3078,11 +3079,11 @@ func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
 func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
 	// The catalog keeps the two spellings apart on a row-typed argument, so
 	// they must not compare equal.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((ROW(a, b) IS NOT DISTINCT FROM NULL))",
 		"CHECK (ROW(a, b) IS NULL)",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((t.* IS NOT DISTINCT FROM NULL))",
 		"CHECK (t.* IS NULL)",
 	))
@@ -3091,18 +3092,18 @@ func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
 func TestEqualConstraintDef_notOverBoolOperatorKept(t *testing.T) {
 	// NOT binds tighter than AND, so a fold that dropped the negation's
 	// parentheses would turn this into the different `NOT a AND b`.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a AND b)))",
 		"CHECK (NOT (a AND b))",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((NOT (a AND b)))",
 		"CHECK ((NOT a) AND b)",
 	))
 }
 
 func TestEqualConstraintDef_different(t *testing.T) {
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK (age > 0)",
 		"CHECK (age >= 18)",
 	))
@@ -3111,28 +3112,28 @@ func TestEqualConstraintDef_different(t *testing.T) {
 func TestEqualConstraintDef_currentIntegerCastStripped(t *testing.T) {
 	// pg_get_constraintdef adds ::integer to bare numeric literals on int
 	// columns. When desired has no cast, treat them as equal.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val > '0'::integer)",
 		"CHECK (val > '0')",
 	))
 }
 
 func TestEqualConstraintDef_currentTimeCastStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (t >= '00:00:00'::time without time zone)",
 		"CHECK (t >= '00:00:00')",
 	))
 }
 
 func TestEqualConstraintDef_currentDateCastStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (d >= '2020-01-01'::date)",
 		"CHECK (d >= '2020-01-01')",
 	))
 }
 
 func TestEqualConstraintDef_currentTimestampCastStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (ts >= '2020-01-01 00:00:00'::timestamp without time zone)",
 		"CHECK (ts >= '2020-01-01 00:00:00')",
 	))
@@ -3141,7 +3142,7 @@ func TestEqualConstraintDef_currentTimestampCastStripped(t *testing.T) {
 func TestEqualConstraintDef_bothExplicitCastsMatch(t *testing.T) {
 	// When desired explicitly has the same cast as current, normal pairwise
 	// comparison succeeds.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val > '0'::integer)",
 		"CHECK (val > '0'::integer)",
 	))
@@ -3149,7 +3150,7 @@ func TestEqualConstraintDef_bothExplicitCastsMatch(t *testing.T) {
 
 func TestEqualConstraintDef_castsDifferTypes(t *testing.T) {
 	// Both sides have a cast but the target types differ -> not equal.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK (val > '0'::bigint)",
 		"CHECK (val > '0'::integer)",
 	))
@@ -3158,14 +3159,14 @@ func TestEqualConstraintDef_castsDifferTypes(t *testing.T) {
 func TestEqualConstraintDef_desiredCastCurrentBare(t *testing.T) {
 	// Asymmetric rule fires only when current has the extra cast.
 	// If desired has a cast and current doesn't, they remain unequal.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK (val > '0')",
 		"CHECK (val > '0'::integer)",
 	))
 }
 
 func TestEqualConstraintDef_currentCastInsideBoolExpr(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((a > 0) AND (b >= '00:00:00'::time without time zone))",
 		"CHECK (a > 0 AND b >= '00:00:00')",
 	))
@@ -3173,7 +3174,7 @@ func TestEqualConstraintDef_currentCastInsideBoolExpr(t *testing.T) {
 
 func TestEqualConstraintDef_currentCastOnColumnRefStripped(t *testing.T) {
 	// Cast on a column expression is also stripped when desired has none.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((col)::integer > 0)",
 		"CHECK (col > 0)",
 	))
@@ -3182,14 +3183,14 @@ func TestEqualConstraintDef_currentCastOnColumnRefStripped(t *testing.T) {
 func TestEqualConstraintDef_currentCastInArrayElementStripped(t *testing.T) {
 	// pg_get_constraintdef converts IN to = ANY(ARRAY[...]) and may add
 	// per-element casts on non-text types.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((val = ANY (ARRAY['0'::integer, '1'::integer])))",
 		"CHECK (val IN ('0', '1'))",
 	))
 }
 
 func TestEqualConstraintDef_currentCastInCaseResultStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((CASE WHEN (val > 0) THEN '1'::integer ELSE '0'::integer END) = '1')",
 		"CHECK ((CASE WHEN val > 0 THEN '1' ELSE '0' END) = '1')",
 	))
@@ -3198,7 +3199,7 @@ func TestEqualConstraintDef_currentCastInCaseResultStripped(t *testing.T) {
 func TestEqualConstraintDef_currentCastInArrayLiteralStripped(t *testing.T) {
 	// ARRAY[...] outside of = ANY stays as AArrayExpr after normalization;
 	// per-element casts on an array-column comparison get stripped too.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((tags = ARRAY['1'::integer, '2'::integer]))",
 		"CHECK (tags = ARRAY['1', '2'])",
 	))
@@ -3208,14 +3209,14 @@ func TestEqualConstraintDef_currentNegativeIntCastStripped(t *testing.T) {
 	// pg_get_constraintdef emits negative integer literals as `'-40'::integer`
 	// to dodge the unary-minus precedence trap; user writes bare `-40`.
 	// The cast strip plus Sval->Ival coercion makes them compare equal.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (vacationhours >= '-40'::integer AND vacationhours <= 240)",
 		"CHECK (vacationhours >= -40 AND vacationhours <= 240)",
 	))
 }
 
 func TestEqualConstraintDef_currentPositiveIntStringCastStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val >= '40'::integer)",
 		"CHECK (val >= 40)",
 	))
@@ -3223,14 +3224,14 @@ func TestEqualConstraintDef_currentPositiveIntStringCastStripped(t *testing.T) {
 
 func TestEqualConstraintDef_currentBigintCastStripped(t *testing.T) {
 	// Value that fits in int64 but exceeds int32 should fall back to Fval form.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val >= '9000000000'::bigint)",
 		"CHECK (val >= 9000000000)",
 	))
 }
 
 func TestEqualConstraintDef_currentNumericFloatCastStripped(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (price >= '12.34'::numeric)",
 		"CHECK (price >= 12.34)",
 	))
@@ -3239,7 +3240,7 @@ func TestEqualConstraintDef_currentNumericFloatCastStripped(t *testing.T) {
 func TestEqualConstraintDef_currentNegativeFloatCastStripped(t *testing.T) {
 	// pg_get_constraintdef emits negative float/numeric literals as
 	// `'-12.34'::numeric` for the same precedence-trap reason as integers.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (price >= '-12.34'::numeric)",
 		"CHECK (price >= -12.34)",
 	))
@@ -3249,7 +3250,7 @@ func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
 	// Numeric literals beyond float64 range (PG `numeric` carries arbitrary
 	// precision). The Sval->Fval coercion must accept these so the strip is
 	// not silently undone for very large values.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (price <= '1e400'::numeric)",
 		"CHECK (price <= 1e400)",
 	))
@@ -3264,7 +3265,7 @@ func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// and compares unequal to the desired bare integer `0` (A_Const{Ival}).
 	// This is what keeps custom-type casts from silently matching unrelated
 	// built-in numeric desired forms.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK (val > '0'::myapp.int4)",
 		"CHECK (val > 0)",
 	))
@@ -3273,7 +3274,7 @@ func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
 func TestEqualConstraintDef_currentSmallintCastStripped(t *testing.T) {
 	// pg_query canonicalises `smallint` to `int2` in the catalog form, so
 	// isNumericTypeName must recognise both. This exercises the int2 path.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val >= '0'::smallint)",
 		"CHECK (val >= 0)",
 	))
@@ -3281,7 +3282,7 @@ func TestEqualConstraintDef_currentSmallintCastStripped(t *testing.T) {
 
 func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
 	// `double precision` canonicalises to `float8`; verify the float8 path.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (val >= '0.5'::double precision)",
 		"CHECK (val >= 0.5)",
 	))
@@ -3291,7 +3292,7 @@ func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) 
 	// When both sides carry casts but the target types differ, the asymmetric
 	// rule does not fire and the difference still surfaces; even for numeric
 	// types where the Sval->numeric coercion would otherwise erase the type.
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK (val > '0'::bigint)",
 		"CHECK (val > '0'::integer)",
 	))
@@ -3299,14 +3300,14 @@ func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) 
 
 func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
 	// pg_get_constraintdef adds ::text to string literals
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((code ~ '^[0-9a-f]{64}$'::text))",
 		"CHECK (code ~ '^[0-9a-f]{64}$')",
 	))
 }
 
 func TestEqualConstraintDef_textCastOnNotEmpty(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((name <> ''::text))",
 		"CHECK (name <> '')",
 	))
@@ -3314,7 +3315,7 @@ func TestEqualConstraintDef_textCastOnNotEmpty(t *testing.T) {
 
 func TestEqualConstraintDef_inVsAnyArray(t *testing.T) {
 	// pg_get_constraintdef returns = ANY(ARRAY[...]) for IN (...)
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
 		"CHECK (status IN ('active', 'pending'))",
 	))
@@ -3322,21 +3323,21 @@ func TestEqualConstraintDef_inVsAnyArray(t *testing.T) {
 
 func TestEqualConstraintDef_varcharCastInAnyArray(t *testing.T) {
 	// pg_get_constraintdef may use ::character varying and ::text[] casts
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((status::text = ANY (ARRAY['active'::character varying, 'pending'::character varying]::text[])))",
 		"CHECK (status IN ('active', 'pending'))",
 	))
 }
 
 func TestEqualConstraintDef_varcharCastWithoutArrayCast(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((status = ANY (ARRAY['active'::character varying, 'pending'::character varying])))",
 		"CHECK (status IN ('active', 'pending'))",
 	))
 }
 
 func TestEqualConstraintDef_inVsAnyArray_different(t *testing.T) {
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
 		"CHECK (status IN ('active', 'closed'))",
 	))
@@ -3344,21 +3345,21 @@ func TestEqualConstraintDef_inVsAnyArray_different(t *testing.T) {
 
 func TestEqualConstraintDef_textCastInBoolExpr(t *testing.T) {
 	// AND/OR combining multiple conditions with ::text casts
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (((name <> ''::text) AND (code ~ '^[0-9]+$'::text)))",
 		"CHECK (name <> '' AND code ~ '^[0-9]+$')",
 	))
 }
 
 func TestEqualConstraintDef_textCastInFuncCall(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((length((name)::text) > 0))",
 		"CHECK (length(name::text) > 0)",
 	))
 }
 
 func TestEqualConstraintDef_textCastInCoalesce(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((COALESCE(name, ''::text) <> ''::text))",
 		"CHECK (COALESCE(name, '') <> '')",
 	))
@@ -3366,22 +3367,22 @@ func TestEqualConstraintDef_textCastInCoalesce(t *testing.T) {
 
 func TestEqualConstraintDef_textCastInNullTest(t *testing.T) {
 	// NullTest recurse - ensure it doesn't break
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK ((name IS NOT NULL))",
 		"CHECK (name IS NOT NULL)",
 	))
 }
 
 func TestEqualConstraintDef_textCastInCase(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"CHECK (((CASE WHEN (kind = 'a'::text) THEN 1 ELSE 0 END) > 0))",
 		"CHECK ((CASE WHEN kind = 'a' THEN 1 ELSE 0 END) > 0)",
 	))
 }
 
 func TestEqualConstraintDef_parseError(t *testing.T) {
-	assert.True(t, equalConstraintDef(")))invalid", ")))invalid"))
-	assert.False(t, equalConstraintDef(")))invalid", ")))other"))
+	assert.True(t, diff.EqualConstraintDef(")))invalid", ")))invalid"))
+	assert.False(t, diff.EqualConstraintDef(")))invalid", ")))other"))
 }
 
 func TestDiffConstraints_noChangeWithTextCast(t *testing.T) {
@@ -3436,7 +3437,7 @@ func TestDiffConstraints_noChangeWithFormattingDiff(t *testing.T) {
 }
 
 func TestEqualIndexDef_sameSchema(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		nil,
@@ -3444,7 +3445,7 @@ func TestEqualIndexDef_sameSchema(t *testing.T) {
 }
 
 func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
 		nil,
@@ -3452,7 +3453,7 @@ func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
 }
 
 func TestEqualIndexDef_only(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON ONLY public.logs USING btree (at)",
 		"CREATE INDEX idx ON logs USING btree (at)",
 		nil,
@@ -3460,7 +3461,7 @@ func TestEqualIndexDef_only(t *testing.T) {
 }
 
 func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
 		nil,
@@ -3469,7 +3470,7 @@ func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
 
 func TestEqualIndexDef_differentSchemas(t *testing.T) {
 	// Different schemas should still be equal; schema is ignored in comparison
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		nil,
@@ -3477,7 +3478,7 @@ func TestEqualIndexDef_differentSchemas(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereClauseSchemaVsNoSchema(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
 		"CREATE UNIQUE INDEX idx ON products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
 		nil,
@@ -3486,7 +3487,7 @@ func TestEqualIndexDef_whereClauseSchemaVsNoSchema(t *testing.T) {
 
 func TestEqualIndexDef_whereClauseFormattingDiff(t *testing.T) {
 	// pg_get_indexdef may return extra parentheses in WHERE clause
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON myschema.products USING btree (group_id) WHERE ((group_id IS NOT NULL))",
 		"CREATE INDEX idx ON products USING btree (group_id) WHERE group_id IS NOT NULL",
 		nil,
@@ -3494,7 +3495,7 @@ func TestEqualIndexDef_whereClauseFormattingDiff(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereClauseWithCast(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON myschema.events USING btree (created_at) WHERE ((kind)::text = 'done'::text)",
 		"CREATE INDEX idx ON events USING btree (created_at) WHERE kind::text = 'done'::text",
 		nil,
@@ -3502,7 +3503,7 @@ func TestEqualIndexDef_whereClauseWithCast(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereClauseBooleanCondition(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON myschema.tasks USING btree (priority) WHERE ((visible = true))",
 		"CREATE INDEX idx ON tasks USING btree (priority) WHERE visible = true",
 		nil,
@@ -3510,7 +3511,7 @@ func TestEqualIndexDef_whereClauseBooleanCondition(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.tasks USING btree (kind, seq) WHERE ((visible = true) AND (seq > 0))",
 		"CREATE UNIQUE INDEX idx ON tasks USING btree (kind, seq) WHERE visible = true AND seq > 0",
 		nil,
@@ -3520,7 +3521,7 @@ func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
 func TestEqualIndexDef_whereCurrentDateCastStripped(t *testing.T) {
 	// pg_get_indexdef emits `'2020-01-01'::date` on a partial-index WHERE
 	// clause comparing a date column; users write the bare literal.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (created_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE created_at >= '2020-01-01'",
 		nil,
@@ -3528,7 +3529,7 @@ func TestEqualIndexDef_whereCurrentDateCastStripped(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereCurrentTimeCastStripped(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE (starts_at >= '00:00:00'::time without time zone)",
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE starts_at >= '00:00:00'",
 		nil,
@@ -3539,7 +3540,7 @@ func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
 	// Negative integer literal: pg_get_indexdef emits `'-40'::integer`,
 	// user writes `-40`. Requires the Sval->Ival coercion alongside the
 	// asymmetric strip.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON balances USING btree (id) WHERE (amount >= '-40'::integer)",
 		"CREATE INDEX idx ON balances USING btree (id) WHERE amount >= -40",
 		nil,
@@ -3548,7 +3549,7 @@ func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
 
 func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
 	// Cast nested inside an AND combinator.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE ((visible = true) AND (starts_at >= '00:00:00'::time without time zone))",
 		"CREATE INDEX idx ON t USING btree (id) WHERE visible = true AND starts_at >= '00:00:00'",
 		nil,
@@ -3560,7 +3561,7 @@ func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 	// gate the Sval->numeric coercion. The cast is still stripped (asymmetric
 	// rule from #201), but the surviving Sval is not rewritten; so the
 	// desired bare integer stays unequal.
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::myapp.int4)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
 		nil,
@@ -3570,7 +3571,7 @@ func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 	// Expression index: pg_get_indexdef adds `::text` on a function-call
 	// argument when the column is varchar; user writes the bare column.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON people USING btree (lower((name)::text))",
 		"CREATE INDEX idx ON people USING btree (lower(name))",
 		nil,
@@ -3580,7 +3581,7 @@ func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 	// When desired explicitly carries the same cast as current, normal
 	// comparison succeeds; the asymmetric strip does not over-fire.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE occurred_at >= '2020-01-01'::date",
 		nil,
@@ -3589,7 +3590,7 @@ func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 
 func TestEqualIndexDef_whereCastsDifferTypes(t *testing.T) {
 	// Both sides cast but on different numeric types; they remain unequal.
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::bigint)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
 		nil,
@@ -3600,7 +3601,7 @@ func TestEqualIndexDef_whereDesiredCastCurrentBare(t *testing.T) {
 	// Reverse direction: desired carries a cast that current doesn't. The
 	// asymmetric strip fires only on the current side, so the difference
 	// surfaces (desired's cast is preserved).
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
 		nil,
@@ -3631,14 +3632,14 @@ func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 	})
 	desired.Set("public.products", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
 
 func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
 	// ASC is the default sort order; pg_get_indexdef omits it
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2 ASC)",
 		nil,
@@ -3646,7 +3647,7 @@ func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
 }
 
 func TestEqualIndexDef_allDefault(t *testing.T) {
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC)",
 		nil,
@@ -3655,7 +3656,7 @@ func TestEqualIndexDef_allDefault(t *testing.T) {
 
 func TestEqualIndexDef_descNullsFirst(t *testing.T) {
 	// NULLS FIRST is the default for DESC; pg_get_indexdef omits it
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS FIRST)",
 		nil,
@@ -3664,7 +3665,7 @@ func TestEqualIndexDef_descNullsFirst(t *testing.T) {
 
 func TestEqualIndexDef_ascNullsLast(t *testing.T) {
 	// NULLS LAST is the default for ASC; pg_get_indexdef omits it
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS LAST)",
 		nil,
@@ -3673,7 +3674,7 @@ func TestEqualIndexDef_ascNullsLast(t *testing.T) {
 
 func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
 	// NULLS LAST for DESC is non-default, must not be treated as equal
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS LAST)",
 		nil,
@@ -3682,7 +3683,7 @@ func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
 
 func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
 	// NULLS FIRST for ASC is non-default, must not be treated as equal
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS FIRST)",
 		nil,
@@ -3692,7 +3693,7 @@ func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
 func TestEqualIndexDef_opclassQualified(t *testing.T) {
 	// get_opclass_name writes an opclass on the search_path bare, while a file
 	// may qualify it.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 public.text_pattern_ops)",
 		nil,
@@ -3700,7 +3701,7 @@ func TestEqualIndexDef_opclassQualified(t *testing.T) {
 }
 
 func TestEqualIndexDef_opclassDiffers_notEqual(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 varchar_pattern_ops)",
 		nil,
@@ -3710,7 +3711,7 @@ func TestEqualIndexDef_opclassDiffers_notEqual(t *testing.T) {
 func TestEqualIndexDef_opclassOptionQuoting(t *testing.T) {
 	// get_reloptions quotes a value that does not read as an identifier, so
 	// pg_get_indexdef writes siglen='32' where a file writes siglen=32.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
 		nil,
@@ -3719,7 +3720,7 @@ func TestEqualIndexDef_opclassOptionQuoting(t *testing.T) {
 
 func TestEqualIndexDef_opclassOptionOrder(t *testing.T) {
 	// The order of the options is not part of the setting.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (numranges='4', siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (siglen=32, numranges=4))",
 		nil,
@@ -3727,7 +3728,7 @@ func TestEqualIndexDef_opclassOptionOrder(t *testing.T) {
 }
 
 func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='64'))",
 		nil,
@@ -3737,7 +3738,7 @@ func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
 func TestEqualIndexDef_opclassOptionFractional(t *testing.T) {
 	// A BRIN bloom class takes a fractional value, which arrives as a Float
 	// where the catalog's quoted spelling arrives as a String.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.05))",
 		nil,
@@ -3745,7 +3746,7 @@ func TestEqualIndexDef_opclassOptionFractional(t *testing.T) {
 }
 
 func TestEqualIndexDef_opclassOptionFractionalDiffers_notEqual(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.02))",
 		nil,
@@ -3755,7 +3756,7 @@ func TestEqualIndexDef_opclassOptionFractionalDiffers_notEqual(t *testing.T) {
 func TestEqualIndexDef_opclassOptionBareWord(t *testing.T) {
 	// A value that reads as an identifier comes back bare, so the quoted
 	// spelling is the one a file may carry.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode=fast))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode='fast'))",
 		nil,
@@ -3766,7 +3767,7 @@ func TestEqualIndexDef_opclassOnlyOnOneSide_notEqual(t *testing.T) {
 	// The catalog omits a class that is the default for the column's type.
 	// Which class that is takes a lookup the diff does not have, so the two
 	// stay different. LIMITATIONS.md covers it.
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 text_ops)",
 		nil,
@@ -3774,7 +3775,7 @@ func TestEqualIndexDef_opclassOnlyOnOneSide_notEqual(t *testing.T) {
 }
 
 func TestEqualIndexDef_opclassOptionOnlyOnOneSide_notEqual(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops)",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
 		nil,
@@ -3783,7 +3784,7 @@ func TestEqualIndexDef_opclassOptionOnlyOnOneSide_notEqual(t *testing.T) {
 
 func TestEqualIndexDef_opclassOnExpression(t *testing.T) {
 	// An expression element takes both folds.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (lower(col1) text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (pg_catalog.lower(col1) public.text_pattern_ops)",
 		nil,
@@ -3792,7 +3793,7 @@ func TestEqualIndexDef_opclassOnExpression(t *testing.T) {
 
 func TestEqualIndexDef_opclassOnSecondColumn(t *testing.T) {
 	// Every element is canonicalised, not just the first.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1, col2 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1, col2 public.text_pattern_ops)",
 		nil,
@@ -3801,7 +3802,7 @@ func TestEqualIndexDef_opclassOnSecondColumn(t *testing.T) {
 
 func TestEqualIndexDef_collationQualified(t *testing.T) {
 	// generate_collation_name writes a collation on the search_path bare.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE pg_catalog."C")`,
 		nil,
@@ -3809,7 +3810,7 @@ func TestEqualIndexDef_collationQualified(t *testing.T) {
 }
 
 func TestEqualIndexDef_collationDiffers_notEqual(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "POSIX")`,
 		nil,
@@ -3819,7 +3820,7 @@ func TestEqualIndexDef_collationDiffers_notEqual(t *testing.T) {
 func TestEqualIndexDef_collationOnlyOnOneSide_notEqual(t *testing.T) {
 	// The catalog omits the collation the column already carries. Reading
 	// that one is the lookup the diff does not have.
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		nil,
@@ -3827,7 +3828,7 @@ func TestEqualIndexDef_collationOnlyOnOneSide_notEqual(t *testing.T) {
 }
 
 func TestEqualIndexDef_different(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (name)",
 		nil,
@@ -3835,14 +3836,14 @@ func TestEqualIndexDef_different(t *testing.T) {
 }
 
 func TestEqualIndexDef_parseError(t *testing.T) {
-	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)", nil))
-	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL", nil))
+	assert.False(t, diff.EqualIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, diff.EqualIndexDef("NOT VALID SQL", "NOT VALID SQL", nil))
 }
 
 func TestEqualIndexDef_notIndexStmt(t *testing.T) {
 	// Valid SQL but not an INDEX statement; falls back to string comparison
-	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)", nil))
-	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1", nil))
+	assert.False(t, diff.EqualIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, diff.EqualIndexDef("SELECT 1", "SELECT 1", nil))
 }
 
 func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
@@ -3859,7 +3860,7 @@ func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
 	dt.Indexes.Set("idx", &model.Index{Schema: "", Name: "idx", Table: "users", Definition: "CREATE INDEX idx ON users USING btree (id)"})
 	desired.Set("public.users", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -3878,7 +3879,7 @@ func TestDiffTables_renameTable(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, result.Stmts)
 }
@@ -3897,7 +3898,7 @@ func TestDiffTables_renameTable_selfRename_skipped(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.users", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -3910,7 +3911,7 @@ func TestDiffColumns_renameColumn_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -3936,7 +3937,7 @@ func TestDiffIndexes_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx", &model.Index{Schema: "public", Name: "idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -3957,7 +3958,7 @@ func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -3977,7 +3978,7 @@ func TestDiffTables_renameTable_alreadyApplied(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -4000,7 +4001,7 @@ func TestDiffTables_renameTable_withIndex(t *testing.T) {
 	dt.Indexes.Set("idx_users_name", &model.Index{Schema: "public", Name: "idx_users_name", Table: "accounts", Definition: "CREATE INDEX idx_users_name ON public.accounts USING btree (name)"})
 	desired.Set("public.accounts", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	// Should only rename the table, no DROP/CREATE index
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, result.Stmts)
@@ -4032,7 +4033,7 @@ func TestDiffTables_renameTable_withFK(t *testing.T) {
 	})
 	desired.Set("public.purchases", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME TO purchases;"}, result.Stmts)
 }
@@ -4055,7 +4056,7 @@ func TestDiffTables_renameTable_destinationExists_error(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -4069,7 +4070,7 @@ func TestDiffColumns_renameColumn_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	_, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -4088,7 +4089,7 @@ func TestDiffTables_renameTable_crossSchema_error(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("other.users", dt)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
@@ -4101,7 +4102,7 @@ func TestDiffColumns_renameColumn(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME COLUMN name TO display_name;"}, stmts)
 }
@@ -4114,7 +4115,7 @@ func TestDiffColumns_renameColumn_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -4140,7 +4141,7 @@ func TestDiffIndexes_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
 }
@@ -4178,7 +4179,7 @@ func TestDiffIndexes_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	idxResult, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -4190,7 +4191,7 @@ func TestDiffIndexes_rename_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	_, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -4211,7 +4212,7 @@ func TestDiffForeignKeys_rename(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME CONSTRAINT old_fk TO new_fk;"}, addStmts)
@@ -4233,7 +4234,7 @@ func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	_, _, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 }
 
@@ -4248,7 +4249,7 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	_, _, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -4276,7 +4277,7 @@ func TestDiffIndexes_rename_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
+	_, err := diff.DiffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -4302,7 +4303,7 @@ func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
+	_, _, _, err := diff.DiffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -4317,7 +4318,7 @@ func TestDiffTables_renameTable_sourceNotFound(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source")
 }
@@ -4336,7 +4337,7 @@ func TestDiffTables_renameColumn_error_propagates(t *testing.T) {
 	dt.Columns.Set("new_col", &model.Column{Name: "new_col", RenameFrom: &oldName, TypeName: "text"})
 	desired.Set("public.users", dt)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source column")
 }
@@ -4348,56 +4349,56 @@ func TestDiffColumns_renameColumn_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	_, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	_, _, _, _, err := diff.DiffColumns("public.users", current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source column")
 }
 
 func TestUpdateIndexName_parseError(t *testing.T) {
-	_, err := updateIndexName("NOT VALID SQL", "new_idx")
+	_, err := diff.UpdateIndexName("NOT VALID SQL", "new_idx")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse index definition")
 }
 
 func TestUpdateIndexName_notIndexStmt(t *testing.T) {
-	_, err := updateIndexName("SELECT 1", "new_idx")
+	_, err := diff.UpdateIndexName("SELECT 1", "new_idx")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected IndexStmt")
 }
 
 func TestUpdateIndexName_success(t *testing.T) {
-	got, err := updateIndexName("CREATE INDEX old_idx ON t (id)", "new_idx")
+	got, err := diff.UpdateIndexName("CREATE INDEX old_idx ON t (id)", "new_idx")
 	require.NoError(t, err)
 	assert.Contains(t, got, "new_idx")
 	assert.NotContains(t, got, "old_idx")
 }
 
 func TestUpdateIndexTableName_parseError(t *testing.T) {
-	_, err := updateIndexTableName("NOT VALID SQL", "new_table")
+	_, err := diff.UpdateIndexTableName("NOT VALID SQL", "new_table")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse index definition")
 }
 
 func TestUpdateIndexTableName_notIndexStmt(t *testing.T) {
-	_, err := updateIndexTableName("SELECT 1", "new_table")
+	_, err := diff.UpdateIndexTableName("SELECT 1", "new_table")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected IndexStmt with relation")
 }
 
 func TestUpdateIndexTableName_success(t *testing.T) {
-	got, err := updateIndexTableName("CREATE INDEX idx ON old_table (id)", "new_table")
+	got, err := diff.UpdateIndexTableName("CREATE INDEX idx ON old_table (id)", "new_table")
 	require.NoError(t, err)
 	assert.Contains(t, got, "new_table")
 	assert.NotContains(t, got, "old_table")
 }
 
 func TestParseFKDef_parseError(t *testing.T) {
-	_, err := parseFKDef("NOT VALID SQL")
+	_, err := diff.ParseFKDef("NOT VALID SQL")
 	require.Error(t, err)
 }
 
 func TestParseFKDef_success(t *testing.T) {
-	con, err := parseFKDef("FOREIGN KEY (user_id) REFERENCES users(id)")
+	con, err := diff.ParseFKDef("FOREIGN KEY (user_id) REFERENCES users(id)")
 	require.NoError(t, err)
 	require.NotNil(t, con)
 }
@@ -4408,13 +4409,13 @@ func TestStripDefaultTopLevelCast_stripsWhenPeerHasNoCast(t *testing.T) {
 	// `'hello'::text` == `'hello'`.
 	_, target, err := pgast.ParseExpr("'hello'::text")
 	require.NoError(t, err)
-	result := stripDefaultTopLevelCast(target.Val, nil)
+	result := diff.StripDefaultTopLevelCast(target.Val, nil)
 	require.NotNil(t, result)
 	assert.Nil(t, result.GetTypeCast())
 }
 
 func TestPeerIsNumericAtTopLevel_nil(t *testing.T) {
-	assert.False(t, peerIsNumericAtTopLevel(nil))
+	assert.False(t, diff.PeerIsNumericAtTopLevel(nil))
 }
 
 func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
@@ -4422,7 +4423,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
 	// gate must reject it.
 	_, target, err := pgast.ParseExpr("'hello'::text")
 	require.NoError(t, err)
-	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+	assert.False(t, diff.PeerIsNumericAtTopLevel(target.Val))
 }
 
 func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
@@ -4430,7 +4431,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
 	// "would be numeric after strip"; the strip leaves a ColumnRef.
 	_, target, err := pgast.ParseExpr("(col)::integer")
 	require.NoError(t, err)
-	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+	assert.False(t, diff.PeerIsNumericAtTopLevel(target.Val))
 }
 
 func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericSval(t *testing.T) {
@@ -4438,34 +4439,34 @@ func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericSval(t *testing.T) {
 	// number. Not coercible, so the gate must reject it.
 	_, target, err := pgast.ParseExpr("'abc'::integer")
 	require.NoError(t, err)
-	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+	assert.False(t, diff.PeerIsNumericAtTopLevel(target.Val))
 }
 
 func TestIsTextLikeTypeName_nil(t *testing.T) {
-	assert.False(t, isTextLikeTypeName(nil))
+	assert.False(t, diff.IsTextLikeTypeName(nil))
 }
 
 func TestParseIndexDef_parseError(t *testing.T) {
-	_, _, err := parseIndexDef("NOT VALID SQL")
+	_, _, err := diff.ParseIndexDef("NOT VALID SQL")
 	require.Error(t, err)
 }
 
 func TestParseIndexDef_notIndexStmt(t *testing.T) {
-	_, _, err := parseIndexDef("SELECT 1")
+	_, _, err := diff.ParseIndexDef("SELECT 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
 
 func TestNormalizeIndexStmt_nil(t *testing.T) {
 	// Must not panic on nil input.
-	normalizeIndexStmt(nil)
+	diff.NormalizeIndexStmt(nil)
 }
 
 func TestAlignIndexCasts_nilInputs(t *testing.T) {
 	// Defensive: must not panic when either side is nil.
-	alignIndexCasts(nil, nil)
-	alignIndexCasts(&pg_query.IndexStmt{}, nil)
-	alignIndexCasts(nil, &pg_query.IndexStmt{})
+	diff.AlignIndexCasts(nil, nil)
+	diff.AlignIndexCasts(&pg_query.IndexStmt{}, nil)
+	diff.AlignIndexCasts(nil, &pg_query.IndexStmt{})
 }
 
 func TestAlignIndexCasts_paramCountMismatch(t *testing.T) {
@@ -4476,7 +4477,7 @@ func TestAlignIndexCasts_paramCountMismatch(t *testing.T) {
 	// the difference.
 	desired := &pg_query.IndexStmt{IndexParams: []*pg_query.Node{}}
 	current := &pg_query.IndexStmt{IndexParams: []*pg_query.Node{{}}}
-	alignIndexCasts(desired, current)
+	diff.AlignIndexCasts(desired, current)
 }
 
 func TestDiffColumns_addIdentity_fromNotNull(t *testing.T) {
@@ -4486,7 +4487,7 @@ func TestDiffColumns_addIdentity_fromNotNull(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;",
@@ -4500,7 +4501,7 @@ func TestDiffColumns_addIdentity_fromNullable(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('d')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id SET NOT NULL;",
@@ -4518,7 +4519,7 @@ func TestDiffColumns_addIdentity_fromSerial(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;",
@@ -4533,7 +4534,7 @@ func TestDiffColumns_addIdentity_fromColumnWithDefault(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;",
@@ -4548,7 +4549,7 @@ func TestDiffColumns_dropIdentity_keepNotNull(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id DROP IDENTITY IF EXISTS;",
@@ -4562,7 +4563,7 @@ func TestDiffColumns_dropIdentity_toNullable(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts, notNullDrops, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, notNullDrops, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id DROP IDENTITY IF EXISTS;",
@@ -4579,7 +4580,7 @@ func TestDiffColumns_changeIdentityKind_alwaysToByDefault(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('d')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id SET GENERATED BY DEFAULT;",
@@ -4593,7 +4594,7 @@ func TestDiffColumns_changeIdentityKind_byDefaultToAlways(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id SET GENERATED ALWAYS;",
@@ -4618,7 +4619,7 @@ func TestDiffColumns_identitySequenceOptionsFollowTheType(t *testing.T) {
 		desired := orderedmap.New[string, *model.Column]()
 		desired.Set("id", identity("bigint", model.DefaultIdentitySequence("bigint", 1)))
 
-		stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+		stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint;",
@@ -4634,7 +4635,7 @@ func TestDiffColumns_identitySequenceOptionsFollowTheType(t *testing.T) {
 		desired := orderedmap.New[string, *model.Column]()
 		desired.Set("id", identity("bigint", model.DefaultIdentitySequence("bigint", 1)))
 
-		stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+		stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint;",
@@ -4650,7 +4651,7 @@ func TestDiffColumns_identityUnchanged(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+	stmts, _, _, _, err := diff.DiffColumns("public.items", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -4661,7 +4662,7 @@ func TestColumnStorageSQL(t *testing.T) {
 	}
 
 	// Nothing to do when both sides agree.
-	assert.Empty(t, columnStorageSQL("public.docs", cur(), &model.Column{
+	assert.Empty(t, diff.ColumnStorageSQL("public.docs", cur(), &model.Column{
 		Name: "body", TypeName: "text", StorageType: "external", Compression: "pglz",
 	}, false))
 
@@ -4670,13 +4671,13 @@ func TestColumnStorageSQL(t *testing.T) {
 	assert.Equal(t, []string{
 		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTENDED;",
 		"ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION default;",
-	}, columnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, false))
+	}, diff.ColumnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, false))
 
 	// A column being added carries only what it names.
 	assert.Equal(t, []string{
 		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;",
-	}, columnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text", StorageType: "main"}, false))
-	assert.Empty(t, columnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text"}, false))
+	}, diff.ColumnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text", StorageType: "main"}, false))
+	assert.Empty(t, diff.ColumnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text"}, false))
 
 	// SET DATA TYPE resets both, so what the definition names is written out
 	// again even though the current column already holds it, and what it
@@ -4684,10 +4685,10 @@ func TestColumnStorageSQL(t *testing.T) {
 	assert.Equal(t, []string{
 		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;",
 		"ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;",
-	}, columnStorageSQL("public.docs", cur(), &model.Column{
+	}, diff.ColumnStorageSQL("public.docs", cur(), &model.Column{
 		Name: "body", TypeName: "text", StorageType: "external", Compression: "pglz",
 	}, true))
-	assert.Empty(t, columnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, true))
+	assert.Empty(t, diff.ColumnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, true))
 }
 
 // Suppressing the rename of a constraint that is being recreated must not take
@@ -4739,7 +4740,7 @@ func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 	current.Set("xa", fk("xa", "p", ""))
 	desired.Set("by", fk("by", "p", "xa"))
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.t", "public", false, current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diff.DiffForeignKeys("public.t", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.t DROP CONSTRAINT a;"}, dropStmts)
 	assert.Equal(t, []string{
@@ -4753,33 +4754,33 @@ func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 // per comparison entry point, since each parses its own way in.
 func TestStripFuncSchema(t *testing.T) {
 	t.Run("constraint", func(t *testing.T) {
-		assert.True(t, equalConstraintDef(
+		assert.True(t, diff.EqualConstraintDef(
 			"CHECK ((lower_v(v) <> 'x'::text))",
 			"CHECK (public.lower_v(v) <> 'x')"))
 	})
 
 	t.Run("index expression", func(t *testing.T) {
-		assert.True(t, equalIndexDef(
+		assert.True(t, diff.EqualIndexDef(
 			"CREATE INDEX i ON public.t USING btree (lower_v(v))",
 			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))", nil))
 	})
 
 	t.Run("index predicate", func(t *testing.T) {
-		assert.True(t, equalIndexDef(
+		assert.True(t, diff.EqualIndexDef(
 			"CREATE INDEX i ON public.t USING btree (v) WHERE (lower_v(v) <> 'y'::text)",
 			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'", nil))
 	})
 
 	t.Run("select expression", func(t *testing.T) {
-		assert.True(t, equalSelectExpr("lower_v(v)", "public.lower_v(v)"))
+		assert.True(t, diff.EqualSelectExpr("lower_v(v)", "public.lower_v(v)"))
 	})
 
 	t.Run("default", func(t *testing.T) {
-		assert.True(t, equalDefault(new("lower_v('A'::text)"), new("public.lower_v('A')")))
+		assert.True(t, diff.EqualDefault(new("lower_v('A'::text)"), new("public.lower_v('A')")))
 	})
 
 	t.Run("view body", func(t *testing.T) {
-		assert.True(t, equalViewDef(
+		assert.True(t, diff.EqualViewDef(
 			"SELECT lower_v(t.v) AS lv FROM t",
 			"SELECT public.lower_v(t.v) AS lv FROM public.t"))
 	})
@@ -4787,67 +4788,67 @@ func TestStripFuncSchema(t *testing.T) {
 	// PostgreSQL accepts catalog.schema.f when the catalog names the current
 	// database, so the strip cannot key on a two-part name alone.
 	t.Run("three-part name", func(t *testing.T) {
-		assert.True(t, equalSelectExpr("lower_v(v)", "postgres.public.lower_v(v)"))
+		assert.True(t, diff.EqualSelectExpr("lower_v(v)", "postgres.public.lower_v(v)"))
 	})
 
 	// A bare name has nothing to strip and must survive untouched.
 	t.Run("unqualified is left alone", func(t *testing.T) {
-		assert.True(t, equalSelectExpr("lower_v(v)", "lower_v(v)"))
-		assert.False(t, equalSelectExpr("lower_v(v)", "upper_v(v)"))
+		assert.True(t, diff.EqualSelectExpr("lower_v(v)", "lower_v(v)"))
+		assert.False(t, diff.EqualSelectExpr("lower_v(v)", "upper_v(v)"))
 	})
 }
 
 func TestSpreadVariadicArray(t *testing.T) {
 	t.Run("index expression", func(t *testing.T) {
-		assert.True(t, equalIndexDef(
+		assert.True(t, diff.EqualIndexDef(
 			"CREATE INDEX i ON public.t USING btree (jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text]))",
 			"CREATE INDEX i ON public.t (jsonb_extract_path_text(d, 'a', 'b'))", nil))
 	})
 
 	t.Run("view body", func(t *testing.T) {
-		assert.True(t, equalViewDef(
+		assert.True(t, diff.EqualViewDef(
 			"SELECT jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text]) AS ab FROM t",
 			"SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t"))
 	})
 
 	t.Run("element change is seen", func(t *testing.T) {
-		assert.False(t, equalSelectExpr(
+		assert.False(t, diff.EqualSelectExpr(
 			"jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text])",
 			"jsonb_extract_path_text(d, 'a', 'c')"))
 	})
 
 	// VARIADIC over an expression or an empty array has no spread form.
 	t.Run("not an array literal", func(t *testing.T) {
-		assert.True(t, equalSelectExpr("f(VARIADIC k)", "f(VARIADIC k)"))
-		assert.False(t, equalSelectExpr("f(VARIADIC k)", "f(k)"))
-		assert.True(t, equalSelectExpr("f(VARIADIC ARRAY[]::text[])", "f(VARIADIC ARRAY[]::text[])"))
+		assert.True(t, diff.EqualSelectExpr("f(VARIADIC k)", "f(VARIADIC k)"))
+		assert.False(t, diff.EqualSelectExpr("f(VARIADIC k)", "f(k)"))
+		assert.True(t, diff.EqualSelectExpr("f(VARIADIC ARRAY[]::text[])", "f(VARIADIC ARRAY[]::text[])"))
 	})
 }
 
 func TestDropCaseElseNull(t *testing.T) {
 	t.Run("cast to text", func(t *testing.T) {
-		assert.True(t, equalSelectExpr(
+		assert.True(t, diff.EqualSelectExpr(
 			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
 			"CASE WHEN a > 0 THEN 'p' END"))
 	})
 
 	t.Run("cast to integer", func(t *testing.T) {
-		assert.True(t, equalSelectExpr(
+		assert.True(t, diff.EqualSelectExpr(
 			"CASE a WHEN 1 THEN 10 ELSE NULL::integer END",
 			"CASE a WHEN 1 THEN 10 END"))
 	})
 
 	t.Run("bare NULL", func(t *testing.T) {
-		assert.True(t, equalSelectExpr(
+		assert.True(t, diff.EqualSelectExpr(
 			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
 			"CASE WHEN a > 0 THEN 'p' ELSE NULL END"))
 	})
 
 	t.Run("ELSE with a value is kept", func(t *testing.T) {
-		assert.False(t, equalSelectExpr(
+		assert.False(t, diff.EqualSelectExpr(
 			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
 			"CASE WHEN a > 0 THEN 'p' ELSE 'n' END"))
-		assert.False(t, equalSelectExpr(
+		assert.False(t, diff.EqualSelectExpr(
 			"CASE WHEN (a > 0) THEN 1 ELSE 0 END",
 			"CASE WHEN a > 0 THEN 1 END"))
 	})
@@ -4855,7 +4856,7 @@ func TestDropCaseElseNull(t *testing.T) {
 
 func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 	// pg_get_indexdef quotes the value, a file writes it bare.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
 		nil,
@@ -4864,7 +4865,7 @@ func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 
 func TestEqualIndexDef_storageParamOrder(t *testing.T) {
 	// The catalog keeps the order the parameters were created in.
-	assert.True(t, equalIndexDef(
+	assert.True(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80', deduplicate_items=off)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (deduplicate_items=off, fillfactor=80)",
 		nil,
@@ -4872,7 +4873,7 @@ func TestEqualIndexDef_storageParamOrder(t *testing.T) {
 }
 
 func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=90)",
 		nil,
@@ -4920,7 +4921,7 @@ func TestEqualIndexDef_columnCollation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.same, equalIndexDef(
+			assert.Equal(t, tt.same, diff.EqualIndexDef(
 				"CREATE INDEX idx ON public.users USING btree "+tt.current,
 				"CREATE INDEX idx ON public.users USING btree "+tt.desired,
 				tt.cols,
@@ -4930,7 +4931,7 @@ func TestEqualIndexDef_columnCollation(t *testing.T) {
 }
 
 func TestEqualIndexDef_storageParamAdded(t *testing.T) {
-	assert.False(t, equalIndexDef(
+	assert.False(t, diff.EqualIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
 		nil,
@@ -4957,7 +4958,7 @@ func TestDiffTables_newTable_withStorageRLSAndTrigger(t *testing.T) {
 	})
 	desired.Set("public.docs", tbl)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 5)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.docs")
@@ -4971,7 +4972,7 @@ func TestDiffTables_newTable_withStorageRLSAndTrigger(t *testing.T) {
 
 func TestEqualConstraintDef_exclusionSchemaQualifiedFunc(t *testing.T) {
 	// The catalog drops the schema from a function on the search_path.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (lower(v) WITH =)",
 		"EXCLUDE USING btree (pg_catalog.lower(v) WITH =)",
 	))
@@ -4980,42 +4981,42 @@ func TestEqualConstraintDef_exclusionSchemaQualifiedFunc(t *testing.T) {
 func TestEqualConstraintDef_exclusionOpclassQualified(t *testing.T) {
 	// An exclusion element is an index element, so it takes the same
 	// canonicalization.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (v text_pattern_ops WITH =)",
 		"EXCLUDE USING btree (v public.text_pattern_ops WITH =)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionOpclassOption(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING gist (tsv tsvector_ops (siglen='32') WITH &&)",
 		"EXCLUDE USING gist (tsv tsvector_ops (siglen=32) WITH &&)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionOpclassDiffers_notEqual(t *testing.T) {
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (v text_pattern_ops WITH =)",
 		"EXCLUDE USING btree (v varchar_pattern_ops WITH =)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionCollationQualified(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		`EXCLUDE USING btree (v COLLATE "C" WITH =)`,
 		`EXCLUDE USING btree (v COLLATE pg_catalog."C" WITH =)`,
 	))
 }
 
 func TestEqualConstraintDef_exclusionTextCast(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree ((v || 'x'::text) WITH =)",
 		"EXCLUDE USING btree (((v || 'x')) WITH =)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionAsc(t *testing.T) {
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (v WITH =)",
 		"EXCLUDE USING btree (v ASC WITH =)",
 	))
@@ -5023,7 +5024,7 @@ func TestEqualConstraintDef_exclusionAsc(t *testing.T) {
 
 func TestEqualConstraintDef_exclusionWhereBetween(t *testing.T) {
 	// The catalog stores a BETWEEN in the predicate expanded.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING gist (r WITH &&) WHERE (a >= 1 AND a <= 10)",
 		"EXCLUDE USING gist (r WITH &&) WHERE (a BETWEEN 1 AND 10)",
 	))
@@ -5031,25 +5032,25 @@ func TestEqualConstraintDef_exclusionWhereBetween(t *testing.T) {
 
 func TestEqualConstraintDef_exclusionWhereNumericCast(t *testing.T) {
 	// The cast the catalog adds is stripped from the current side only.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0::numeric)",
 		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0)",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0)",
 		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0::numeric)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionOperatorDiff(t *testing.T) {
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (v WITH =)",
 		"EXCLUDE USING btree (v WITH <>)",
 	))
 }
 
 func TestEqualConstraintDef_exclusionElementCountDiff(t *testing.T) {
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"EXCLUDE USING gist (r WITH &&)",
 		"EXCLUDE USING gist (r WITH &&, v WITH =)",
 	))
@@ -5057,7 +5058,7 @@ func TestEqualConstraintDef_exclusionElementCountDiff(t *testing.T) {
 
 func TestEqualConstraintDef_exclusionQualifiedOperator(t *testing.T) {
 	// The catalog prints a visible operator bare.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"EXCLUDE USING btree (v WITH =)",
 		"EXCLUDE USING btree (v WITH OPERATOR(pg_catalog.=))",
 	))
@@ -5065,20 +5066,20 @@ func TestEqualConstraintDef_exclusionQualifiedOperator(t *testing.T) {
 
 func TestEqualConstraintDef_storageParams(t *testing.T) {
 	// The catalog quotes the value; the file writes it bare.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"UNIQUE (v) WITH (fillfactor='70')",
 		"UNIQUE (v) WITH (fillfactor = 70)",
 	))
 	// The order the parameters were created in is not part of the setting.
-	assert.True(t, equalConstraintDef(
+	assert.True(t, diff.EqualConstraintDef(
 		"UNIQUE (v) WITH (fillfactor='70', deduplicate_items='off')",
 		"UNIQUE (v) WITH (deduplicate_items = off, fillfactor = 70)",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"UNIQUE (v) WITH (fillfactor='70')",
 		"UNIQUE (v) WITH (fillfactor = 80)",
 	))
-	assert.False(t, equalConstraintDef(
+	assert.False(t, diff.EqualConstraintDef(
 		"UNIQUE (v) WITH (fillfactor='70')",
 		"UNIQUE (v)",
 	))
@@ -5086,12 +5087,12 @@ func TestEqualConstraintDef_storageParams(t *testing.T) {
 
 func TestAlterTypeName(t *testing.T) {
 	// A serial pseudo-type resolves to the type SET DATA TYPE can name.
-	assert.Equal(t, "integer", alterTypeName("serial"))
-	assert.Equal(t, "bigint", alterTypeName("bigserial"))
-	assert.Equal(t, "smallint", alterTypeName("smallserial"))
+	assert.Equal(t, "integer", diff.AlterTypeName("serial"))
+	assert.Equal(t, "bigint", diff.AlterTypeName("bigserial"))
+	assert.Equal(t, "smallint", diff.AlterTypeName("smallserial"))
 	// Everything else goes out as written.
-	assert.Equal(t, "text", alterTypeName("text"))
-	assert.Equal(t, "numeric(10,2)", alterTypeName("numeric(10,2)"))
+	assert.Equal(t, "text", diff.AlterTypeName("text"))
+	assert.Equal(t, "numeric(10,2)", diff.AlterTypeName("numeric(10,2)"))
 }
 
 func TestAlterSerialSequenceSQL(t *testing.T) {
@@ -5100,37 +5101,37 @@ func TestAlterSerialSequenceSQL(t *testing.T) {
 	t.Run("serial column widening", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "bigserial"}
-		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL("public.t", current, desired))
+		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("base type named directly", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "bigint"}
-		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL("public.t", current, desired))
+		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("type unchanged", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "serial"}
-		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
+		assert.Empty(t, diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("column owns no sequence", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "integer"}
 		desired := &model.Column{Name: "id", TypeName: "bigint"}
-		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
+		assert.Empty(t, diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("type a sequence cannot hold", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "text"}
-		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
+		assert.Empty(t, diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("neither side a serial", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "integer", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "bigint"}
-		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
+		assert.Empty(t, diff.AlterSerialSequenceSQL("public.t", current, desired))
 	})
 }
 
@@ -5142,7 +5143,7 @@ func TestAlterColumnSQL_SerialWidening(t *testing.T) {
 	desired := &model.Column{Name: "id", TypeName: "bigserial", NotNull: true}
 	assert.Equal(t, []string{
 		"ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;",
-	}, alterColumnSQL("public.users", current, desired))
+	}, diff.AlterColumnSQL("public.users", current, desired))
 }
 
 func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
@@ -5157,7 +5158,7 @@ func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
 			"ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;",
 			"ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;",
 			"ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';",
-		}, alterColumnSQL("public.items", current, desired))
+		}, diff.AlterColumnSQL("public.items", current, desired))
 	})
 
 	t.Run("default removed", func(t *testing.T) {
@@ -5166,7 +5167,7 @@ func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
 		assert.Equal(t, []string{
 			"ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;",
 			"ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;",
-		}, alterColumnSQL("public.items", current, desired))
+		}, diff.AlterColumnSQL("public.items", current, desired))
 	})
 
 	t.Run("collation comes before USING", func(t *testing.T) {
@@ -5176,7 +5177,7 @@ func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
 		desired := &model.Column{Name: "code", TypeName: "character varying(10)", Collation: &coll, RetypeUsing: &u}
 		assert.Equal(t, []string{
 			`ALTER TABLE public.items ALTER COLUMN code SET DATA TYPE character varying(10) COLLATE "C" USING code::varchar(10);`,
-		}, alterColumnSQL("public.items", current, desired))
+		}, diff.AlterColumnSQL("public.items", current, desired))
 	})
 
 	// A serial column's nextval() converts to any integer type.
@@ -5188,7 +5189,7 @@ func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
 		desired := &model.Column{Name: "id", TypeName: "bigserial", RetypeUsing: &u}
 		assert.Equal(t, []string{
 			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint USING id::bigint;",
-		}, alterColumnSQL("public.items", current, desired))
+		}, diff.AlterColumnSQL("public.items", current, desired))
 	})
 
 	// A generated column's expression is not a default to drop.
@@ -5199,14 +5200,14 @@ func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
 		desired := &model.Column{Name: "g", TypeName: "bigint", Default: &expr, Generated: 's', RetypeUsing: &u}
 		assert.Equal(t, []string{
 			"ALTER TABLE public.items ALTER COLUMN g SET DATA TYPE bigint USING g::bigint;",
-		}, alterColumnSQL("public.items", current, desired))
+		}, diff.AlterColumnSQL("public.items", current, desired))
 	})
 
 	t.Run("type unchanged", func(t *testing.T) {
 		current := &model.Column{Name: "status", TypeName: "text", Default: &def}
 		d := "'active'"
 		desired := &model.Column{Name: "status", TypeName: "text", Default: &d, RetypeUsing: &using}
-		assert.Empty(t, alterColumnSQL("public.items", current, desired))
+		assert.Empty(t, diff.AlterColumnSQL("public.items", current, desired))
 	})
 }
 
@@ -5219,18 +5220,18 @@ func TestAlterColumnSQL_SerialDefault(t *testing.T) {
 
 	t.Run("serial", func(t *testing.T) {
 		desired := &model.Column{Name: "id", TypeName: "bigserial", NotNull: true}
-		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+		assert.Empty(t, diff.AlterColumnSQL("public.users", current, desired))
 	})
 
 	t.Run("no default", func(t *testing.T) {
 		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true}
-		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+		assert.Empty(t, diff.AlterColumnSQL("public.users", current, desired))
 	})
 
 	t.Run("same default", func(t *testing.T) {
 		d := "nextval('users_id_seq')"
 		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true, Default: &d}
-		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+		assert.Empty(t, diff.AlterColumnSQL("public.users", current, desired))
 	})
 
 	t.Run("other default", func(t *testing.T) {
@@ -5238,7 +5239,7 @@ func TestAlterColumnSQL_SerialDefault(t *testing.T) {
 		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true, Default: &d}
 		assert.Equal(t, []string{
 			"ALTER TABLE public.users ALTER COLUMN id SET DEFAULT 0;",
-		}, alterColumnSQL("public.users", current, desired))
+		}, diff.AlterColumnSQL("public.users", current, desired))
 	})
 }
 
@@ -5260,14 +5261,14 @@ func TestDiffTables_dropTableWithInheritedForeignKey(t *testing.T) {
 	}
 
 	t.Run("drop allowed", func(t *testing.T) {
-		result, err := DiffTables(build(), orderedmap.New[string, *model.Table](), allowAllDrops{})
+		result, err := diff.DiffTables(build(), orderedmap.New[string, *model.Table](), allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"ALTER TABLE public.logs_2024 DROP CONSTRAINT logs_own_fkey;"}, result.FKDropStmts)
 		assert.Equal(t, []string{"DROP TABLE public.logs_2024;"}, result.DropStmts)
 	})
 
 	t.Run("drop disallowed", func(t *testing.T) {
-		result, err := DiffTables(build(), orderedmap.New[string, *model.Table](), denyAllDrops{})
+		result, err := diff.DiffTables(build(), orderedmap.New[string, *model.Table](), diff.DenyAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"-- skipped: ALTER TABLE public.logs_2024 DROP CONSTRAINT logs_own_fkey;",
@@ -5293,7 +5294,7 @@ func TestDiffTables_partitionChild_addIndex_perDirective(t *testing.T) {
 	dt.Indexes.Set("events_0_id", &model.Index{Schema: "public", Name: "events_0_id", Table: "events_0", Definition: "CREATE INDEX events_0_id ON public.events_0 USING btree (id)", Concurrently: true})
 	desired.Set("public.events_0", dt)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY events_0_id ON public.events_0 USING btree (id);"}, result.Stmts)
 	assert.True(t, result.HasConcurrently)
@@ -5338,15 +5339,15 @@ func TestDiffForeignKeys_comment(t *testing.T) {
 	}
 	const def = "FOREIGN KEY (user_id) REFERENCES users(id)"
 
-	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, newFK(def, nil), newFK(def, &author), allowAllDrops{})
+	_, addStmts, _, err := diff.DiffForeignKeys("public.orders", "public", false, newFK(def, nil), newFK(def, &author), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON CONSTRAINT fk_user ON public.orders IS 'author';"}, addStmts)
 
-	_, addStmts, _, err = diffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def, nil), allowAllDrops{})
+	_, addStmts, _, err = diff.DiffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def, nil), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON CONSTRAINT fk_user ON public.orders IS NULL;"}, addStmts)
 
-	_, addStmts, _, err = diffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def+" ON DELETE CASCADE", &author), allowAllDrops{})
+	_, addStmts, _, err = diff.DiffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def+" ON DELETE CASCADE", &author), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;",
@@ -5356,7 +5357,7 @@ func TestDiffForeignKeys_comment(t *testing.T) {
 
 // diffConstraintStmts runs diffConstraints and puts its drops ahead of its
 // other statements, the order diffTable gives them.
-func diffConstraintStmts(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) ([]string, []string, []string, []string, error) {
-	drops, stmts, comments, disallowed, usingIndex, err := diffConstraints(fqtn, current, desired, dc)
+func diffConstraintStmts(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc diff.DropChecker) ([]string, []string, []string, []string, error) {
+	drops, stmts, comments, disallowed, usingIndex, err := diff.DiffConstraints(fqtn, current, desired, dc)
 	return append(drops, stmts...), comments, disallowed, usingIndex, err
 }

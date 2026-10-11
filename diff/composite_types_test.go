@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -35,7 +36,7 @@ func attr(name, typeName string) *model.CompositeAttribute {
 func TestDiffCompositeTypes_CreateNew(t *testing.T) {
 	current := newCompositeTypeMap()
 	desired := newCompositeTypeMap(ct("address", attr("street", "text"), attr("city", "text")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.address AS (")
@@ -45,7 +46,7 @@ func TestDiffCompositeTypes_CreateNew(t *testing.T) {
 func TestDiffCompositeTypes_DropExisting(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("street", "text")))
 	desired := newCompositeTypeMap()
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"DROP TYPE public.address;"}, result.DropStmts)
@@ -54,7 +55,7 @@ func TestDiffCompositeTypes_DropExisting(t *testing.T) {
 func TestDiffCompositeTypes_DropDisallowed(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("street", "text")))
 	desired := newCompositeTypeMap()
-	result, err := DiffCompositeTypes(current, desired, denyAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Equal(t, []string{"-- skipped: DROP TYPE public.address;"}, result.DisallowedDropStmts)
@@ -63,7 +64,7 @@ func TestDiffCompositeTypes_DropDisallowed(t *testing.T) {
 func TestDiffCompositeTypes_AddAttribute(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("street", "text")))
 	desired := newCompositeTypeMap(ct("address", attr("street", "text"), attr("city", "text")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.address ADD ATTRIBUTE city text;"}, result.Stmts)
 }
@@ -71,7 +72,7 @@ func TestDiffCompositeTypes_AddAttribute(t *testing.T) {
 func TestDiffCompositeTypes_DropAttribute(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("street", "text"), attr("zip", "text")))
 	desired := newCompositeTypeMap(ct("address", attr("street", "text")))
-	result, err := DiffCompositeTypes(current, desired, allowCompositeTypeDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowCompositeTypeDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.address DROP ATTRIBUTE zip;"}, result.Stmts)
 }
@@ -79,7 +80,7 @@ func TestDiffCompositeTypes_DropAttribute(t *testing.T) {
 func TestDiffCompositeTypes_DropAttributeDisallowed(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("street", "text"), attr("zip", "text")))
 	desired := newCompositeTypeMap(ct("address", attr("street", "text")))
-	result, err := DiffCompositeTypes(current, desired, denyAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"-- skipped: ALTER TYPE public.address DROP ATTRIBUTE zip;"}, result.DisallowedDropStmts)
@@ -88,7 +89,7 @@ func TestDiffCompositeTypes_DropAttributeDisallowed(t *testing.T) {
 func TestDiffCompositeTypes_AlterAttributeType(t *testing.T) {
 	current := newCompositeTypeMap(ct("address", attr("city", "text")))
 	desired := newCompositeTypeMap(ct("address", attr("city", "character varying(100)")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.address ALTER ATTRIBUTE city TYPE character varying(100);"}, result.Stmts)
 }
@@ -102,7 +103,7 @@ func TestDiffCompositeTypes_RenameType(t *testing.T) {
 		RenameFrom: &renameFrom,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.address RENAME TO postal_address;"}, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -119,7 +120,7 @@ func TestDiffCompositeTypes_RenameAttribute(t *testing.T) {
 			attr("city", "text"),
 		},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TYPE public.address RENAME ATTRIBUTE street TO road;"}, result.Stmts)
 }
@@ -134,7 +135,7 @@ func TestDiffCompositeTypes_RenameAttributeDestinationExists(t *testing.T) {
 			{Name: "road", TypeName: "text", RenameFrom: &renameFrom},
 		},
 	})
-	_, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	_, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -148,7 +149,7 @@ func TestDiffCompositeTypes_RenameTypeSourceNotFound(t *testing.T) {
 		RenameFrom: &renameFrom,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	_, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	_, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source public.nonexist not found")
 }
@@ -165,7 +166,7 @@ func TestDiffCompositeTypes_RenameTypeDestinationExists(t *testing.T) {
 		RenameFrom: &renameFrom,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	_, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	_, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -182,7 +183,7 @@ func TestDiffCompositeTypes_RenameTypeCrossSchema(t *testing.T) {
 		RenameFrom: &renameFrom,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	_, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	_, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename is not supported")
 }
@@ -197,7 +198,7 @@ func TestDiffCompositeTypes_RenameTypeAlreadyApplied(t *testing.T) {
 		RenameFrom: &renameFrom,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -215,7 +216,7 @@ func TestDiffCompositeTypes_RenameAttributeAlreadyApplied(t *testing.T) {
 			attr("city", "text"),
 		},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -227,7 +228,7 @@ func TestDiffCompositeTypes_TypeCommentRemoved(t *testing.T) {
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
 	desired := newCompositeTypeMap(ct("address", attr("street", "text")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TYPE public.address IS NULL;"}, result.Stmts)
 }
@@ -239,7 +240,7 @@ func TestDiffCompositeTypes_AttributeCommentRemoved(t *testing.T) {
 		Attributes: []*model.CompositeAttribute{{Name: "street", TypeName: "text", Comment: &c}},
 	})
 	desired := newCompositeTypeMap(ct("address", attr("street", "text")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.address.street IS NULL;"}, result.Stmts)
 }
@@ -260,7 +261,7 @@ func TestDiffCompositeTypes_AttributeCommentSetAndChanged(t *testing.T) {
 			{Name: "city", TypeName: "text", Comment: &city},
 		},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"COMMENT ON COLUMN public.address.street IS 'the street';",
@@ -281,7 +282,7 @@ func TestDiffCompositeTypes_CollationEquivalentForms(t *testing.T) {
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &desiredColl}},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -292,7 +293,7 @@ func TestDiffCompositeTypes_QualifiedAttributeTypeNoDiff(t *testing.T) {
 	// the composite type's own schema, so no ALTER ATTRIBUTE is emitted.
 	current := newCompositeTypeMap(ct("outer_t", attr("i", "inner_t")))
 	desired := newCompositeTypeMap(ct("outer_t", attr("i", "public.inner_t")))
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 }
@@ -308,7 +309,7 @@ func TestDiffCompositeTypes_CollationChange(t *testing.T) {
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &newColl}},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{`ALTER TYPE public.ct ALTER ATTRIBUTE name TYPE text COLLATE "en_US";`}, result.Stmts)
 }
@@ -322,7 +323,7 @@ func TestDiffCompositeTypes_CommentChange(t *testing.T) {
 		Comment:    &comment,
 		Attributes: []*model.CompositeAttribute{attr("street", "text")},
 	})
-	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	result, err := diff.DiffCompositeTypes(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TYPE public.address IS 'an address';"}, result.Stmts)
 }

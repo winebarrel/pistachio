@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -19,12 +20,12 @@ func TestCollectColumnRenames(t *testing.T) {
 	cols.Set("id", &model.Column{Name: "id"})
 	cols.Set("self", &model.Column{Name: "self", RenameFrom: new("self")}) // no-op same-name rename
 
-	renames := collectColumnRenames(cols)
+	renames := diff.CollectColumnRenames(cols)
 	assert.Equal(t, map[string]string{"name": "display_name"}, renames)
 }
 
 func TestRewriteColumnsInIndexDef_PlainColumn(t *testing.T) {
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (name)",
 		one("name", "display_name"),
 	)
@@ -34,7 +35,7 @@ func TestRewriteColumnsInIndexDef_PlainColumn(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_LeavesOtherColumns(t *testing.T) {
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (a, b)",
 		one("a", "x"),
 	)
@@ -43,7 +44,7 @@ func TestRewriteColumnsInIndexDef_LeavesOtherColumns(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_ExpressionIndex(t *testing.T) {
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (lower(email))",
 		one("email", "email_addr"),
 	)
@@ -52,7 +53,7 @@ func TestRewriteColumnsInIndexDef_ExpressionIndex(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_PartialWhere(t *testing.T) {
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (id) WHERE deleted_at IS NULL",
 		one("deleted_at", "removed_at"),
 	)
@@ -61,7 +62,7 @@ func TestRewriteColumnsInIndexDef_PartialWhere(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (sku) INCLUDE (name)",
 		one("name", "product_name"),
 	)
@@ -72,7 +73,7 @@ func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
 func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
 	// Renames a->b alongside b->c must rewrite the index's reference to a (the
 	// original) into b; NOT cascade through b->c into c.
-	got, err := rewriteColumnsInIndexDef(
+	got, err := diff.RewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (a, b)",
 		map[string]string{"a": "b", "b": "c"},
 	)
@@ -82,40 +83,40 @@ func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_ParseError(t *testing.T) {
-	_, err := rewriteColumnsInIndexDef("not a valid sql", one("a", "b"))
+	_, err := diff.RewriteColumnsInIndexDef("not a valid sql", one("a", "b"))
 	require.Error(t, err)
 }
 
 func TestRewriteColumnsInIndexDef_EmptyInput(t *testing.T) {
-	_, err := rewriteColumnsInIndexDef("", one("a", "b"))
+	_, err := diff.RewriteColumnsInIndexDef("", one("a", "b"))
 	require.Error(t, err)
 }
 
 func TestRewriteColumnsInIndexDef_NotIndexStmt(t *testing.T) {
-	_, err := rewriteColumnsInIndexDef("SELECT 1", one("a", "b"))
+	_, err := diff.RewriteColumnsInIndexDef("SELECT 1", one("a", "b"))
 	require.Error(t, err)
 }
 
 func TestRewriteColumnsInConstraintDef_Unique(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("UNIQUE (email)", one("email", "email_addr"))
+	got, err := diff.RewriteColumnsInConstraintDef("UNIQUE (email)", one("email", "email_addr"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "(email_addr)")
 }
 
 func TestRewriteColumnsInConstraintDef_PrimaryKey(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("PRIMARY KEY (id)", one("id", "user_id"))
+	got, err := diff.RewriteColumnsInConstraintDef("PRIMARY KEY (id)", one("id", "user_id"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "(user_id)")
 }
 
 func TestRewriteColumnsInConstraintDef_Check(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("CHECK ((qty > 0))", one("qty", "quantity"))
+	got, err := diff.RewriteColumnsInConstraintDef("CHECK ((qty > 0))", one("qty", "quantity"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "quantity > 0")
 }
 
 func TestRewriteColumnsInConstraintDef_CheckBoolExpr(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"CHECK ((qty > 0 AND qty < 1000))",
 		one("qty", "quantity"),
 	)
@@ -125,13 +126,13 @@ func TestRewriteColumnsInConstraintDef_CheckBoolExpr(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_CheckNullTest(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("CHECK ((deleted_at IS NULL))", one("deleted_at", "removed_at"))
+	got, err := diff.RewriteColumnsInConstraintDef("CHECK ((deleted_at IS NULL))", one("deleted_at", "removed_at"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "removed_at IS NULL")
 }
 
 func TestRewriteColumnsInConstraintDef_FKLocalAttrs(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"FOREIGN KEY (user_id) REFERENCES users(id)",
 		one("user_id", "buyer_id"),
 	)
@@ -142,7 +143,7 @@ func TestRewriteColumnsInConstraintDef_FKLocalAttrs(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_FKReferencedNotRewritten(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"FOREIGN KEY (user_id) REFERENCES users(id)",
 		one("id", "user_pk"),
 	)
@@ -152,7 +153,7 @@ func TestRewriteColumnsInConstraintDef_FKReferencedNotRewritten(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_Exclusion(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"EXCLUDE USING gist (room WITH =, during WITH &&)",
 		one("during", "time_range"),
 	)
@@ -161,7 +162,7 @@ func TestRewriteColumnsInConstraintDef_Exclusion(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_UniqueInclude(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"UNIQUE (email) INCLUDE (name)",
 		one("name", "display_name"),
 	)
@@ -170,30 +171,30 @@ func TestRewriteColumnsInConstraintDef_UniqueInclude(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_ParseError(t *testing.T) {
-	_, err := rewriteColumnsInConstraintDef("not a valid def", one("a", "b"))
+	_, err := diff.RewriteColumnsInConstraintDef("not a valid def", one("a", "b"))
 	require.Error(t, err)
 }
 
 func TestRewriteColumnsInConstraintDef_EmptyInput(t *testing.T) {
-	_, err := rewriteColumnsInConstraintDef("", one("a", "b"))
+	_, err := diff.RewriteColumnsInConstraintDef("", one("a", "b"))
 	require.Error(t, err)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckTypeCast(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("CHECK ((col::text = 'x'))", one("col", "value"))
+	got, err := diff.RewriteColumnsInConstraintDef("CHECK ((col::text = 'x'))", one("col", "value"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "value")
 	assert.NotContains(t, got, "(col")
 }
 
 func TestRewriteColumnsInConstraintDef_CheckCoalesce(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef("CHECK ((COALESCE(col, 0) > 0))", one("col", "value"))
+	got, err := diff.RewriteColumnsInConstraintDef("CHECK ((COALESCE(col, 0) > 0))", one("col", "value"))
 	require.NoError(t, err)
 	assert.Contains(t, got, "COALESCE(value")
 }
 
 func TestRewriteColumnsInConstraintDef_CheckCase(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"CHECK (((CASE WHEN col > 0 THEN 1 ELSE 0 END) = 1))",
 		one("col", "value"),
 	)
@@ -202,7 +203,7 @@ func TestRewriteColumnsInConstraintDef_CheckCase(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_CheckAnyArray(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"CHECK ((status = ANY (ARRAY['a'::text, 'b'::text])))",
 		one("status", "state"),
 	)
@@ -211,7 +212,7 @@ func TestRewriteColumnsInConstraintDef_CheckAnyArray(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_CheckInList(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"CHECK ((status IN ('a', 'b')))",
 		one("status", "state"),
 	)
@@ -221,7 +222,7 @@ func TestRewriteColumnsInConstraintDef_CheckInList(t *testing.T) {
 
 func TestRewriteColumnsInConstraintDef_NoCascadeOnChain(t *testing.T) {
 	// Renames a->b and b->c must not cascade.
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"UNIQUE (a, b)",
 		map[string]string{"a": "b", "b": "c"},
 	)
@@ -240,7 +241,7 @@ func TestRewriteColumnRefsInIndexes_RewritesAndClones(t *testing.T) {
 	}
 	in.Set("idx", original)
 
-	out := rewriteColumnRefsInIndexes(in, one("name", "display_name"))
+	out := diff.RewriteColumnRefsInIndexes(in, one("name", "display_name"))
 	got, ok := out.GetOk("idx")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "(display_name)")
@@ -257,7 +258,7 @@ func TestRewriteColumnRefsInIndexes_FallbackOnParseError(t *testing.T) {
 		Definition: "not a valid CREATE INDEX",
 	})
 
-	out := rewriteColumnRefsInIndexes(in, one("name", "display_name"))
+	out := diff.RewriteColumnRefsInIndexes(in, one("name", "display_name"))
 	got, ok := out.GetOk("idx")
 	require.True(t, ok)
 	// Unparseable definitions are kept intact so downstream comparison still works.
@@ -269,7 +270,7 @@ func TestRewriteColumnRefsInConstraints_RewritesAndClones(t *testing.T) {
 	original := &model.Constraint{Name: "u", Definition: "UNIQUE (email)"}
 	in.Set("u", original)
 
-	out := rewriteColumnRefsInConstraints(in, one("email", "email_addr"))
+	out := diff.RewriteColumnRefsInConstraints(in, one("email", "email_addr"))
 	got, ok := out.GetOk("u")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "(email_addr)")
@@ -282,7 +283,7 @@ func TestRenameColumnKeys_RemapsAndPreservesOrder(t *testing.T) {
 	in.Set("b", &model.Column{Name: "b"})
 	in.Set("c", &model.Column{Name: "c"})
 
-	out := renameColumnKeys(in, map[string]string{"b": "d"})
+	out := diff.RenameColumnKeys(in, map[string]string{"b": "d"})
 	keys := []string{}
 	for k := range out.Keys() {
 		keys = append(keys, k)
@@ -296,7 +297,7 @@ func TestRenameColumnKeys_NoCascadeOnChain(t *testing.T) {
 	in.Set("a", &model.Column{Name: "a"})
 	in.Set("b", &model.Column{Name: "b"})
 
-	out := renameColumnKeys(in, map[string]string{"a": "b", "b": "c"})
+	out := diff.RenameColumnKeys(in, map[string]string{"a": "b", "b": "c"})
 	keys := []string{}
 	for k := range out.Keys() {
 		keys = append(keys, k)
@@ -311,7 +312,7 @@ func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 		Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
 	})
 
-	out := rewriteColumnRefsInForeignKeys(in, one("user_id", "buyer_id"))
+	out := diff.RewriteColumnRefsInForeignKeys(in, one("user_id", "buyer_id"))
 	got, ok := out.GetOk("fk")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "(buyer_id)")
@@ -329,7 +330,7 @@ func TestRewriteColumnRefsInTriggers_RewritesUpdateOfAndWhen(t *testing.T) {
 	}
 	in.Set("products_audit", original)
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("products_audit")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "UPDATE OF quantity")
@@ -348,7 +349,7 @@ func TestRewriteColumnRefsInTriggers_LeavesFunctionArgsAlone(t *testing.T) {
 			"FOR EACH ROW EXECUTE FUNCTION public.stamp('qty')",
 	})
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "'qty'")
@@ -363,7 +364,7 @@ func TestRewriteColumnRefsInTriggers_LeavesOtherQualifiersAlone(t *testing.T) {
 			"FOR EACH ROW WHEN (new.qty > other.qty) EXECUTE FUNCTION public.stamp()",
 	})
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "new.quantity")
@@ -378,7 +379,7 @@ func TestRewriteColumnRefsInTriggers_NoCascadeOnChain(t *testing.T) {
 			"FOR EACH ROW EXECUTE FUNCTION public.stamp()",
 	})
 
-	out := rewriteColumnRefsInTriggers(in, map[string]string{"a": "b", "b": "c"})
+	out := diff.RewriteColumnRefsInTriggers(in, map[string]string{"a": "b", "b": "c"})
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, "UPDATE OF b, c")
@@ -391,7 +392,7 @@ func TestRewriteColumnRefsInTriggers_RewritesQuotedName(t *testing.T) {
 			`FOR EACH ROW WHEN (new."Qty" > 0) EXECUTE FUNCTION public.stamp()`,
 	})
 
-	out := rewriteColumnRefsInTriggers(in, one("Qty", "Quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("Qty", "Quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	assert.Contains(t, got.Definition, `UPDATE OF "Quantity"`)
@@ -402,7 +403,7 @@ func TestRewriteColumnRefsInTriggers_FallbackOnParseError(t *testing.T) {
 	in := orderedmap.New[string, *model.Trigger]()
 	in.Set("t", &model.Trigger{Definition: "not a valid CREATE TRIGGER"})
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	// Unparseable definitions are kept intact so downstream comparison still works.
@@ -413,7 +414,7 @@ func TestRewriteColumnRefsInTriggers_FallbackOnEmptyDefinition(t *testing.T) {
 	in := orderedmap.New[string, *model.Trigger]()
 	in.Set("t", &model.Trigger{Definition: ""})
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	assert.Empty(t, got.Definition)
@@ -423,7 +424,7 @@ func TestRewriteColumnRefsInTriggers_FallbackOnOtherStatement(t *testing.T) {
 	in := orderedmap.New[string, *model.Trigger]()
 	in.Set("t", &model.Trigger{Definition: "SELECT qty FROM public.products"})
 
-	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
 	// Parseable but not a CREATE TRIGGER, so nothing is rewritten.
@@ -437,7 +438,7 @@ func TestRewriteColumnRefsInPolicies_RewritesBothClauses(t *testing.T) {
 	original := &model.Policy{Name: "docs_own", Using: &using, WithCheck: &withCheck}
 	in.Set("docs_own", original)
 
-	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	out := diff.RewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
 	got, ok := out.GetOk("docs_own")
 	require.True(t, ok)
 	// The deparse lowercases CURRENT_USER. Only the comparison reads this
@@ -453,7 +454,7 @@ func TestRewriteColumnRefsInPolicies_KeepsNilClauses(t *testing.T) {
 	in := orderedmap.New[string, *model.Policy]()
 	in.Set("p", &model.Policy{Name: "p"})
 
-	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	out := diff.RewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
 	got, ok := out.GetOk("p")
 	require.True(t, ok)
 	assert.Nil(t, got.Using)
@@ -465,7 +466,7 @@ func TestRewriteColumnRefsInPolicies_FallbackOnParseError(t *testing.T) {
 	broken := "owner = ("
 	in.Set("p", &model.Policy{Name: "p", Using: &broken})
 
-	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	out := diff.RewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
 	got, ok := out.GetOk("p")
 	require.True(t, ok)
 	// Unparseable expressions are kept intact so downstream comparison still works.
@@ -477,7 +478,7 @@ func TestRewriteColumnRefsInGenerated_RewritesExpression(t *testing.T) {
 	expr := "(qty * 2)"
 	in.Set("total", &model.Column{Name: "total", Generated: 's', Default: &expr})
 
-	out := rewriteColumnRefsInGenerated(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInGenerated(in, one("qty", "quantity"))
 	got, ok := out.GetOk("total")
 	require.True(t, ok)
 	assert.Contains(t, *got.Default, "quantity * 2")
@@ -489,7 +490,7 @@ func TestRewriteColumnRefsInGenerated_LeavesPlainDefaultAlone(t *testing.T) {
 	expr := "'qty'::text"
 	in.Set("label", &model.Column{Name: "label", Default: &expr})
 
-	out := rewriteColumnRefsInGenerated(in, one("qty", "quantity"))
+	out := diff.RewriteColumnRefsInGenerated(in, one("qty", "quantity"))
 	got, ok := out.GetOk("label")
 	require.True(t, ok)
 	assert.Equal(t, "'qty'::text", *got.Default)
@@ -501,7 +502,7 @@ func TestRewriteColumnRefsInGenerated_NoCascadeOnChain(t *testing.T) {
 	expr := "(a + b)"
 	in.Set("total", &model.Column{Name: "total", Generated: 's', Default: &expr})
 
-	out := rewriteColumnRefsInGenerated(in, map[string]string{"a": "b", "b": "c"})
+	out := diff.RewriteColumnRefsInGenerated(in, map[string]string{"a": "b", "b": "c"})
 	got, ok := out.GetOk("total")
 	require.True(t, ok)
 	assert.Contains(t, *got.Default, "b + c")
@@ -517,7 +518,7 @@ func triggersOnOldT(defs ...string) *orderedmap.Map[string, *model.Trigger] {
 }
 
 func TestRenameTriggerRelation(t *testing.T) {
-	got, err := renameTriggerRelation(triggersOnOldT(
+	got, err := diff.RenameTriggerRelation(triggersOnOldT(
 		"CREATE TRIGGER a BEFORE INSERT ON old_t FOR EACH ROW EXECUTE FUNCTION f()",
 		"CREATE TRIGGER b BEFORE INSERT ON s.old_t FOR EACH ROW EXECUTE FUNCTION f()",
 	), "new_t")
@@ -528,7 +529,7 @@ func TestRenameTriggerRelation(t *testing.T) {
 }
 
 func TestRenameTriggerRelation_ConstraintTriggerFrom(t *testing.T) {
-	got, err := renameTriggerRelation(triggersOnOldT(
+	got, err := diff.RenameTriggerRelation(triggersOnOldT(
 		"CREATE CONSTRAINT TRIGGER a AFTER INSERT ON s.old_t FROM s.old_t FOR EACH ROW EXECUTE FUNCTION f()",
 		"CREATE CONSTRAINT TRIGGER b AFTER INSERT ON s.old_t FROM old_t FOR EACH ROW EXECUTE FUNCTION f()",
 		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON s.old_t FROM other FOR EACH ROW EXECUTE FUNCTION f()",
@@ -542,17 +543,17 @@ func TestRenameTriggerRelation_ConstraintTriggerFrom(t *testing.T) {
 }
 
 func TestRenameTriggerRelation_ParseError(t *testing.T) {
-	_, err := renameTriggerRelation(triggersOnOldT("NOT VALID SQL"), "new_t")
+	_, err := diff.RenameTriggerRelation(triggersOnOldT("NOT VALID SQL"), "new_t")
 	require.ErrorContains(t, err, "failed to parse trigger definition")
 }
 
 func TestRenameTriggerRelation_EmptyInput(t *testing.T) {
-	_, err := renameTriggerRelation(triggersOnOldT(""), "new_t")
+	_, err := diff.RenameTriggerRelation(triggersOnOldT(""), "new_t")
 	require.ErrorContains(t, err, "unexpected parse result for trigger definition")
 }
 
 func TestRenameTriggerRelation_NotTriggerStmt(t *testing.T) {
-	_, err := renameTriggerRelation(triggersOnOldT("SELECT 1"), "new_t")
+	_, err := diff.RenameTriggerRelation(triggersOnOldT("SELECT 1"), "new_t")
 	require.ErrorContains(t, err, "expected CreateTrigStmt")
 }
 
@@ -566,7 +567,7 @@ func TestDiffTables_RenameWithBadTrigger(t *testing.T) {
 	des.RenameFrom = new("public.old_t")
 	desired.Set("public.new_t", des)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.ErrorContains(t, err, "failed to parse trigger definition")
 }
 
@@ -580,7 +581,7 @@ func TestDiffTables_RenameWithBadIndex(t *testing.T) {
 	des.RenameFrom = new("public.old_t")
 	desired.Set("public.new_t", des)
 
-	_, err := DiffTables(current, desired, allowAllDrops{})
+	_, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.ErrorContains(t, err, "failed to parse index definition")
 }
 
@@ -590,7 +591,7 @@ func TestDiffViews_RenameWithBadTrigger(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: new("public.v1"), Definition: "SELECT 1"})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.ErrorContains(t, err, "failed to parse trigger definition")
 }
 
@@ -611,7 +612,7 @@ func TestDiffTables_RenameCarriesTriggers(t *testing.T) {
 	des.Triggers = triggerOn("new_t", "CREATE TRIGGER a BEFORE INSERT ON new_t FOR EACH ROW EXECUTE FUNCTION f()")
 	desired.Set("public.new_t", des)
 
-	got, err := DiffTables(current, desired, allowAllDrops{})
+	got, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.old_t RENAME TO new_t;"}, got.Stmts)
 	assert.Empty(t, got.DropStmts)
@@ -629,14 +630,14 @@ func TestDiffViews_RenameCarriesTriggers(t *testing.T) {
 		Triggers: triggerOn("v2", "CREATE TRIGGER a INSTEAD OF INSERT ON v2 FOR EACH ROW EXECUTE FUNCTION f()"),
 	})
 
-	got, err := DiffViews(current, desired, allowAllDrops{})
+	got, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, got.CreateStmts)
 	assert.Empty(t, got.DropStmts)
 }
 
 func TestRewriteColumnsInConstraintDef_ExclusionWhere(t *testing.T) {
-	got, err := rewriteColumnsInConstraintDef(
+	got, err := diff.RewriteColumnsInConstraintDef(
 		"EXCLUDE USING gist (room WITH =) WHERE ((NOT canceled))",
 		one("canceled", "is_canceled"),
 	)

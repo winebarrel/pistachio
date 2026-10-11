@@ -1,9 +1,10 @@
-package diff
+package diff_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -17,17 +18,17 @@ func paramsTable(params map[string]string) *model.Table {
 
 func TestDiffStorageParams_noChange(t *testing.T) {
 	params := map[string]string{"fillfactor": "70"}
-	assert.Empty(t, diffStorageParams("public.users", paramsTable(params), paramsTable(params)))
+	assert.Empty(t, diff.DiffStorageParams("public.users", paramsTable(params), paramsTable(params)))
 }
 
 func TestDiffStorageParams_neitherSideCarriesTheMap(t *testing.T) {
-	assert.Empty(t, diffStorageParams("public.users", paramsTable(nil), paramsTable(nil)))
+	assert.Empty(t, diff.DiffStorageParams("public.users", paramsTable(nil), paramsTable(nil)))
 }
 
 func TestDiffStorageParams_add(t *testing.T) {
 	assert.Equal(t,
 		[]string{"ALTER TABLE public.users SET (autovacuum_enabled='off', fillfactor='70');"},
-		diffStorageParams("public.users",
+		diff.DiffStorageParams("public.users",
 			paramsTable(nil),
 			paramsTable(map[string]string{"fillfactor": "70", "autovacuum_enabled": "off"})))
 }
@@ -35,7 +36,7 @@ func TestDiffStorageParams_add(t *testing.T) {
 func TestDiffStorageParams_changeValue(t *testing.T) {
 	assert.Equal(t,
 		[]string{"ALTER TABLE public.users SET (fillfactor='90');"},
-		diffStorageParams("public.users",
+		diff.DiffStorageParams("public.users",
 			paramsTable(map[string]string{"fillfactor": "70"}),
 			paramsTable(map[string]string{"fillfactor": "90"})))
 }
@@ -43,7 +44,7 @@ func TestDiffStorageParams_changeValue(t *testing.T) {
 func TestDiffStorageParams_reset(t *testing.T) {
 	assert.Equal(t,
 		[]string{"ALTER TABLE public.users RESET (autovacuum_enabled, fillfactor);"},
-		diffStorageParams("public.users",
+		diff.DiffStorageParams("public.users",
 			paramsTable(map[string]string{"fillfactor": "70", "autovacuum_enabled": "off"}),
 			paramsTable(nil)))
 }
@@ -56,7 +57,7 @@ func TestDiffStorageParams_setAndReset(t *testing.T) {
 			"ALTER TABLE public.users SET (toast.autovacuum_enabled='off');",
 			"ALTER TABLE public.users RESET (autovacuum_enabled);",
 		},
-		diffStorageParams("public.users",
+		diff.DiffStorageParams("public.users",
 			paramsTable(map[string]string{"autovacuum_enabled": "off"}),
 			paramsTable(map[string]string{"toast.autovacuum_enabled": "off"})))
 }

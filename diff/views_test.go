@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -14,7 +15,7 @@ func TestDiffViews_newView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
@@ -32,7 +33,7 @@ func TestDiffViews_newView_withTrigger(t *testing.T) {
 	})
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Triggers: triggers})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.CreateStmts, 2)
 	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
@@ -44,7 +45,7 @@ func TestDiffViews_dropView(t *testing.T) {
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP VIEW public.v1;"}, result.DropStmts)
 }
@@ -54,7 +55,7 @@ func TestDiffViews_dropView_denied(t *testing.T) {
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -67,7 +68,7 @@ func TestDiffViews_modifyView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 2"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
@@ -79,7 +80,7 @@ func TestDiffViews_noChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -91,7 +92,7 @@ func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -103,7 +104,7 @@ func TestDiffViews_checkOptionSet(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "local"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER VIEW public.v1 SET (check_option='local');"}, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -115,7 +116,7 @@ func TestDiffViews_checkOptionReset(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER VIEW public.v1 RESET (check_option);"}, result.CreateStmts)
 }
@@ -126,7 +127,7 @@ func TestDiffViews_checkOptionNoChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "cascaded"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 }
@@ -143,7 +144,7 @@ func TestDiffViews_storageParams(t *testing.T) {
 		StorageParams: model.SortedStorageParams(map[string]string{"security_invoker": "true"}),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ALTER VIEW public.v1 SET (security_invoker='true');",
@@ -164,7 +165,7 @@ func TestDiffViews_matViewStorageParams(t *testing.T) {
 		StorageParams: model.SortedStorageParams(map[string]string{"fillfactor": "90"}),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER MATERIALIZED VIEW public.mv1 SET (fillfactor='90');"}, result.CreateStmts)
 }
@@ -177,7 +178,7 @@ func TestDiffViews_checkOptionWithDefinitionChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 2", CheckOption: "local"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE OR REPLACE VIEW public.v1 AS\nSELECT 2\n  WITH LOCAL CHECK OPTION;"}, result.CreateStmts)
 }
@@ -188,7 +189,7 @@ func TestDiffViews_commentAdd(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: new("my view")})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Equal(t, "COMMENT ON VIEW public.v1 IS 'my view';", result.CreateStmts[0])
@@ -200,7 +201,7 @@ func TestDiffViews_commentDrop(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Equal(t, "COMMENT ON VIEW public.v1 IS NULL;", result.CreateStmts[0])
@@ -214,7 +215,7 @@ func TestDiffViews_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, result.CreateStmts)
 }
@@ -227,7 +228,7 @@ func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -241,7 +242,7 @@ func TestDiffViews_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -256,7 +257,7 @@ func TestDiffViews_rename_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -269,7 +270,7 @@ func TestDiffViews_rename_crossSchema_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("other.v2", &model.View{Schema: "other", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
@@ -281,7 +282,7 @@ func TestDiffViews_rename_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source")
 }
@@ -298,7 +299,7 @@ func TestDiffViews_rename_matviewKeepsIndexes(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.mv2", &model.View{Schema: "public", Name: "mv2", RenameFrom: &oldName, Materialized: true, Definition: "SELECT 1 AS a", Indexes: desiredIndexes})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER MATERIALIZED VIEW public.mv RENAME TO mv2;"}, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
@@ -314,26 +315,26 @@ func TestDiffViews_rename_matviewInvalidIndex_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.mv2", &model.View{Schema: "public", Name: "mv2", RenameFrom: &oldName, Materialized: true, Definition: "SELECT 1 AS a"})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse index definition")
 }
 
 func TestEqualViewDef_same(t *testing.T) {
-	assert.True(t, equalViewDef("SELECT 1", "SELECT 1"))
+	assert.True(t, diff.EqualViewDef("SELECT 1", "SELECT 1"))
 }
 
 func TestEqualViewDef_formattingDifference(t *testing.T) {
-	assert.True(t, equalViewDef("SELECT   1", "SELECT 1"))
+	assert.True(t, diff.EqualViewDef("SELECT   1", "SELECT 1"))
 }
 
 func TestEqualViewDef_different(t *testing.T) {
-	assert.False(t, equalViewDef("SELECT 1", "SELECT 2"))
+	assert.False(t, diff.EqualViewDef("SELECT 1", "SELECT 2"))
 }
 
 func TestEqualViewDef_schemaQualificationDifference(t *testing.T) {
 	// pg_get_viewdef omits schema, parser preserves it
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM users",
 		"SELECT id FROM public.users",
 	))
@@ -341,7 +342,7 @@ func TestEqualViewDef_schemaQualificationDifference(t *testing.T) {
 
 func TestEqualViewDef_columnQualificationDifference(t *testing.T) {
 	// pg_get_viewdef adds table.column, parser doesn't
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id, users.name FROM users",
 		"SELECT id, name FROM public.users",
 	))
@@ -349,7 +350,7 @@ func TestEqualViewDef_columnQualificationDifference(t *testing.T) {
 
 func TestEqualViewDef_joinQualification(t *testing.T) {
 	// Covers JoinExpr + A_Expr paths in stripQualifications
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id",
 		"SELECT u.id FROM public.users u JOIN public.orders o ON u.id = o.user_id",
 	))
@@ -357,12 +358,12 @@ func TestEqualViewDef_joinQualification(t *testing.T) {
 
 func TestEqualViewDef_whereSubquery(t *testing.T) {
 	// Covers SubLink + BoolExpr paths in stripQualifications
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id FROM users WHERE users.id > 0 AND EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
 		"SELECT id FROM public.users WHERE id > 0 AND EXISTS (SELECT 1 FROM public.orders WHERE user_id = users.id)",
 	))
 	// Inside the sub-query a bare id is orders.id, not the outer users.id.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT users.id FROM users WHERE users.id > 0 AND EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
 		"SELECT id FROM public.users WHERE id > 0 AND EXISTS (SELECT 1 FROM public.orders WHERE user_id = id)",
 	))
@@ -370,21 +371,21 @@ func TestEqualViewDef_whereSubquery(t *testing.T) {
 
 func TestEqualViewDef_joinScopeKeepsQualifier(t *testing.T) {
 	// With more than one relation in FROM the qualifier picks the column.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id",
 		"SELECT o.id FROM users u JOIN orders o ON o.user_id = u.id",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT p.name AS parent, c.name AS child FROM users p JOIN users c ON c.parent_id = p.id",
 		"SELECT c.name AS parent, p.name AS child FROM users p JOIN users c ON c.parent_id = p.id",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT users.name FROM users, orders WHERE orders.id > 100",
 		"SELECT users.name FROM users, orders WHERE users.id > 100",
 	))
 	// A bare column in a join is not resolved, so it differs from the
 	// qualified form pg_get_viewdef writes.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT u.name FROM users u JOIN orders o ON o.user_id = u.id",
 		"SELECT name FROM users u JOIN orders o ON o.user_id = u.id",
 	))
@@ -393,61 +394,61 @@ func TestEqualViewDef_joinScopeKeepsQualifier(t *testing.T) {
 func TestEqualViewDef_singleRelationScope(t *testing.T) {
 	// A sub-query in FROM, a CTE and a correlated sub-query each strip their
 	// own single relation, and leave a reference to the outer one alone.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT s.n FROM (SELECT items.id AS n FROM items) s",
 		"SELECT n FROM (SELECT id AS n FROM items) s",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"WITH c AS (SELECT items.id FROM items) SELECT c.id FROM c",
 		"WITH c AS (SELECT id FROM items) SELECT id FROM c",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
 		"SELECT name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE user_id = u.id)",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
 		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = o.id)",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) AS n FROM users u",
 		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = o.id) AS n FROM users u",
 	))
 	// A LATERAL sub-query is a scope of its own, and the outer FROM holds two
 	// relations, so the outer prefixes stay.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT id AS n FROM orders o WHERE user_id = u.id) l",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT u.id AS n FROM orders o WHERE o.user_id = u.id) l",
 	))
 	// A table with TABLESAMPLE is named like the table.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id FROM users TABLESAMPLE system (10)",
 		"SELECT id FROM users TABLESAMPLE SYSTEM (10)",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.id FROM users u TABLESAMPLE system (10)",
 		"SELECT id FROM users u TABLESAMPLE SYSTEM (10)",
 	))
 	// A function in FROM is named by its alias, or by the function itself.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT g FROM generate_series(1, 3) g(g)",
 		"SELECT g.g FROM generate_series(1, 3) g(g)",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT generate_series FROM generate_series(1, 3)",
 		"SELECT generate_series.generate_series FROM pg_catalog.generate_series(1, 3)",
 	))
 	// Each branch of a set operation is a scope of its own.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id FROM users UNION SELECT o.id FROM orders o",
 		"SELECT id FROM users UNION SELECT id FROM orders o",
 	))
 	// A qualifier naming a relation outside the scope stays.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT items.id FROM items",
 		"SELECT other.id FROM items",
 	))
@@ -455,7 +456,7 @@ func TestEqualViewDef_singleRelationScope(t *testing.T) {
 
 func TestEqualViewDef_groupByOrderByLimit(t *testing.T) {
 	// Covers GroupClause, SortClause, LimitCount paths
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id, count(*) AS cnt FROM users GROUP BY users.id ORDER BY users.id LIMIT 10",
 		"SELECT id, count(*) AS cnt FROM public.users GROUP BY id ORDER BY id LIMIT 10",
 	))
@@ -463,7 +464,7 @@ func TestEqualViewDef_groupByOrderByLimit(t *testing.T) {
 
 func TestEqualViewDef_unionDifference(t *testing.T) {
 	// Covers Larg/Rarg paths
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT users.id FROM users UNION SELECT admins.id FROM admins",
 		"SELECT id FROM public.users UNION SELECT id FROM public.admins",
 	))
@@ -471,24 +472,24 @@ func TestEqualViewDef_unionDifference(t *testing.T) {
 
 func TestEqualViewDef_setOpBranchNames(t *testing.T) {
 	// pg_get_viewdef names the later branches after the leftmost SELECT.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
 		"SELECT id FROM public.items UNION SELECT qty FROM public.other",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"(SELECT items.id AS a, items.qty FROM items UNION ALL SELECT other.qty AS a, other.id AS qty FROM other) EXCEPT SELECT third.id AS a, third.qty FROM third",
 		"SELECT id AS a, qty FROM items UNION ALL SELECT qty AS x, id FROM other EXCEPT SELECT id, qty FROM third",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT s.n FROM (SELECT items.id AS n FROM items UNION SELECT other.qty FROM other) s",
 		"SELECT s.n FROM (SELECT id AS n FROM items UNION SELECT qty AS m FROM other) s",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"WITH c AS (SELECT items.id AS a FROM items UNION SELECT other.qty FROM other) SELECT c.a FROM c",
 		"WITH c AS (SELECT id AS a FROM items UNION SELECT qty AS b FROM other) SELECT a FROM c",
 	))
 	// A sub-query inside a later branch keeps its own names.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT items.id FROM items UNION SELECT s.q AS id FROM (SELECT other.qty AS q FROM other) s",
 		"SELECT id FROM items UNION SELECT s.q FROM (SELECT qty AS r FROM other) s",
 	))
@@ -496,11 +497,11 @@ func TestEqualViewDef_setOpBranchNames(t *testing.T) {
 
 func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
 	// The leftmost SELECT names the output columns, so its names still count.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
 		"SELECT id AS n FROM items UNION SELECT qty FROM other",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
 		"SELECT id FROM items UNION SELECT id FROM other",
 	))
@@ -509,25 +510,25 @@ func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
 func TestEqualViewDef_setOpBranchOrderBy(t *testing.T) {
 	// A later branch with its own ORDER BY can sort by its output names, so
 	// the names there still count.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT id, qty FROM t UNION ALL (SELECT qty AS x, id AS y FROM u ORDER BY x LIMIT 1)",
 		"SELECT id, qty FROM t UNION ALL (SELECT qty AS y, id AS x FROM u ORDER BY x LIMIT 1)",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
 		"SELECT a FROM t UNION (SELECT b FROM t ORDER BY a LIMIT 1)",
 	))
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
 		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
 	))
 	// A nested set operation's ORDER BY can sort by its leftmost names.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS x, 9 AS y UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
 		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS y, 9 AS x UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
 	))
 	// Without an ORDER BY, a LIMIT does not refer to the names.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT a FROM t UNION (SELECT t.b AS a FROM t LIMIT 1)",
 		"SELECT a FROM t UNION (SELECT b FROM t LIMIT 1)",
 	))
@@ -535,7 +536,7 @@ func TestEqualViewDef_setOpBranchOrderBy(t *testing.T) {
 
 func TestEqualViewDef_subselect(t *testing.T) {
 	// Covers RangeSubselect path
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT sub.id FROM (SELECT users.id FROM users) sub",
 		"SELECT sub.id FROM (SELECT id FROM public.users) sub",
 	))
@@ -543,7 +544,7 @@ func TestEqualViewDef_subselect(t *testing.T) {
 
 func TestEqualViewDef_funcCallArgs(t *testing.T) {
 	// Covers FuncCall path
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT upper(users.name) FROM users",
 		"SELECT upper(name) FROM public.users",
 	))
@@ -551,7 +552,7 @@ func TestEqualViewDef_funcCallArgs(t *testing.T) {
 
 func TestEqualViewDef_cte(t *testing.T) {
 	// Covers WithClause/CTE path
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"WITH active AS (SELECT users.id FROM users) SELECT active.id FROM active",
 		"WITH active AS (SELECT id FROM public.users) SELECT active.id FROM active",
 	))
@@ -560,7 +561,7 @@ func TestEqualViewDef_cte(t *testing.T) {
 func TestEqualViewDef_inVsAnyArray(t *testing.T) {
 	// pg_get_viewdef rewrites `IN ('a','b')` as `= ANY (ARRAY['a','b'])`.
 	// Equality must hold across that rewrite for the WHERE clause.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
 		"SELECT id FROM t WHERE status IN ('a', 'b')",
 	))
@@ -568,7 +569,7 @@ func TestEqualViewDef_inVsAnyArray(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_join(t *testing.T) {
 	// Same rewrite, but on a JOIN ... ON expression.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON o.status = ANY (ARRAY['paid', 'shipped'])",
 		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status IN ('paid', 'shipped')",
 	))
@@ -579,7 +580,7 @@ func TestEqualViewDef_currentOnlyTypeCast(t *testing.T) {
 	// (e.g. enum columns get `'x'::my_enum`). The desired SQL written
 	// without the cast should still compare equal to the current form.
 	// First arg is current (with cast), second is desired (without).
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE status = 'published'::post_status",
 		"SELECT id FROM t WHERE status = 'published'",
 	))
@@ -587,7 +588,7 @@ func TestEqualViewDef_currentOnlyTypeCast(t *testing.T) {
 
 func TestEqualViewDef_currentOnlyTypeCast_inList(t *testing.T) {
 	// Casts inside an IN list, after the ANY->IN rewrite.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE status = ANY (ARRAY['published'::post_status, 'pinned'::post_status])",
 		"SELECT id FROM t WHERE status IN ('published', 'pinned')",
 	))
@@ -597,7 +598,7 @@ func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
 	// alignCurrentCasts is asymmetric: a cast in desired that is missing
 	// from current must surface as a difference (otherwise a user-requested
 	// cast change would be silently hidden).
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE x = 1",
 		"SELECT id FROM t WHERE x = 1::bigint",
 	))
@@ -608,14 +609,14 @@ func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_targetList(t *testing.T) {
 	// Target-list expression: CASE inside SELECT.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 1 ELSE 0 END AS hit FROM t",
 		"SELECT CASE WHEN status IN ('a', 'b') THEN 1 ELSE 0 END AS hit FROM t",
 	))
 }
 
 func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x = ANY (ARRAY['a', 'b'])",
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x IN ('a', 'b')",
 	))
@@ -624,14 +625,14 @@ func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
 func TestEqualViewDef_inVsAnyArray_groupBy(t *testing.T) {
 	// GROUP BY can contain expressions (here a boolean test on status).
 	// Covers the GroupClause walker position.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT count(*) FROM t GROUP BY status = ANY (ARRAY['a', 'b'])",
 		"SELECT count(*) FROM t GROUP BY status IN ('a', 'b')",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT count(*) FROM t GROUP BY status = 'a'::e",
 		"SELECT count(*) FROM t GROUP BY status = 'a'",
 	))
@@ -640,14 +641,14 @@ func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
 func TestEqualViewDef_currentOnlyTypeCast_join(t *testing.T) {
 	// Covers the JoinExpr.Quals position in alignSelectCasts (the IN<->ANY
 	// variant is already tested in inVsAnyArray_join).
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON o.status = 'paid'::e",
 		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status = 'paid'",
 	))
 }
 
 func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"WITH active AS (SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])) SELECT id FROM active",
 		"WITH active AS (SELECT id FROM t WHERE status IN ('a', 'b')) SELECT id FROM active",
 	))
@@ -655,7 +656,7 @@ func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_union(t *testing.T) {
 	// Both UNION arms (Larg / Rarg) must be normalized.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE x = ANY (ARRAY[1, 2]) UNION SELECT id FROM t WHERE y = ANY (ARRAY[3, 4])",
 		"SELECT id FROM t WHERE x IN (1, 2) UNION SELECT id FROM t WHERE y IN (3, 4)",
 	))
@@ -663,7 +664,7 @@ func TestEqualViewDef_inVsAnyArray_union(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_rangeSubselect(t *testing.T) {
 	// Sub-SELECT in FROM (RangeSubselect path).
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT s.id FROM (SELECT id FROM t WHERE x = ANY (ARRAY[1, 2])) s",
 		"SELECT s.id FROM (SELECT id FROM t WHERE x IN (1, 2)) s",
 	))
@@ -671,49 +672,49 @@ func TestEqualViewDef_inVsAnyArray_rangeSubselect(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_sublink(t *testing.T) {
 	// Sub-SELECT inside an EXISTS predicate (SubLink path).
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = ANY (ARRAY[1, 2]))",
 		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x IN (1, 2))",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_targetList(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT CASE WHEN status = 'a'::e THEN 1 ELSE 0 END AS hit FROM t",
 		"SELECT CASE WHEN status = 'a' THEN 1 ELSE 0 END AS hit FROM t",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_having(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'::e",
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_cte(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"WITH active AS (SELECT id FROM t WHERE status = 'a'::e) SELECT id FROM active",
 		"WITH active AS (SELECT id FROM t WHERE status = 'a') SELECT id FROM active",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_union(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE x = 'a'::e UNION SELECT id FROM t WHERE y = 'b'::e",
 		"SELECT id FROM t WHERE x = 'a' UNION SELECT id FROM t WHERE y = 'b'",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_sublink(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a'::e)",
 		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a')",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a'::e) s",
 		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a') s",
 	))
@@ -722,7 +723,7 @@ func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
 func TestEqualViewDef_targetBareLiteral(t *testing.T) {
 	// pg_get_viewdef prints an untyped constant on a target with the text type
 	// it resolved to.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT t.id, 'i'::text AS src, NULL::text AS note FROM t",
 		"SELECT id, 'i' AS src, NULL AS note FROM t",
 	))
@@ -731,27 +732,27 @@ func TestEqualViewDef_targetBareLiteral(t *testing.T) {
 func TestEqualViewDef_targetBareLiteral_otherType(t *testing.T) {
 	// A bare constant resolves to text only, so another type on the current
 	// side is a different output column type.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT 'i'::character varying AS src FROM t",
 		"SELECT 'i' AS src FROM t",
 	))
 	// A cast the desired side writes is compared as written.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT 'i'::text AS src FROM t",
 		"SELECT 'i'::varchar AS src FROM t",
 	))
 }
 
 func TestEqualViewDef_targetBareLiteral_notConstant(t *testing.T) {
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT t.id::text AS src FROM t",
 		"SELECT id AS src FROM t",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT 'i'::text AS src FROM t",
 		"SELECT 'j' AS src FROM t",
 	))
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT 1::text AS src FROM t",
 		"SELECT 1 AS src FROM t",
 	))
@@ -760,14 +761,14 @@ func TestEqualViewDef_targetBareLiteral_notConstant(t *testing.T) {
 func TestEqualViewDef_inVsAnyArray_orderBy(t *testing.T) {
 	// ORDER BY can contain a comparison expression (sorts by the boolean
 	// result). Covers the SortClause walker position.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t ORDER BY CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 0 ELSE 1 END",
 		"SELECT id FROM t ORDER BY CASE WHEN status IN ('a', 'b') THEN 0 ELSE 1 END",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_orderBy(t *testing.T) {
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t ORDER BY CASE WHEN status = 'a'::e THEN 0 ELSE 1 END",
 		"SELECT id FROM t ORDER BY CASE WHEN status = 'a' THEN 0 ELSE 1 END",
 	))
@@ -777,7 +778,7 @@ func TestEqualViewDef_currentOnlyTypeCast_limit(t *testing.T) {
 	// pg_get_viewdef can emit a LIMIT/OFFSET with a TypeCast attached to the
 	// numeric literal. The desired SQL written as a bare integer must still
 	// compare equal. Covers the LimitCount walker position.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t LIMIT 5::bigint",
 		"SELECT id FROM t LIMIT 5",
 	))
@@ -785,7 +786,7 @@ func TestEqualViewDef_currentOnlyTypeCast_limit(t *testing.T) {
 
 func TestEqualViewDef_currentOnlyTypeCast_offset(t *testing.T) {
 	// Covers the LimitOffset walker position.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM t OFFSET 0::bigint",
 		"SELECT id FROM t OFFSET 0",
 	))
@@ -795,7 +796,7 @@ func TestEqualViewDef_targetListTopLevelTextCast_added(t *testing.T) {
 	// A user-added top-level cast on a target column changes the resulting
 	// view column type. It must surface as a diff, even though
 	// normalizeCheckExpr strips ::text/::varchar symmetrically elsewhere.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT id FROM t",
 		"SELECT id::text FROM t",
 	))
@@ -806,7 +807,7 @@ func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
 	// also changes the view column type. alignCurrentCasts would normally
 	// strip the current-only cast; at the top of a target list we must
 	// not, so the diff still surfaces.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT id::text FROM t",
 		"SELECT id FROM t",
 	))
@@ -814,7 +815,7 @@ func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
 
 func TestEqualViewDef_targetListTopLevelTextCast_bothPresent(t *testing.T) {
 	// Both sides have the same top-level cast; no diff.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id::text FROM t",
 		"SELECT id::text FROM t",
 	))
@@ -826,7 +827,7 @@ func TestEqualViewDef_qualifiedColumnInsideTextCast(t *testing.T) {
 	// unqualified bare form. stripQualifications must recurse into
 	// TypeCast.Arg so the inner ColumnRef is reached before
 	// normalizeSelectExprs collapses the surrounding cast.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT lower(users.name::text) FROM users",
 		"SELECT lower(name) FROM users",
 	))
@@ -836,7 +837,7 @@ func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
 	// `users.id IN (SELECT ...)` parses to SubLink{Testexpr: users.id, ...}.
 	// stripQualifications must recurse into Testexpr or the table-qualified
 	// LHS won't match the unqualified desired form.
-	assert.True(t, equalViewDef(
+	assert.True(t, diff.EqualViewDef(
 		"SELECT id FROM users WHERE users.id IN (SELECT user_id FROM orders)",
 		"SELECT id FROM public.users WHERE id IN (SELECT user_id FROM public.orders)",
 	))
@@ -845,7 +846,7 @@ func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
 func TestEqualViewDef_realChangeStillDetected(t *testing.T) {
 	// Regression guard: after all the normalizations, a genuinely different
 	// view body must still surface as a difference.
-	assert.False(t, equalViewDef(
+	assert.False(t, diff.EqualViewDef(
 		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
 		"SELECT id FROM t WHERE status IN ('a', 'b', 'c')",
 	))
@@ -860,7 +861,7 @@ func TestDiffViews_newMatview(t *testing.T) {
 		Indexes:    orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW public.mv")
@@ -880,7 +881,7 @@ func TestDiffViews_newMatviewWithIndex(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.CreateStmts, 2)
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
@@ -908,7 +909,7 @@ func TestDiffViews_matviewIndexComment(t *testing.T) {
 		desired := orderedmap.New[string, *model.View]()
 		desired.Set("public.mv", matview(new("new")))
 
-		result, err := DiffViews(current, desired, allowAllDrops{})
+		result, err := diff.DiffViews(current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_mv_n IS 'new';"}, result.CreateStmts)
 	})
@@ -919,7 +920,7 @@ func TestDiffViews_matviewIndexComment(t *testing.T) {
 		desired := orderedmap.New[string, *model.View]()
 		desired.Set("public.mv", matview(new("same")))
 
-		result, err := DiffViews(current, desired, allowAllDrops{})
+		result, err := diff.DiffViews(current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, result.CreateStmts)
 	})
@@ -929,7 +930,7 @@ func TestDiffViews_matviewIndexComment(t *testing.T) {
 		desired := orderedmap.New[string, *model.View]()
 		desired.Set("public.mv", matview(new("fresh")))
 
-		result, err := DiffViews(current, desired, allowAllDrops{})
+		result, err := diff.DiffViews(current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		require.Len(t, result.CreateStmts, 3)
 		assert.Equal(t, "COMMENT ON INDEX public.idx_mv_n IS 'fresh';", result.CreateStmts[2])
@@ -944,7 +945,7 @@ func TestDiffViews_dropMatview(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.View]()
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.DropStmts, 1)
 	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW public.mv")
@@ -958,7 +959,7 @@ func TestDiffViews_dropMatview_denied(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.View]()
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Equal(t, []string{"-- skipped: DROP MATERIALIZED VIEW public.mv;"}, result.DisallowedDropStmts)
@@ -976,7 +977,7 @@ func TestDiffViews_modifyMatview(t *testing.T) {
 		Definition: "SELECT 2 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	// Materialized views must be dropped and recreated
 	assert.Len(t, result.DropStmts, 1)
@@ -1000,7 +1001,7 @@ func TestDiffViews_modifyMatview_preservesComment(t *testing.T) {
 		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	// DROP+CREATE loses the comment, so it must be re-applied
 	assert.Len(t, result.DropStmts, 1)
@@ -1021,7 +1022,7 @@ func TestDiffViews_modifyMatview_dropDenied(t *testing.T) {
 		Definition: "SELECT 2 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	// Drop denied: no executable DROP or CREATE; the suppressed recreation
 	// is surfaced as a skipped comment so users can see what was blocked.
@@ -1051,7 +1052,7 @@ func TestDiffViews_modifyMatview_dropDenied_withCommentChange(t *testing.T) {
 		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts, "no executable DDL when recreation is denied, even if comment differs")
@@ -1075,7 +1076,7 @@ func TestDiffViews_matviewIndexAdd(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Len(t, result.CreateStmts, 1)
@@ -1103,7 +1104,7 @@ func TestDiffViews_matviewIndexUnchanged(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.mv", newMatview())
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
@@ -1127,7 +1128,7 @@ func TestDiffViews_matviewIndexDrop(t *testing.T) {
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Len(t, result.CreateStmts, 1)
@@ -1157,7 +1158,7 @@ func TestDiffViews_matviewIndexRename(t *testing.T) {
 	})
 	desired.Set("public.mv", des)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Equal(t, []string{"ALTER INDEX public.idx_mv_n RENAME TO idx_mv_n2;"}, result.CreateStmts)
@@ -1167,7 +1168,7 @@ func TestDiffViews_matviewIndexRename(t *testing.T) {
 		Schema: "public", Name: "idx_mv_n2", Table: "mv", RenameFrom: &missing,
 		Definition: "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n)",
 	})
-	_, err = DiffViews(current, desired, allowAllDrops{})
+	_, err = diff.DiffViews(current, desired, allowAllDrops{})
 	require.EqualError(t, err, "rename source index idx_missing not found")
 }
 
@@ -1192,7 +1193,7 @@ func TestDiffViews_matviewIndexAdd_concurrently_parseError(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create index")
 }
@@ -1216,7 +1217,7 @@ func TestDiffViews_matviewIndexDrop_denied(t *testing.T) {
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
@@ -1236,7 +1237,7 @@ func TestDiffViews_matviewCommentAdd(t *testing.T) {
 		Definition: "SELECT 1", Comment: &comment, Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW")
@@ -1255,7 +1256,7 @@ func TestDiffViews_matviewCommentDrop(t *testing.T) {
 		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW public.mv IS NULL")
@@ -1284,7 +1285,7 @@ func TestDiffViews_matviewIndexChange(t *testing.T) {
 	})
 	desired.Set("public.mv", mvDesired)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 2)
@@ -1304,7 +1305,7 @@ func TestDiffViews_matviewNoChange(t *testing.T) {
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
@@ -1324,7 +1325,7 @@ func TestDiffViews_renameMatview(t *testing.T) {
 		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 1)
@@ -1344,7 +1345,7 @@ func TestDiffViews_viewToMatview(t *testing.T) {
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
 	assert.Contains(t, result.DropStmts[0], "DROP VIEW public.v")
@@ -1364,7 +1365,7 @@ func TestDiffViews_matviewToView(t *testing.T) {
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
 	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW public.v")
@@ -1386,7 +1387,7 @@ func TestDiffViews_viewToMatview_dropDenied(t *testing.T) {
 		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	// Type change denied: no executable DROP/CREATE/comment change; the
 	// suppressed recreation is surfaced as a skipped comment.
@@ -1409,7 +1410,7 @@ func TestDiffViews_renameTypeMismatch(t *testing.T) {
 		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "view type mismatch")
 }
@@ -1429,7 +1430,7 @@ func TestDiffViews_newMatviewWithIndex_perIndexDirective(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.CreateStmts, 2)
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
@@ -1460,7 +1461,7 @@ func TestDiffViews_matviewIndexChange_perIndexDirective(t *testing.T) {
 	})
 	desired.Set("public.mv", mvDesired)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.CreateStmts, 2)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_mv_n;", result.CreateStmts[0])
@@ -1489,7 +1490,7 @@ func TestDiffViews_matviewIndexAdd_perIndexDirective(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 2)
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[0])
@@ -1518,7 +1519,7 @@ func TestDiffViews_matviewIndexPureDrop_currentConcurrentlyForced(t *testing.T) 
 		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.CreateStmts, 1)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_mv_n;", result.CreateStmts[0])
@@ -1543,7 +1544,7 @@ func TestDiffViews_modifyMatviewWithIndex_perIndexDirective(t *testing.T) {
 	})
 	desired.Set("public.mv", mv)
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.DropStmts, 1)
 	require.Len(t, result.CreateStmts, 2)
@@ -1673,7 +1674,7 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := canCreateOrReplaceView(tc.current, tc.desired, tc.desiredNames)
+			got := diff.CanCreateOrReplaceView(tc.current, tc.desired, tc.desiredNames)
 			assert.Equal(t, tc.want, got)
 		})
 	}
@@ -1703,7 +1704,7 @@ func TestViewOutputColumns_NegativePaths(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, ok := viewOutputColumns(tc.body)
+			_, ok := diff.ViewOutputColumns(tc.body)
 			assert.False(t, ok)
 		})
 	}
@@ -1727,7 +1728,7 @@ func TestDiffViews_renamePlusRecreateDropsOldNameAndSkipsRename(t *testing.T) {
 		Definition: "SELECT id FROM t",
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
 	assert.Equal(t, "DROP VIEW public.v_old;", result.DropStmts[0])
@@ -1755,7 +1756,7 @@ func TestDiffViews_renameWithoutDefinitionChangeKeepsRename(t *testing.T) {
 		Definition: "SELECT id FROM t",
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 1)
@@ -1779,7 +1780,7 @@ func TestDiffViews_renamePlusRecreateDropDeniedSkipsOldName(t *testing.T) {
 		Definition: "SELECT id FROM t",
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
@@ -1802,7 +1803,7 @@ func TestDiffViews_renameWithAppendOnlyChangeKeepsRename(t *testing.T) {
 		Definition: "SELECT id, name FROM t",
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 2)
@@ -1822,7 +1823,7 @@ func TestDiffViews_columnRemovedTriggersDropCreate(t *testing.T) {
 		Definition: "SELECT id FROM t",
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
 	assert.Equal(t, "DROP VIEW public.v;", result.DropStmts[0])
@@ -1842,7 +1843,7 @@ func TestDiffViews_columnAppendedKeepsCreateOrReplace(t *testing.T) {
 		Definition: "SELECT id, name FROM t",
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 1)
@@ -1861,7 +1862,7 @@ func TestDiffViews_columnRemovedDropDeniedFallsBackToCommented(t *testing.T) {
 		Definition: "SELECT id FROM t",
 	})
 
-	result, err := DiffViews(current, desired, denyAllDrops{})
+	result, err := diff.DiffViews(current, desired, diff.DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
@@ -1892,7 +1893,7 @@ func TestDiffViews_columnComment(t *testing.T) {
 		ColumnComments: commentsOf("X", "x"),
 	})
 
-	result, err := DiffViews(current, desired, allowAllDrops{})
+	result, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"CREATE OR REPLACE VIEW public.v2 AS\nSELECT 1 AS \"X\";",
@@ -1914,6 +1915,6 @@ func TestDiffViews_TriggerRenameSourceMissing(t *testing.T) {
 		}),
 	})
 
-	_, err := DiffViews(current, desired, allowAllDrops{})
+	_, err := diff.DiffViews(current, desired, allowAllDrops{})
 	require.ErrorContains(t, err, "rename source trigger v1_old not found")
 }

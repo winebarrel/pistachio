@@ -1,9 +1,10 @@
-package diff
+package diff_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/winebarrel/pistachio/diff"
 )
 
 func TestEqualCollation(t *testing.T) {
@@ -36,7 +37,7 @@ func TestEqualCollation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, equalCollation(tt.a, tt.b))
+			assert.Equal(t, tt.expected, diff.EqualCollation(tt.a, tt.b))
 		})
 	}
 }

@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -25,8 +26,8 @@ func persistenceTable(schema, name string, unlogged bool, refs ...string) *model
 	return t
 }
 
-func changeFor(t *model.Table) *persistenceChange {
-	c := diffPersistence(t.FQTN(), &model.Table{Unlogged: !t.Unlogged}, t)
+func changeFor(t *model.Table) *diff.PersistenceChange {
+	c := diff.DiffPersistence(t.FQTN(), &model.Table{Unlogged: !t.Unlogged}, t)
 	return c
 }
 
@@ -36,7 +37,7 @@ func TestOrderPersistenceChanges_MutualForeignKeys(t *testing.T) {
 	a := persistenceTable("public", "a", true, "b")
 	b := persistenceTable("public", "b", true, "a")
 
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(a), changeFor(b)})
+	stmts := diff.OrderPersistenceChanges([]*diff.PersistenceChange{changeFor(a), changeFor(b)})
 
 	assert.ElementsMatch(t, []string{
 		"ALTER TABLE public.a SET UNLOGGED;",
@@ -53,7 +54,7 @@ func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
 	unloggedParent := persistenceTable("public", "parent", true)
 	unloggedChild := persistenceTable("public", "child", true, "parent")
 
-	stmts := orderPersistenceChanges([]*persistenceChange{
+	stmts := diff.OrderPersistenceChanges([]*diff.PersistenceChange{
 		changeFor(unloggedChild), changeFor(toLogged), changeFor(unloggedParent),
 	})
 
@@ -70,7 +71,7 @@ func TestOrderPersistenceChanges_ReferenceOutsideTheSet(t *testing.T) {
 	a := persistenceTable("public", "a", true, "elsewhere")
 	b := persistenceTable("public", "b", true)
 
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(a), changeFor(b)})
+	stmts := diff.OrderPersistenceChanges([]*diff.PersistenceChange{changeFor(a), changeFor(b)})
 
 	assert.Equal(t, []string{
 		"ALTER TABLE public.b SET UNLOGGED;",
@@ -93,7 +94,7 @@ func TestOrderPersistenceChanges_CrossSchemaReference(t *testing.T) {
 	fk.Name = "child_p_fkey"
 	child.ForeignKeys.Set(fk.Name, fk)
 
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(child), changeFor(parent)})
+	stmts := diff.OrderPersistenceChanges([]*diff.PersistenceChange{changeFor(child), changeFor(parent)})
 
 	assert.Equal(t, []string{
 		"ALTER TABLE public.parent SET LOGGED;",
@@ -116,7 +117,7 @@ func TestDiffTables_PersistenceStmts(t *testing.T) {
 	des.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	desired.Set("public.sessions", des)
 
-	result, err := DiffTables(current, desired, allowAllDrops{})
+	result, err := diff.DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.sessions SET UNLOGGED;"}, result.PersistenceStmts)
 	assert.Empty(t, result.Stmts)
@@ -128,5 +129,5 @@ func TestDiffPersistence_PartitionedSkipped(t *testing.T) {
 	current := &model.Table{Schema: "public", Name: "events", Unlogged: true, Partitioned: true}
 	desired := &model.Table{Schema: "public", Name: "events", Partitioned: true}
 
-	assert.Nil(t, diffPersistence(desired.FQTN(), current, desired))
+	assert.Nil(t, diff.DiffPersistence(desired.FQTN(), current, desired))
 }

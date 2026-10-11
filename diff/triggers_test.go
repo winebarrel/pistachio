@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -45,7 +46,7 @@ const (
 	conDef    = "CREATE CONSTRAINT TRIGGER events_stamp AFTER INSERT ON public.events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp()"
 )
 
-func allowTriggerDrops() DropChecker {
+func allowTriggerDrops() diff.DropChecker {
 	return &fakeDropChecker{allowed: map[string]bool{"trigger": true}}
 }
 
@@ -58,7 +59,7 @@ func (f *fakeDropChecker) IsDropAllowed(objectType string) bool { return f.allow
 func TestDiffTriggers_NoChange(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
 	des := triggers(newTrigger("events_stamp", insertDef))
-	stmts, disallowed, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, disallowed, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, disallowed)
@@ -71,7 +72,7 @@ func TestDiffTriggers_NoChangeAcrossRenderings(t *testing.T) {
 		"CREATE TRIGGER events_batch AFTER INSERT ON events REFERENCING NEW TABLE AS added FOR EACH STATEMENT EXECUTE FUNCTION stamp()"))
 	des := triggers(newTrigger("events_batch",
 		"CREATE TRIGGER events_batch AFTER INSERT ON public.events REFERENCING NEW TABLE added EXECUTE FUNCTION stamp()"))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -100,7 +101,7 @@ func TestDiffTriggers_NoChangeAcrossWhenRenderings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cur := triggers(newTrigger("events_audit", tc.cur))
 			des := triggers(newTrigger("events_audit", tc.des))
-			stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+			stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 			require.NoError(t, err)
 			assert.Empty(t, stmts)
 		})
@@ -113,7 +114,7 @@ func TestDiffTriggers_WhenChanged(t *testing.T) {
 		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'skip'::text) EXECUTE FUNCTION stamp()"))
 	des := triggers(newTrigger("events_audit",
 		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'keep') EXECUTE FUNCTION stamp()"))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"CREATE OR REPLACE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'keep') EXECUTE FUNCTION stamp();",
@@ -127,20 +128,20 @@ func TestDiffTriggers_NoChangeAcrossArgumentRenderings(t *testing.T) {
 		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp('a', '1')"))
 	des := triggers(newTrigger("events_audit",
 		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp('a', 1)"))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
 
 func TestDiffTriggers_Add(t *testing.T) {
-	stmts, _, err := diffTriggers("public.events", triggers(), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", triggers(), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{insertDef + ";"}, stmts)
 }
 
 func TestDiffTriggers_AddDisabled(t *testing.T) {
 	des := triggers(newTrigger("events_stamp", insertDef, withState('D')))
-	stmts, _, err := diffTriggers("public.events", triggers(), des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", triggers(), des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		insertDef + ";",
@@ -150,7 +151,7 @@ func TestDiffTriggers_AddDisabled(t *testing.T) {
 
 func TestDiffTriggers_Drop(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
-	stmts, disallowed, err := diffTriggers("public.events", cur, triggers(), allowTriggerDrops())
+	stmts, disallowed, err := diff.DiffTriggers("public.events", cur, triggers(), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP TRIGGER events_stamp ON public.events;"}, stmts)
 	assert.Empty(t, disallowed)
@@ -158,7 +159,7 @@ func TestDiffTriggers_Drop(t *testing.T) {
 
 func TestDiffTriggers_DropDisallowed(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
-	stmts, disallowed, err := diffTriggers("public.events", cur, triggers(), nil)
+	stmts, disallowed, err := diff.DiffTriggers("public.events", cur, triggers(), nil)
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"-- skipped: DROP TRIGGER events_stamp ON public.events;"}, disallowed)
@@ -167,7 +168,7 @@ func TestDiffTriggers_DropDisallowed(t *testing.T) {
 func TestDiffTriggers_Replace(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
 	des := triggers(newTrigger("events_stamp", updateDef))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"CREATE OR REPLACE TRIGGER events_stamp BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();",
@@ -179,7 +180,7 @@ func TestDiffTriggers_Replace(t *testing.T) {
 func TestDiffTriggers_ReplaceKeepsState(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef, withState('D')))
 	des := triggers(newTrigger("events_stamp", updateDef, withState('D')))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"CREATE OR REPLACE TRIGGER events_stamp BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();",
@@ -204,7 +205,7 @@ func TestDiffTriggers_StateOnly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cur := triggers(newTrigger("events_stamp", insertDef, withState(tc.cur)))
 			des := triggers(newTrigger("events_stamp", insertDef, withState(tc.des)))
-			stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+			stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 			require.NoError(t, err)
 			assert.Equal(t, tc.stmts, stmts)
 		})
@@ -216,7 +217,7 @@ func TestDiffTriggers_StateOnly(t *testing.T) {
 func TestDiffTriggers_ConstraintSwitch(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", conDef))
 	des := triggers(newTrigger("events_stamp", insertDef))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP TRIGGER events_stamp ON public.events;",
@@ -230,7 +231,7 @@ func TestDiffTriggers_ConstraintChange(t *testing.T) {
 	changed := "CREATE CONSTRAINT TRIGGER events_stamp AFTER INSERT ON public.events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp2()"
 	cur := triggers(newTrigger("events_stamp", conDef))
 	des := triggers(newTrigger("events_stamp", changed))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP TRIGGER events_stamp ON public.events;",
@@ -243,7 +244,7 @@ func TestDiffTriggers_ConstraintChange(t *testing.T) {
 func TestDiffTriggers_ConstraintSwitchDenied(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", conDef))
 	des := triggers(newTrigger("events_stamp", insertDef))
-	stmts, disallowed, err := diffTriggers("public.events", cur, des, nil)
+	stmts, disallowed, err := diff.DiffTriggers("public.events", cur, des, nil)
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"-- skipped: DROP TRIGGER events_stamp ON public.events;"}, disallowed)
@@ -257,7 +258,7 @@ func TestDiffTriggers_RenameWithRecreateDenied(t *testing.T) {
 	des := triggers(newTrigger("events_new",
 		"CREATE TRIGGER events_new AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()",
 		withTriggerRenameFrom("events_old")))
-	stmts, disallowed, err := diffTriggers("public.events", cur, des, nil)
+	stmts, disallowed, err := diff.DiffTriggers("public.events", cur, des, nil)
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"-- skipped: DROP TRIGGER events_old ON public.events;"}, disallowed)
@@ -269,7 +270,7 @@ func TestDiffTriggers_Rename(t *testing.T) {
 	des := triggers(newTrigger("events_new",
 		"CREATE TRIGGER events_new BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()",
 		withTriggerRenameFrom("events_old")))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TRIGGER events_old ON public.events RENAME TO events_new;"}, stmts)
 }
@@ -282,7 +283,7 @@ func TestDiffTriggers_RenameWithRecreate(t *testing.T) {
 	des := triggers(newTrigger("events_new",
 		"CREATE TRIGGER events_new AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()",
 		withTriggerRenameFrom("events_old")))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP TRIGGER events_old ON public.events;",
@@ -295,7 +296,7 @@ func TestDiffTriggers_RenameWithRecreate(t *testing.T) {
 func TestDiffTriggers_RenameAlreadyApplied(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
 	des := triggers(newTrigger("events_stamp", insertDef, withTriggerRenameFrom("events_old")))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -303,14 +304,14 @@ func TestDiffTriggers_RenameAlreadyApplied(t *testing.T) {
 func TestDiffTriggers_RenameSameName(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
 	des := triggers(newTrigger("events_stamp", insertDef, withTriggerRenameFrom("events_stamp")))
-	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
 
 func TestDiffTriggers_RenameSourceMissing(t *testing.T) {
 	des := triggers(newTrigger("events_new", insertDef, withTriggerRenameFrom("events_old")))
-	_, _, err := diffTriggers("public.events", triggers(), des, allowTriggerDrops())
+	_, _, err := diff.DiffTriggers("public.events", triggers(), des, allowTriggerDrops())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source trigger events_old not found")
 }
@@ -321,7 +322,7 @@ func TestDiffTriggers_RenameDestinationExists(t *testing.T) {
 		newTrigger("events_new", insertDef),
 	)
 	des := triggers(newTrigger("events_new", insertDef, withTriggerRenameFrom("events_old")))
-	_, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	_, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -331,13 +332,13 @@ func TestDiffTriggers_RenameDestinationExists(t *testing.T) {
 func TestDiffTriggers_RenameUnparseableCurrent(t *testing.T) {
 	cur := triggers(newTrigger("events_old", "NOT A TRIGGER"))
 	des := triggers(newTrigger("events_new", insertDef, withTriggerRenameFrom("events_old")))
-	_, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	_, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse the current trigger definition")
 }
 
 func TestDiffTriggers_NilMaps(t *testing.T) {
-	stmts, disallowed, err := diffTriggers("public.events", nil, nil, allowTriggerDrops())
+	stmts, disallowed, err := diff.DiffTriggers("public.events", nil, nil, allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, disallowed)
@@ -346,7 +347,7 @@ func TestDiffTriggers_NilMaps(t *testing.T) {
 func TestDiffTriggers_UnparseableDefinition(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", "NOT A TRIGGER"))
 	des := triggers(newTrigger("events_stamp", insertDef))
-	_, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	_, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse the current trigger definition")
 }
@@ -354,7 +355,7 @@ func TestDiffTriggers_UnparseableDefinition(t *testing.T) {
 func TestDiffTriggers_UnparseableDesiredDefinition(t *testing.T) {
 	cur := triggers(newTrigger("events_stamp", insertDef))
 	des := triggers(newTrigger("events_stamp", "NOT A TRIGGER"))
-	_, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	_, _, err := diff.DiffTriggers("public.events", cur, des, allowTriggerDrops())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse the desired trigger definition")
 }
@@ -362,43 +363,43 @@ func TestDiffTriggers_UnparseableDesiredDefinition(t *testing.T) {
 // A definition that parses as something other than CREATE TRIGGER cannot be
 // compared, and neither can a file holding more than one statement.
 func TestParseTriggerDef_WrongStatement(t *testing.T) {
-	_, _, err := parseTriggerDef("SELECT 1", "public")
+	_, _, err := diff.ParseTriggerDef("SELECT 1", "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 
-	_, _, err = parseTriggerDef(insertDef+"; "+insertDef, "public")
+	_, _, err = diff.ParseTriggerDef(insertDef+"; "+insertDef, "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
 
 func TestIsConstraintTrigger(t *testing.T) {
-	assert.True(t, isConstraintTrigger(conDef))
-	assert.False(t, isConstraintTrigger(insertDef))
-	assert.False(t, isConstraintTrigger("NOT A TRIGGER"))
+	assert.True(t, diff.IsConstraintTrigger(conDef))
+	assert.False(t, diff.IsConstraintTrigger(insertDef))
+	assert.False(t, diff.IsConstraintTrigger("NOT A TRIGGER"))
 }
 
 func TestReplaceTriggerSQL_Unparseable(t *testing.T) {
-	_, err := replaceTriggerSQL("NOT A TRIGGER")
+	_, err := diff.ReplaceTriggerSQL("NOT A TRIGGER")
 	require.Error(t, err)
 
-	_, err = replaceTriggerSQL("SELECT 1")
+	_, err = diff.ReplaceTriggerSQL("SELECT 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 
-	_, err = replaceTriggerSQL(insertDef + "; " + insertDef)
+	_, err = diff.ReplaceTriggerSQL(insertDef + "; " + insertDef)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
 
 func TestRenameTriggerDef_Unparseable(t *testing.T) {
-	_, err := renameTriggerDef("NOT A TRIGGER", "x")
+	_, err := diff.RenameTriggerDef("NOT A TRIGGER", "x")
 	require.Error(t, err)
 
-	_, err = renameTriggerDef("SELECT 1", "x")
+	_, err = diff.RenameTriggerDef("SELECT 1", "x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 
-	_, err = renameTriggerDef(insertDef+"; "+insertDef, "x")
+	_, err = diff.RenameTriggerDef(insertDef+"; "+insertDef, "x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
@@ -414,14 +415,14 @@ func TestEqualTriggerDef_QualifiedFunction(t *testing.T) {
 		"three-part": "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION postgres.public.stamp()",
 	} {
 		t.Run(name, func(t *testing.T) {
-			same, err := equalTriggerDef(current, desired, "public")
+			same, err := diff.EqualTriggerDef(current, desired, "public")
 			require.NoError(t, err)
 			assert.True(t, same)
 		})
 	}
 
 	// A different function is still a difference.
-	same, err := equalTriggerDef(current, "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.other()", "public")
+	same, err := diff.EqualTriggerDef(current, "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.other()", "public")
 	require.NoError(t, err)
 	assert.False(t, same)
 }
@@ -432,19 +433,19 @@ func TestDiffTriggers_comment(t *testing.T) {
 	c := "stamps"
 	withComment := func(trg *model.Trigger) { trg.Comment = &c }
 
-	stmts, _, err := diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef)), triggers(newTrigger("events_stamp", insertDef, withComment)), allowTriggerDrops())
+	stmts, _, err := diff.DiffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef)), triggers(newTrigger("events_stamp", insertDef, withComment)), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TRIGGER events_stamp ON public.events IS 'stamps';"}, stmts)
 
-	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
+	stmts, _, err = diff.DiffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"COMMENT ON TRIGGER events_stamp ON public.events IS NULL;"}, stmts)
 
-	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", updateDef, withComment)), allowTriggerDrops())
+	stmts, _, err = diff.DiffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", updateDef, withComment)), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE OR REPLACE TRIGGER events_stamp BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();"}, stmts)
 
-	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", conDef, withComment)), allowTriggerDrops())
+	stmts, _, err = diff.DiffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", conDef, withComment)), allowTriggerDrops())
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP TRIGGER events_stamp ON public.events;",

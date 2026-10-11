@@ -1,4 +1,4 @@
-package diff
+package diff_test
 
 // allowAllDrops is a DropChecker that permits every drop. It is a fixture used
 // only by tests; production callers either pass a *cmd.DropPolicy or rely on
