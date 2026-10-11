@@ -42,6 +42,12 @@ request that changes a statement pistachio sends fails it until the
 recording is made again. Without a cluster, leave the job failing and say so
 in the pull request; a maintainer with a cluster records it.
 
+`make test-dsql-scenario` runs the scenarios in test/dsql/ against a live
+cluster named by `DSQL_HOST`. They take the schemas of
+aws-samples/aurora-dsql-samples at a pinned commit, then build, change and
+drop them step by step, checking for drift after each. CI does not run
+them, and nothing is recorded.
+
 The rest of this file is the evidence.
 
 Connection:
