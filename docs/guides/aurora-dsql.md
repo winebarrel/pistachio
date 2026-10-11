@@ -9,7 +9,7 @@ DSQL supports only part of PostgreSQL. For example, it has no enums, triggers, p
 !!! note "Write `CREATE INDEX` without `ASYNC`"
     Write indexes in the schema as `CREATE INDEX`, not `CREATE INDEX ASYNC`. pistachio adds `ASYNC` to the statements it generates.
 
-`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it. `lint`, `parse` and `diff` have no such option, so remove `ASYNC` with `pista fmt --dsql-strip-async` before you use them.
+`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it.
 
 ## Connecting
 
