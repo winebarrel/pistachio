@@ -52,10 +52,10 @@ type ExecOptions struct {
 	// over, so it passes the terminal here. nil writes the line to the
 	// output writer.
 	WaitWriter io.Writer `kong:"-"`
-	// DSQLNoWaitIndexBuild leaves an index build running when apply moves on.
-	// DSQL builds every index in the background, and apply waits for each by
-	// default.
-	DSQLNoWaitIndexBuild bool `env:"PISTA_DSQL_NO_WAIT_INDEX_BUILD" help:"With --engine dsql, do not wait for an index build to finish before running the next statement."`
+	// DSQLNoWaitJob leaves a job running when apply moves on. DSQL builds
+	// every index and validates every constraint in a background job, and
+	// apply waits for each by default.
+	DSQLNoWaitJob bool `env:"PISTA_DSQL_NO_WAIT_JOB" help:"With --engine dsql, do not wait for an index build or a constraint validation to finish before running the next statement."`
 }
 
 // applyInput is the statement set an apply runs, whichever it came from: the
@@ -199,9 +199,9 @@ func (client *Client) applyStmts(
 
 	// A unique constraint takes over its index only once the index is valid,
 	// so it cannot follow a build nobody waits for.
-	if client.Engine.isDSQL() && options.DSQLNoWaitIndexBuild {
+	if client.Engine.isDSQL() && options.DSQLNoWaitJob {
 		if name, ok := dsql.UnwaitedUniqueIndex(input.Stmts); ok {
-			return fmt.Errorf("--dsql-no-wait-index-build cannot be used when a unique constraint takes over index %s, which this plan builds", name)
+			return fmt.Errorf("--dsql-no-wait-job cannot be used when a unique constraint takes over index %s, which this plan builds", name)
 		}
 	}
 
@@ -216,10 +216,10 @@ func (client *Client) applyStmts(
 	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
 
-	// DSQL builds an index in the background. Each build is waited for
-	// before the next statement runs. --with-tx is refused with dsql, so the
+	// DSQL builds an index and validates a constraint in a background job.
+	// Each job is waited for before the next statement runs. --with-tx is refused with dsql, so the
 	// transaction below never replaces this.
-	if client.Engine.isDSQL() && !options.DSQLNoWaitIndexBuild {
+	if client.Engine.isDSQL() && !options.DSQLNoWaitJob {
 		exec = func(ctx context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
 			return pgconn.CommandTag{}, dsql.Exec(ctx, conn, sql)
 		}

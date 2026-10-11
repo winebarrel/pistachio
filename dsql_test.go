@@ -111,6 +111,17 @@ CREATE INDEX users_name_idx ON public.users (name);
 CREATE INDEX users_status_idx ON public.users (status, name);
 `
 
+const dsqlPosts = `CREATE TABLE public.posts (
+    id bigint NOT NULL,
+    user_id bigint,
+    title text,
+    body text,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+ALTER TABLE public.users ADD CONSTRAINT users_name_check CHECK (name <> '');
+`
+
 // TestDSQL covers what only a DSQL cluster can answer: that it takes the
 // statements --engine dsql writes, that apply waits for its index builds, and
 // that what it reports reads back without drift. Behavior decided before
@@ -166,13 +177,29 @@ func TestDSQL(t *testing.T) {
 
 	t.Run("change an index without waiting for the build", func(t *testing.T) {
 		changed := strings.Replace(dsqlUsersChanged, "users_status_idx ON public.users (status, name)", "users_status_idx ON public.users (status)", 1)
-		out, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitIndexBuild: true})
+		out, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitJob: true})
 		require.NoError(t, err)
 		assert.Contains(t, out, "DROP INDEX public.users_status_idx;\nCREATE INDEX ASYNC users_status_idx ON public.users (status);")
 		requireNoDSQLDrift(t, client, changed)
 
 		_, err = dsqlApply(t, client, dsqlUsersChanged, pistachio.ExecOptions{})
 		require.NoError(t, err)
+	})
+	t.Run("add a foreign key and a check", func(t *testing.T) {
+		desired := dsqlUsersChanged + dsqlPosts
+		out, err := dsqlApply(t, client, desired, pistachio.ExecOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, out, "ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) NOT VALID;\nALTER TABLE ASYNC public.posts VALIDATE CONSTRAINT posts_user_id_fkey;")
+		assert.Contains(t, out, "ALTER TABLE public.users ADD CONSTRAINT users_name_check CHECK (name <> '') NOT VALID;\nALTER TABLE ASYNC public.users VALIDATE CONSTRAINT users_name_check;")
+		requireNoDSQLDrift(t, client, desired)
+	})
+
+	t.Run("drop a column", func(t *testing.T) {
+		desired := dsqlUsersChanged + strings.Replace(dsqlPosts, "    body text,\n", "", 1)
+		out, err := dsqlApply(t, client, desired, pistachio.ExecOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, out, "ALTER TABLE public.posts DROP COLUMN body;")
+		requireNoDSQLDrift(t, client, desired)
 	})
 }
 
@@ -203,9 +230,21 @@ func localDSQLClient(t *testing.T, initSQL string) *pistachio.Client {
 
 // A change DSQL cannot make is refused at plan, before anything is applied.
 func TestDSQL_RefusedAtPlan(t *testing.T) {
-	client := localDSQLClient(t, dsqlUsersChanged)
-	_, err := dsqlPlan(t, client, dsqlUsers)
-	require.ErrorContains(t, err, "DSQL does not support DROP COLUMN")
+	client := localDSQLClient(t, dsqlUsers)
+	_, err := dsqlPlan(t, client, strings.Replace(dsqlUsers, "email text", "email varchar(100)", 1))
+	require.ErrorContains(t, err, "DSQL does not support a column type change")
+}
+
+// A check or foreign key is added NOT VALID and validated in a job, and a
+// NOT VALID one the desired schema validates is validated in a job too.
+func TestDSQL_ValidateInJob(t *testing.T) {
+	client := localDSQLClient(t, dsqlUsers+"ALTER TABLE public.users ADD CONSTRAINT users_email_check CHECK (email <> '') NOT VALID;\n")
+	result, err := dsqlPlan(t, client, dsqlUsers+dsqlPosts+"ALTER TABLE public.users ADD CONSTRAINT users_email_check CHECK (email <> '');\n")
+	require.NoError(t, err)
+	assert.Contains(t, result.SQL, "ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) NOT VALID;\nALTER TABLE ASYNC public.posts VALIDATE CONSTRAINT posts_user_id_fkey;")
+	assert.Contains(t, result.SQL, "ALTER TABLE public.users ADD CONSTRAINT users_name_check CHECK (name <> '') NOT VALID;\nALTER TABLE ASYNC public.users VALIDATE CONSTRAINT users_name_check;")
+	assert.Contains(t, result.SQL, "ALTER TABLE ASYNC public.users VALIDATE CONSTRAINT users_email_check;")
+	assert.NotContains(t, result.SQL, "ALTER TABLE public.users VALIDATE")
 }
 
 // A unique constraint cannot take over an index nobody waits for, so apply
@@ -213,8 +252,8 @@ func TestDSQL_RefusedAtPlan(t *testing.T) {
 func TestDSQL_NoWaitUniqueRefused(t *testing.T) {
 	client := localDSQLClient(t, dsqlUsers)
 	changed := dsqlUsers + "ALTER TABLE public.users ADD CONSTRAINT users_name_key UNIQUE (name);\n"
-	_, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitIndexBuild: true})
-	require.ErrorContains(t, err, "--dsql-no-wait-index-build cannot be used")
+	_, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitJob: true})
+	require.ErrorContains(t, err, "--dsql-no-wait-job cannot be used")
 }
 
 // The plan file records the engine, and apply-from runs the plan under it.

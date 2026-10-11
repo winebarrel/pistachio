@@ -224,9 +224,15 @@ func relationName(rel *pg_query.RangeVar) string {
 // INDEX, and the column and constraint changes DSQL takes only in CREATE
 // TABLE. It drops USING btree, since DSQL rejects USING and has the one
 // method, and leaves another method for DSQL to refuse. It writes CACHE 1 on
-// an identity column, since DSQL rejects one without a cache size. ASYNC goes
-// in last: PostgreSQL's grammar has no such word, so nothing can parse the
-// statement after it.
+// an identity column, since DSQL rejects one without a cache size.
+//
+// A check or foreign key added to a table becomes ADD CONSTRAINT ... NOT
+// VALID and VALIDATE CONSTRAINT: DSQL takes the constraint only NOT VALID,
+// and validates it only in a job. The two stay next to each other, so this
+// is done here rather than in Split.
+//
+// ASYNC goes in last: PostgreSQL's grammar has no such word, so nothing can
+// parse the statement after it.
 func Finish(stmts []string) ([]string, error) {
 	out := make([]string, 0, len(stmts))
 
@@ -253,6 +259,21 @@ func Finish(stmts []string) ([]string, error) {
 			continue
 		}
 
+		if as := node.GetAlterTableStmt(); as != nil && len(as.Cmds) == 1 {
+			cmd := as.Cmds[0].GetAlterTableCmd()
+			switch cmd.Subtype {
+			case pg_query.AlterTableType_AT_ValidateConstraint:
+				out = append(out, validateAsync(as.Relation, cmd.Name))
+				continue
+			case pg_query.AlterTableType_AT_AddConstraint:
+				if con := cmd.Def.GetConstraint(); needsValidation(con) {
+					body := strings.TrimSuffix(strings.TrimRight(stmt, " \n"), ";")
+					out = append(out, body+" NOT VALID;", validateAsync(as.Relation, con.Conname))
+					continue
+				}
+			}
+		}
+
 		out = append(out, AddIdentityCache(stmt))
 	}
 
@@ -276,8 +297,6 @@ func refusal(node *pg_query.Node) string {
 	for _, c := range as.Cmds {
 		cmd := c.GetAlterTableCmd()
 		switch cmd.Subtype {
-		case pg_query.AlterTableType_AT_DropColumn:
-			return "DROP COLUMN"
 		case pg_query.AlterTableType_AT_SetNotNull:
 			return "SET NOT NULL"
 		case pg_query.AlterTableType_AT_AlterColumnType:
@@ -289,16 +308,28 @@ func refusal(node *pg_query.Node) string {
 				}
 			}
 		case pg_query.AlterTableType_AT_AddConstraint:
-			switch cmd.Def.GetConstraint().Contype {
-			case pg_query.ConstrType_CONSTR_PRIMARY:
+			if cmd.Def.GetConstraint().Contype == pg_query.ConstrType_CONSTR_PRIMARY {
 				return "ADD CONSTRAINT ... PRIMARY KEY"
-			case pg_query.ConstrType_CONSTR_CHECK:
-				return "ADD CONSTRAINT ... CHECK"
 			}
 		}
 	}
 
 	return ""
+}
+
+// needsValidation reports a check or foreign key added validated, which DSQL
+// adds only NOT VALID.
+func needsValidation(con *pg_query.Constraint) bool {
+	switch con.Contype {
+	case pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_FOREIGN:
+		return !con.SkipValidation
+	}
+	return false
+}
+
+// validateAsync writes the VALIDATE CONSTRAINT that DSQL runs as a job.
+func validateAsync(rel *pg_query.RangeVar, name string) string {
+	return "ALTER TABLE ASYNC " + relationName(rel) + " VALIDATE CONSTRAINT " + model.Ident(name) + ";"
 }
 
 // addAsync writes ASYNC after CREATE [UNIQUE] INDEX. The statement is one
@@ -391,7 +422,7 @@ func insertCache(sql string, loc int) string {
 
 // UnwaitedUniqueIndex reports a unique constraint that takes over an index
 // the same statements build with ASYNC. Without the wait the index is not
-// valid yet when the constraint takes it over, so --dsql-no-wait-index-build
+// valid yet when the constraint takes it over, so --dsql-no-wait-job
 // cannot run them. An index that already exists needs no wait. A statement
 // that does not parse has nothing to report.
 func UnwaitedUniqueIndex(stmts []string) (string, bool) {
@@ -427,12 +458,13 @@ type Conn interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Exec runs one statement. An index build is waited for: CREATE INDEX ASYNC
-// returns the job it starts, and sys.wait_for_job returns whether the job
-// succeeded. A build that fails leaves the index invalid, so the apply stops
-// there.
+// Exec runs one statement. A job is waited for: CREATE INDEX ASYNC and ALTER
+// TABLE ASYNC ... VALIDATE CONSTRAINT return the job they start, and
+// sys.wait_for_job returns whether the job succeeded. A build that fails
+// leaves the index invalid, and a validation that fails leaves the
+// constraint NOT VALID, so the apply stops there.
 func Exec(ctx context.Context, conn Conn, stmt string) error {
-	if !strings.HasPrefix(stmt, "CREATE INDEX ASYNC ") && !strings.HasPrefix(stmt, "CREATE UNIQUE INDEX ASYNC ") {
+	if !isAsync(stmt) {
 		_, err := conn.Exec(ctx, stmt)
 		return err
 	}
@@ -444,13 +476,23 @@ func Exec(ctx context.Context, conn Conn, stmt string) error {
 
 	var succeeded bool
 	if err := conn.QueryRow(ctx, "CALL sys.wait_for_job("+model.QuoteLiteral(jobID)+")").Scan(&succeeded); err != nil {
-		return fmt.Errorf("failed to wait for index build job %s: %w", jobID, err)
+		return fmt.Errorf("failed to wait for job %s: %w", jobID, err)
 	}
 	if !succeeded {
-		return fmt.Errorf("index build job %s failed", jobID)
+		return fmt.Errorf("job %s failed: %s", jobID, stmt)
 	}
 
 	return nil
+}
+
+// isAsync reports a statement Finish wrote ASYNC in.
+func isAsync(stmt string) bool {
+	for _, prefix := range []string{"CREATE INDEX ASYNC ", "CREATE UNIQUE INDEX ASYNC ", "ALTER TABLE ASYNC "} {
+		if strings.HasPrefix(stmt, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // StripAsync blanks out the ASYNC of each CREATE [UNIQUE] INDEX ASYNC, for a
