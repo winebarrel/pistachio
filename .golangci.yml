@@ -9,11 +9,21 @@ linters:
     - modernize
     - nilerr
     - nilnesserr
+    - perfsprint
     - reassign
     - testifylint
     - unconvert
     - usestdlibvars
     - wastedassign
+  settings:
+    perfsprint:
+      # Only error-format is on: fmt.Errorf with a constant message becomes
+      # errors.New.
+      integer-format: false
+      string-format: false
+      bool-format: false
+      hex-format: false
+      concat-loop: false
   exclusions:
     rules:
       - linters:

@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -193,7 +194,7 @@ func (client *Client) applyStmts(
 	// --try-tx asks for a transaction only when one is possible, so the same
 	// diff runs without one.
 	if options.WithTx && input.HasConcurrentlyIndex {
-		return fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
+		return errors.New("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
 	withTx := options.WithTx || (options.TryTx && !input.HasConcurrentlyIndex)
 

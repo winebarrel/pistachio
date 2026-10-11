@@ -2,6 +2,7 @@
 package fuzzseed
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 func Schemas() ([]string, error) {
 	_, self, _, ok := runtime.Caller(0)
 	if !ok {
-		return nil, fmt.Errorf("cannot locate the fuzzseed source file")
+		return nil, errors.New("cannot locate the fuzzseed source file")
 	}
 
 	root := filepath.Join(filepath.Dir(self), "..", "..", "..")
