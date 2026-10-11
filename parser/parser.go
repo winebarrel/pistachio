@@ -1014,7 +1014,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				col.NotNullName = &name
 			}
 		case pg_query.ConstrType_CONSTR_DEFAULT:
-			if con.RawExpr != nil {
+			if con.RawExpr != nil && !isNullDefault(con.RawExpr) {
 				def, err := deparseExpr(con.RawExpr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for column %s: %w", cd.Colname, err)
@@ -1957,7 +1957,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) 
 		case pg_query.ConstrType_CONSTR_NOTNULL:
 			domain.NotNull = true
 		case pg_query.ConstrType_CONSTR_DEFAULT:
-			if con.RawExpr != nil {
+			if con.RawExpr != nil && !isNullDefault(con.RawExpr) {
 				def, err := deparseExpr(con.RawExpr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for domain %s: %w", name, err)
@@ -2985,6 +2985,16 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 		return "", fmt.Errorf("unexpected deparse output for expression: %s", sql)
 	}
 	return strings.TrimSpace(expr), nil
+}
+
+// isNullDefault reports whether a column or domain DEFAULT is a NULL constant,
+// cast or not. PostgreSQL stores no default for one, so it reads as none.
+func isNullDefault(n *pg_query.Node) bool {
+	if tc := n.GetTypeCast(); tc != nil {
+		n = tc.Arg
+	}
+	c := n.GetAConst()
+	return c != nil && c.Isnull
 }
 
 // parenthesizeDefault wraps a deparsed column or domain DEFAULT expression in
