@@ -38,22 +38,11 @@ install:
 # writes.
 .PHONY: json-schema
 json-schema:
-	go run -tags tools ./cmd/gen-json-schema
-
-# Code that must stay out of a release is built only with a tag: tests on
-# the test helpers (internal/testutil), tools on the JSON Schema generator
-# (cmd/gen-json-schema, internal/jsonschema). Every command that compiles the
-# tests passes both. `make build-check` builds everything without them, as a
-# release does, so non-test code that imports such a package fails there.
-GOTAGS := -tags tests,tools
+	go run ./cmd/gen-json-schema
 
 .PHONY: vet
 vet:
-	go vet $(GOTAGS) ./...
-
-.PHONY: build-check
-build-check:
-	go build ./...
+	go vet ./...
 
 # TEST_JUNIT names a file to write a JUnit XML report to, which is what
 # Codecov Test Analytics ingests. Leave it empty and the report is skipped;
@@ -79,7 +68,7 @@ endif
 # another. Override PGPORT, or wipe the other server yourself.
 .PHONY: test
 test: clean-schema
-	go test $(GOTAGS) -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
+	go test -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
 
 .PHONY: lint
 lint:
@@ -93,6 +82,12 @@ fix:
 deadcode:
 	bash scripts/check-deadcode.sh
 
+# Fails when non-test code imports internal/testutil. See
+# scripts/check-test-imports.sh.
+.PHONY: check-test-imports
+check-test-imports:
+	bash scripts/check-test-imports.sh
+
 # Fuzzing. The targets need no database, so this is the one test target that
 # runs anywhere. FUZZTIME is per target, not for the run as a whole, and each
 # has to be started on its own because `go test -fuzz` takes one target at a
@@ -102,9 +97,9 @@ FUZZTIME ?= 1m
 
 .PHONY: fuzz
 fuzz:
-	go test $(GOTAGS) ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
-	go test $(GOTAGS) ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
-	go test $(GOTAGS) ./format/ -run='^$$' -fuzz=FuzzFormat -fuzztime=$(FUZZTIME)
+	go test ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
+	go test ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
+	go test ./format/ -run='^$$' -fuzz=FuzzFormat -fuzztime=$(FUZZTIME)
 
 .PHONY: keywords
 keywords:
@@ -129,7 +124,7 @@ test-fidelity: clean-schema
 # it in a job of its own.
 .PHONY: test-dsql
 test-dsql:
-	TEST_PISTA_DSQL=1 go test $(GOTAGS) -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
+	TEST_PISTA_DSQL=1 go test -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
 
 # Makes the TestDSQL recording again against a live cluster. DSQL_HOST names
 # the cluster endpoint, and its public schema must be empty. See

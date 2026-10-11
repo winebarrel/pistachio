@@ -77,9 +77,7 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       - run: make deadcode
-      # Built without the tests and tools tags, as a release is: non-test
-      # code that imports a package built only with them fails here.
-      - run: make build-check
+      - run: make check-test-imports
 
   windows:
     runs-on: windows-latest

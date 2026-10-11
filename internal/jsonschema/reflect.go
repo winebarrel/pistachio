@@ -1,5 +1,3 @@
-//go:build tools
-
 // Package jsonschema builds the JSON Schema of the document `pista parse`
 // writes. It reflects over document.Document, so the schema follows the
 // structs rather than a description kept beside them.

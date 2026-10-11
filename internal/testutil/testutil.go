@@ -1,5 +1,3 @@
-//go:build tests
-
 package testutil
 
 import (

@@ -32,9 +32,8 @@ Do not coddle the user. Assume they know PostgreSQL and their own schema.
 
 ```sh
 make build          # go build ./cmd/pista (outputs ./pista at the repo root)
-make vet            # go vet -tags tests,tools ./...
-make build-check    # go build ./... without the tags, as a release builds
-make test           # go test -tags tests,tools -p 1 -v ./... $(TEST_OPTS)
+make vet            # go vet ./...
+make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
 make test-fidelity  # restore fidelity check (bash, requires PostgreSQL and pg_dump)
 make test-changelog # CHANGELOG.md merge driver test (bash, no database)
@@ -43,11 +42,11 @@ make record-dsql    # records TestDSQL again against a live cluster (DSQL_HOST)
 make test-dsql-scenario # CLI scenario tests on the aws-samples DSQL schemas (bash, live cluster, DSQL_HOST)
 make fuzz           # fuzz targets (no database; FUZZTIME per target, default 1m)
 make lint           # golangci-lint run
+make check-test-imports # fails when non-test code imports internal/testutil
 make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 
 - Tests require a running PostgreSQL instance. `compose.yaml` publishes each version of the CI matrix on its own port (15 -> 5415, 16 -> 5416, 17 -> 5417, 18 -> 5418), so several can run side by side; `PGPORT` (default 5415) selects which one every `psql`- and test-based target uses. The Makefile builds `TEST_PISTA_CONN_STR` from it; set that variable to point somewhere else entirely.
-- Code that must stay out of a release is built only with a build tag: `tests` on the test helpers (`internal/testutil`, `internal/testutil/fuzzseed`), `tools` on the JSON Schema generator (`cmd/gen-json-schema`, `internal/jsonschema`). A new package of that kind gets the tag on each of its non-test files. Every command that compiles the tests passes `-tags tests,tools`: the Makefile's `GOTAGS`, `.golangci.yml`, the fuzz workflow and `scripts/record-dsql.sh` do, and a bare `go test ./...` fails to compile. Set the tags in the editor too (gopls `buildFlags: ["-tags=tests,tools"]`). `make build-check`, which CI runs, builds everything without them, so non-test code that imports such a package fails there.
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
 - The `plan`, `apply` and `dump` fixture cases run in parallel, each on a database of its own taken from a pool: `pista_test_1` to `pista_test_<GOMAXPROCS>`, created on the same server on first use and kept. The role needs `CREATEDB`. `-parallel 1` runs them one at a time.
 - CI uploads the coverage profile of each test job as an artifact: `coverage-windows-apply`, `coverage-windows-plan`, `coverage-windows-rest`, `coverage-pg15` to `coverage-pg18` and `coverage-dsql`. Each holds `coverage.txt`. The Windows tests are split across three jobs, so each Windows profile covers only part of the tests. View it with `go tool cover -html=coverage.txt`.
