@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"maps"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -67,9 +68,7 @@ func diffTriggers(
 	// recreate is denied.
 	recreateDenied := map[string]bool{}
 	if !triggerAllowed {
-		for name := range recreated {
-			recreateDenied[name] = true
-		}
+		maps.Copy(recreateDenied, recreated)
 	}
 
 	// A trigger that is both renamed and recreated skips the RENAME, since the

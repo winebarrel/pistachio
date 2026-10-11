@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -1362,7 +1361,7 @@ func peerIsNumericAtTopLevel(n *pg_query.Node) bool {
 // Returns nil for non-numeric strings; callers leave the original node alone
 // in that case.
 func numericAConstFromString(s string) *pg_query.Node {
-	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n >= math.MinInt32 && n <= math.MaxInt32 {
+	if n, err := strconv.ParseInt(s, 10, 32); err == nil {
 		return &pg_query.Node{
 			Node: &pg_query.Node_AConst{
 				AConst: &pg_query.A_Const{
@@ -1529,11 +1528,9 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 		// user wrote a quoted form (`'0'`), leave the stripped Sval intact so
 		// it still compares equal to the quoted desired.
 		if isNumericTypeName(ct.TypeName) && desiredIsNumericAConst(desired) {
-			if ac := arg.GetAConst(); ac != nil {
-				if sv := ac.GetSval(); sv != nil {
-					if numeric := numericAConstFromString(sv.Sval); numeric != nil {
-						arg = numeric
-					}
+			if sv := arg.GetAConst().GetSval(); sv != nil {
+				if numeric := numericAConstFromString(sv.Sval); numeric != nil {
+					arg = numeric
 				}
 			}
 		}
@@ -2635,11 +2632,9 @@ func stripDefaultTopLevelCast(node, peer *pg_query.Node) *pg_query.Node {
 	}
 	arg := tc.Arg
 	if isNumericTypeName(tc.TypeName) && peerIsNumericAtTopLevel(peer) {
-		if ac := arg.GetAConst(); ac != nil {
-			if sv := ac.GetSval(); sv != nil {
-				if numeric := numericAConstFromString(sv.Sval); numeric != nil {
-					arg = numeric
-				}
+		if sv := arg.GetAConst().GetSval(); sv != nil {
+			if numeric := numericAConstFromString(sv.Sval); numeric != nil {
+				arg = numeric
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -306,8 +307,7 @@ func (a *literalAligner) alignDomains(domains, desired *orderedmap.Map[string, *
 					break
 				}
 				if cons == nil {
-					cons = make([]*model.DomainConstraint, len(d.Constraints))
-					copy(cons, d.Constraints)
+					cons = slices.Clone(d.Constraints)
 				}
 				copied := *c
 				copied.Definition = aligned

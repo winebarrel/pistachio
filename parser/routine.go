@@ -450,8 +450,7 @@ func lookupRoutine(routines *orderedmap.Map[string, *model.Routine], schema, nam
 			// silently fail to attach.
 			types = append(types, model.StripTypeSchema(stripTypeMod(typeName), model.Ident(schema)))
 		}
-		r, _ := routines.GetOk(model.Ident(schema, name) + "(" + strings.Join(types, ", ") + ")")
-		return r
+		return routines.Get(model.Ident(schema, name) + "(" + strings.Join(types, ", ") + ")")
 	}
 
 	var found *model.Routine

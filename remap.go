@@ -298,11 +298,7 @@ func sequenceLiteral(fc *pg_query.FuncCall) *pg_query.String {
 	if !builtinName(fc.Funcname, "nextval", "currval", "setval") || len(fc.Args) == 0 {
 		return nil
 	}
-	c := fc.Args[0].GetAConst()
-	if c == nil {
-		return nil
-	}
-	return c.GetSval()
+	return fc.Args[0].GetAConst().GetSval()
 }
 
 // regTypes are the object identifier types. A literal cast to one names a
@@ -318,11 +314,7 @@ func regLiteral(tc *pg_query.TypeCast) *pg_query.String {
 	if !builtinName(tc.GetTypeName().GetNames(), regTypes...) {
 		return nil
 	}
-	c := tc.Arg.GetAConst()
-	if c == nil {
-		return nil
-	}
-	return c.GetSval()
+	return tc.Arg.GetAConst().GetSval()
 }
 
 // builtinName reports whether a function or type name is one of the given
