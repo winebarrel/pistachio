@@ -334,7 +334,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore }),
 		removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore }),
 	)
-	sort.Strings(ignored)
+	slices.Sort(ignored)
 
 	// Hashed here: after removeIgnored, so an object the desired schema
 	// ignores is out of it, and before the transforms below, which reach into

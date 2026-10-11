@@ -2130,11 +2130,8 @@ func commentOnSQL(target string, comment *string) string {
 }
 
 func equalPtr[T comparable](a, b *T) bool {
-	if a == nil && b == nil {
-		return true
-	}
 	if a == nil || b == nil {
-		return false
+		return a == b
 	}
 	return *a == *b
 }
@@ -2551,11 +2548,8 @@ func schemaOf(fqtn string) string {
 //     `now() - '18 years'::interval` where the cast is nested under an
 //     A_Expr rather than at the top.
 func equalDefault(current, desired *string) bool {
-	if current == nil && desired == nil {
-		return true
-	}
 	if current == nil || desired == nil {
-		return false
+		return current == desired
 	}
 	if *current == *desired {
 		return true

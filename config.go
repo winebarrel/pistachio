@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -73,11 +73,11 @@ func (y *yamlResolver) Validate(app *kong.Application) error {
 		}
 	}
 	if len(unknown) > 0 {
-		sort.Strings(unknown)
+		slices.Sort(unknown)
 		return fmt.Errorf("unknown config key(s): %s", strings.Join(unknown, ", "))
 	}
 	if len(commandLineOnly) > 0 {
-		sort.Strings(commandLineOnly)
+		slices.Sort(commandLineOnly)
 		return fmt.Errorf("config key(s) only for the command line: %s", strings.Join(commandLineOnly, ", "))
 	}
 	return nil

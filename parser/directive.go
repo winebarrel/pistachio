@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -198,7 +199,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		matches := executeDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
 		firstMatches := executeFirstDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
 		if len(matches) > 0 && len(firstMatches) > 0 {
-			return nil, nil, fmt.Errorf("-- pista:execute and -- pista:execute-first cannot both apply to one statement")
+			return nil, nil, errors.New("-- pista:execute and -- pista:execute-first cannot both apply to one statement")
 		}
 		first := len(firstMatches) > 0
 		if first {

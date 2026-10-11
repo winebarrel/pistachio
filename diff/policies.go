@@ -217,11 +217,8 @@ func normalizeRoles(r []string) []string {
 // noise normalised away without picking up equalDefault's DEFAULT-specific
 // symmetric top-level cast strip.
 func exprChanged(a, b *string) bool {
-	if a == nil && b == nil {
-		return false
-	}
 	if a == nil || b == nil {
-		return true
+		return a != b
 	}
 	return !equalSelectExpr(*a, *b)
 }

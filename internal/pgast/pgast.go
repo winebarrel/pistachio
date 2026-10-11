@@ -4,6 +4,7 @@
 package pgast
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -43,15 +44,15 @@ func ParseConstraintDefStrict(def string) (*pg_query.ParseResult, *pg_query.Cons
 		return nil, nil, fmt.Errorf("failed to parse constraint definition: %w", err)
 	}
 	if len(result.Stmts) == 0 {
-		return nil, nil, fmt.Errorf("empty constraint definition")
+		return nil, nil, errors.New("empty constraint definition")
 	}
 	as := result.Stmts[0].Stmt.GetAlterTableStmt()
 	if as == nil || len(as.Cmds) == 0 {
-		return nil, nil, fmt.Errorf("unexpected parse result for constraint definition")
+		return nil, nil, errors.New("unexpected parse result for constraint definition")
 	}
 	con := as.Cmds[0].GetAlterTableCmd().GetDef().GetConstraint()
 	if con == nil {
-		return nil, nil, fmt.Errorf("unexpected parse result for constraint definition")
+		return nil, nil, errors.New("unexpected parse result for constraint definition")
 	}
 	return result, con, nil
 }

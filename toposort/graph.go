@@ -2,7 +2,7 @@ package toposort
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // graph is a directed acyclic graph for topological sorting.
@@ -60,7 +60,7 @@ func (g *graph) Sort() ([]string, error) {
 			queue = append(queue, n)
 		}
 	}
-	sort.Strings(queue)
+	slices.Sort(queue)
 
 	var result []string
 	for len(queue) > 0 {
@@ -71,14 +71,14 @@ func (g *graph) Sort() ([]string, error) {
 
 		// Reduce in-degree for dependents
 		deps := dependents[node]
-		sort.Strings(deps)
+		slices.Sort(deps)
 		for _, dep := range deps {
 			inDegree[dep]--
 			if inDegree[dep] == 0 {
 				queue = append(queue, dep)
 			}
 		}
-		sort.Strings(queue)
+		slices.Sort(queue)
 	}
 
 	if len(result) != len(g.nodes) {
