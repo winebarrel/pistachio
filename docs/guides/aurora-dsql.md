@@ -4,6 +4,13 @@ Use `--engine dsql` to manage a schema on Amazon Aurora DSQL. Write the schema i
 
 DSQL supports only part of PostgreSQL. For example, it has no enums, triggers, policies, partitioned tables, composite types or column collations. pistachio does not check for these. DSQL rejects them when you apply.
 
+## Writing the schema
+
+!!! note "Write `CREATE INDEX` without `ASYNC`"
+    Write indexes in the schema as `CREATE INDEX`, not `CREATE INDEX ASYNC`. pistachio adds `ASYNC` to the statements it generates.
+
+`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it.
+
 ## Connecting
 
 DSQL uses an IAM token as the password. Pass it with `--password` or `PGPASSWORD`:
@@ -27,8 +34,6 @@ pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" sc
 | Create an identity column | `CACHE 1` is added when no cache size is given. DSQL requires a cache size. |
 
 `dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back.
-
-`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it. `lint`, `parse` and `diff` have no such option, so remove `ASYNC` with `pista fmt --dsql-strip-async` before you use them.
 
 DSQL reports some things that are not in your schema. pistachio ignores them:
 
