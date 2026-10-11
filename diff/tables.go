@@ -445,8 +445,6 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	if err != nil {
 		return nil, err
 	}
-	result.Stmts = append(result.Stmts, colStmts...)
-	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 
 	// Rewrite column references in dependent objects so that subsequent diffs
 	// don't see the renamed column as a definition change. PostgreSQL applies
@@ -464,10 +462,16 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		current = &clone
 	}
 
-	conStmts, conCommentStmts, conDisallowed, usingIndexStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
+	conDrops, conStmts, conCommentStmts, conDisallowed, usingIndexStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
 	}
+	// The constraint drops go before the column statements: a type change
+	// rebuilds the CHECK constraints on the column, and fails on one the new
+	// type rejects.
+	result.Stmts = append(result.Stmts, conDrops...)
+	result.Stmts = append(result.Stmts, colStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 	result.Stmts = append(result.Stmts, conStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, conDisallowed...)
 
@@ -1604,16 +1608,18 @@ func sameConstraintDef(current, desired *model.Constraint) bool {
 // diffConstraints returns the constraint statements and, apart from them, the
 // COMMENT ON statements the constraints need, so the caller can put the
 // comments with the table's other comments instead of between the ALTER
-// TABLE statements --bulk-alter merges. The ADD of a constraint written USING
-// INDEX is also returned apart, so the caller can put it after the CREATE
-// INDEX of its index.
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, commentStmts []string, disallowed []string, usingIndexStmts []string, err error) {
+// TABLE statements --bulk-alter merges. The DROP CONSTRAINT statements are
+// returned apart, so the caller can put them before a column type change: it
+// rebuilds the CHECK constraints on the column, and one the new type rejects
+// fails it. The ADD of a constraint written USING INDEX is also returned
+// apart, so the caller can put it after the CREATE INDEX of its index.
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (dropStmts []string, stmts []string, commentStmts []string, disallowed []string, usingIndexStmts []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	changes := constraintChanges(current, desired)
@@ -1657,7 +1663,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 			disallowed = append(disallowed, "-- skipped: "+drop)
 			continue
 		}
-		stmts = append(stmts, drop)
+		dropStmts = append(dropStmts, drop)
 	}
 
 	// Add new or changed constraints, or validate an existing NOT VALID one.
@@ -1695,7 +1701,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	return stmts, commentStmts, disallowed, usingIndexStmts, nil
+	return dropStmts, stmts, commentStmts, disallowed, usingIndexStmts, nil
 }
 
 // constraintCommentSQL renders the COMMENT ON a table constraint and a foreign
