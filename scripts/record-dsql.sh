@@ -25,7 +25,7 @@ export TEST_PISTA_DSQL_CONN_STR="postgres://admin@$DSQL_HOST:5432/postgres?sslmo
 # the recording even when the test fails, so the check below runs either
 # way, and the test's status is the script's in the end.
 status=0
-go test -count=1 -v -run '^TestDSQL$' . || status=$?
+go test -tags testonly -count=1 -v -run '^TestDSQL$' . || status=$?
 
 cluster=${DSQL_HOST%%.*}
 if [ -f "$recording" ] && grep -nEi -e "$cluster" -e 'on\.aws|amazonaws\.com|arn:aws' -e '(AKIA|ASIA)[0-9A-Z]{16}' -e 'X-Amz-' "$recording"; then

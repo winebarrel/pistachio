@@ -32,7 +32,8 @@ Do not coddle the user. Assume they know PostgreSQL and their own schema.
 
 ```sh
 make build          # go build ./cmd/pista (outputs ./pista at the repo root)
-make vet            # go vet ./...
+make vet            # go vet -tags testonly ./...
+make build-check    # go build ./... without the testonly tag, as a release builds
 make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
 make test-fidelity  # restore fidelity check (bash, requires PostgreSQL and pg_dump)
@@ -99,8 +100,8 @@ Leave a change to CI, the build or other repository tooling without a label. Do 
 
 ## Code conventions
 
-- Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
-- Root-level integration tests use `package pistachio_test` where they can. Most reach an unexported identifier, or a helper that does, so they sit in `package pistachio` today.
+- Tests use external test packages (e.g., `package catalog_test`, `package pistachio_test`). A test that needs something unexported reaches it through the package's `export_testonly.go`, which starts with `//go:build testonly` and gives it an exported name (`var DiffColumns = diffColumns`, `type PlanFile = planFile`). Do not change the visibility of non-test code for a test. Keep a test in the package itself (e.g., `package diff`) only when it needs more than such names, for instance the fields of an unexported type, and for `package main`, which nothing can import.
+- The testonly tag keeps that code out of a build without it, which is what a release is. Every command that compiles the tests passes `-tags testonly`: the Makefile's `GOTAGS`, `.golangci.yml` and the fuzz workflow do, and a bare `go test ./...` fails to compile. Set the tag in the editor too (gopls `buildFlags: ["-tags=testonly"]`). `make build-check`, which CI runs, builds everything without the tag, so non-test code that uses a testonly name fails there.
 - Test fixtures are YAML files in `testdata/`. Required fields vary by test suite: `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, and `parser` uses `input`/`expected`. The plan/apply/dump harnesses also accept optional fields, but **the set differs per suite** (the lists below are not interchangeable):
   - `dump`: `min_pg`, `omit_schema`, `manage_routine`, `skip_partition_child`, `explain`, `omit_partition_child_index`, `include`/`exclude`/`enable`/`disable`, `dump_pg16`/`dump_pg17`/`dump_pg18`.
   - `plan`: `min_pg`/`max_pg`, `count`, `drop_policy`, `disallowed_drops`, `ignored`, `disable_index_concurrently`, `force_index_concurrently`, `bulk_alter`, `assume_validated`, `manage_routine`, `skip_partition_child`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.

@@ -40,9 +40,21 @@ install:
 json-schema:
 	go run ./cmd/gen-json-schema
 
+# Code only the tests use sits in files built with the testonly tag, such as
+# the export_testonly.go files that give an external test package a name for
+# something unexported. Every command that compiles the tests passes the tag,
+# and a build without it, which is what a release is, leaves the code out.
+# `make build-check` builds everything without the tag, so non-test code that
+# reaches for a testonly name fails there.
+GOTAGS := -tags testonly
+
 .PHONY: vet
 vet:
-	go vet ./...
+	go vet $(GOTAGS) ./...
+
+.PHONY: build-check
+build-check:
+	go build ./...
 
 # TEST_JUNIT names a file to write a JUnit XML report to, which is what
 # Codecov Test Analytics ingests. Leave it empty and the report is skipped;
@@ -68,7 +80,7 @@ endif
 # another. Override PGPORT, or wipe the other server yourself.
 .PHONY: test
 test: clean-schema
-	go test -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
+	go test $(GOTAGS) -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
 
 .PHONY: lint
 lint:
@@ -91,9 +103,9 @@ FUZZTIME ?= 1m
 
 .PHONY: fuzz
 fuzz:
-	go test ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
-	go test ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
-	go test ./format/ -run='^$$' -fuzz=FuzzFormat -fuzztime=$(FUZZTIME)
+	go test $(GOTAGS) ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
+	go test $(GOTAGS) ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
+	go test $(GOTAGS) ./format/ -run='^$$' -fuzz=FuzzFormat -fuzztime=$(FUZZTIME)
 
 .PHONY: keywords
 keywords:
@@ -118,7 +130,7 @@ test-fidelity: clean-schema
 # it in a job of its own.
 .PHONY: test-dsql
 test-dsql:
-	TEST_PISTA_DSQL=1 go test -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
+	TEST_PISTA_DSQL=1 go test $(GOTAGS) -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
 
 # Makes the TestDSQL recording again against a live cluster. DSQL_HOST names
 # the cluster endpoint, and its public schema must be empty. See

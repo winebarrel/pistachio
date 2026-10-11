@@ -1,4 +1,8 @@
 version: "2"
+run:
+  # The tests use code built only with this tag. See GOTAGS in the Makefile.
+  build-tags:
+    - testonly
 linters:
   enable:
     - asasalint
