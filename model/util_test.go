@@ -1,4 +1,4 @@
-package model
+package model_test
 
 import (
 	"bufio"
@@ -8,64 +8,66 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/winebarrel/pistachio/model"
+
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIdent_single(t *testing.T) {
-	assert.Equal(t, "users", Ident("users"))
+	assert.Equal(t, "users", model.Ident("users"))
 }
 
 func TestIdent_schemaAndTable(t *testing.T) {
-	assert.Equal(t, "public.users", Ident("public", "users"))
+	assert.Equal(t, "public.users", model.Ident("public", "users"))
 }
 
 func TestIdent_reservedKeyword(t *testing.T) {
-	assert.Equal(t, `"select"`, Ident("select"))
+	assert.Equal(t, `"select"`, model.Ident("select"))
 }
 
 func TestIdent_uppercase(t *testing.T) {
-	assert.Equal(t, `"Users"`, Ident("Users"))
+	assert.Equal(t, `"Users"`, model.Ident("Users"))
 }
 
 func TestIdent_empty(t *testing.T) {
-	assert.Empty(t, Ident(""))
+	assert.Empty(t, model.Ident(""))
 }
 
 func TestIdent_emptySchema(t *testing.T) {
-	assert.Equal(t, "users", Ident("", "users"))
+	assert.Equal(t, "users", model.Ident("", "users"))
 }
 
 func TestIdent_withSpecialChars(t *testing.T) {
-	assert.Equal(t, `"my-table"`, Ident("my-table"))
+	assert.Equal(t, `"my-table"`, model.Ident("my-table"))
 }
 
 func TestIdent_withDoubleQuote(t *testing.T) {
-	assert.Equal(t, `"my""table"`, Ident(`my"table`))
+	assert.Equal(t, `"my""table"`, model.Ident(`my"table`))
 }
 
 func TestIdent_unreservedKeyword(t *testing.T) {
 	// "name" is unreserved in PostgreSQL, should not be quoted
-	assert.Equal(t, "name", Ident("name"))
+	assert.Equal(t, "name", model.Ident("name"))
 }
 
 func TestIdent_multipleTokens(t *testing.T) {
 	// A string that scans to multiple tokens should be quoted
-	assert.Equal(t, `"a b"`, Ident("a b"))
+	assert.Equal(t, `"a b"`, model.Ident("a b"))
 }
 
 func TestQuoteIdent_empty(t *testing.T) {
 	// quoteIdent with empty string returns quoted empty
-	assert.Equal(t, `""`, quoteIdent(""))
+	assert.Equal(t, `""`, model.QuoteIdent(""))
 }
 
 func TestQuoteLiteral(t *testing.T) {
-	assert.Equal(t, "'hello'", QuoteLiteral("hello"))
+	assert.Equal(t, "'hello'", model.QuoteLiteral("hello"))
 }
 
 func TestQuoteLiteral_withSingleQuote(t *testing.T) {
-	assert.Equal(t, "'it''s'", QuoteLiteral("it's"))
+	assert.Equal(t, "'it''s'", model.QuoteLiteral("it's"))
 }
 
 // Quoting follows the keyword categories in PostgreSQL's kwlist.h: a ColId
@@ -87,7 +89,7 @@ func TestIdent_keywordKinds(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.kind, keywordKindOf(t, tt.name), "keyword category changed upstream")
-			assert.Equal(t, tt.expected, Ident(tt.name))
+			assert.Equal(t, tt.expected, model.Ident(tt.name))
 		})
 	}
 }
@@ -105,7 +107,7 @@ func TestIdent_typeFuncNameKeywords(t *testing.T) {
 	for _, kw := range keywords {
 		t.Run(kw, func(t *testing.T) {
 			assert.Equal(t, pg_query.KeywordKind_TYPE_FUNC_NAME_KEYWORD, keywordKindOf(t, kw))
-			assert.Equal(t, `"`+kw+`"`, Ident(kw))
+			assert.Equal(t, `"`+kw+`"`, model.Ident(kw))
 		})
 	}
 }
@@ -115,7 +117,7 @@ func TestIdent_colNameKeywords(t *testing.T) {
 	for _, kw := range []string{"int", "char", "numeric", "position", "values"} {
 		t.Run(kw, func(t *testing.T) {
 			assert.Equal(t, pg_query.KeywordKind_COL_NAME_KEYWORD, keywordKindOf(t, kw))
-			assert.Equal(t, kw, Ident(kw))
+			assert.Equal(t, kw, model.Ident(kw))
 		})
 	}
 }
@@ -248,7 +250,7 @@ func TestIdent_allKeywords(t *testing.T) {
 		quoted := kind == pg_query.KeywordKind_TYPE_FUNC_NAME_KEYWORD ||
 			kind == pg_query.KeywordKind_RESERVED_KEYWORD
 
-		got := Ident(kw)
+		got := model.Ident(kw)
 		if quoted {
 			assert.Equal(t, `"`+kw+`"`, got, "%s (%s) must be quoted", kw, kind)
 		} else {
@@ -256,8 +258,8 @@ func TestIdent_allKeywords(t *testing.T) {
 		}
 
 		assertParses(t, got, kw != unusableRoleName)
-		assertParsesIn(t, qualifiedIdentPositions, Ident("public", kw))
-		assertParsesIn(t, columnIdentPositions, Ident("public", "t", kw))
+		assertParsesIn(t, qualifiedIdentPositions, model.Ident("public", kw))
+		assertParsesIn(t, columnIdentPositions, model.Ident("public", "t", kw))
 	}
 
 	for _, kind := range []pg_query.KeywordKind{
@@ -275,9 +277,9 @@ func TestIdent_allKeywords(t *testing.T) {
 func TestIdent_nonKeywordsRoundTrip(t *testing.T) {
 	for _, name := range []string{"users", "Users", "my-table", `my"table`, "a b", "a.b", "1st", "_x", "0"} {
 		t.Run(name, func(t *testing.T) {
-			assertParses(t, Ident(name), true)
-			assertParsesIn(t, qualifiedIdentPositions, Ident("public", name))
-			assertParsesIn(t, columnIdentPositions, Ident("public", "t", name))
+			assertParses(t, model.Ident(name), true)
+			assertParsesIn(t, qualifiedIdentPositions, model.Ident("public", name))
+			assertParsesIn(t, columnIdentPositions, model.Ident("public", "t", name))
 		})
 	}
 }
@@ -347,7 +349,7 @@ func TestSplitQualifiedName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, SplitQualifiedName(tt.name))
+			assert.Equal(t, tt.expected, model.SplitQualifiedName(tt.name))
 		})
 	}
 }
@@ -369,7 +371,7 @@ func TestUnquoteIdent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, UnquoteIdent(tt.name))
+			assert.Equal(t, tt.expected, model.UnquoteIdent(tt.name))
 		})
 	}
 }
@@ -378,10 +380,10 @@ func TestUnquoteIdent(t *testing.T) {
 // reports a type in the search path unqualified while a desired schema may
 // write it qualified.
 func TestStripTypeSchema(t *testing.T) {
-	assert.Equal(t, "addr", StripTypeSchema("public.addr", "public"))
-	assert.Equal(t, "addr[]", StripTypeSchema("public.addr[]", "public"))
+	assert.Equal(t, "addr", model.StripTypeSchema("public.addr", "public"))
+	assert.Equal(t, "addr[]", model.StripTypeSchema("public.addr[]", "public"))
 	// A different schema prefix is left intact.
-	assert.Equal(t, "other.addr", StripTypeSchema("other.addr", "public"))
+	assert.Equal(t, "other.addr", model.StripTypeSchema("other.addr", "public"))
 	// An empty schema is a no-op.
-	assert.Equal(t, "addr", StripTypeSchema("addr", ""))
+	assert.Equal(t, "addr", model.StripTypeSchema("addr", ""))
 }

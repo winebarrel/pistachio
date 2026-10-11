@@ -1,10 +1,12 @@
-package command
+package command_test
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/winebarrel/pistachio/cmd/command"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +21,7 @@ import (
 
 func TestWriteDumpFiles_HappyPath(t *testing.T) {
 	dir := t.TempDir()
-	count, err := writeDumpFiles(dir, map[string]string{
+	count, err := command.WriteDumpFiles(dir, map[string]string{
 		"public.users.sql":    "CREATE TABLE public.users (id integer);\n",
 		"public.products.sql": "CREATE TABLE public.products (id integer);\n",
 	})
@@ -37,7 +39,7 @@ func TestWriteDumpFiles_HappyPath(t *testing.T) {
 
 func TestWriteDumpFiles_Empty(t *testing.T) {
 	dir := t.TempDir()
-	count, err := writeDumpFiles(dir, map[string]string{})
+	count, err := command.WriteDumpFiles(dir, map[string]string{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
@@ -76,7 +78,7 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 			dir := filepath.Join(parent, "split")
 			require.NoError(t, os.MkdirAll(dir, 0o755))
 
-			count, err := writeDumpFiles(dir, map[string]string{tc.name: "x"})
+			count, err := command.WriteDumpFiles(dir, map[string]string{tc.name: "x"})
 			require.Error(t, err)
 			assert.Equal(t, 0, count)
 			assert.Contains(t, err.Error(), "unsafe name")
@@ -104,7 +106,7 @@ func TestWriteDumpFiles_AllowsLiteralDotsInName(t *testing.T) {
 		"foo..bar.sql":    "y\n",
 		"public.v1.0.sql": "z\n",
 	}
-	count, err := writeDumpFiles(dir, files)
+	count, err := command.WriteDumpFiles(dir, files)
 	require.NoError(t, err)
 	assert.Equal(t, 3, count)
 	for name := range files {
@@ -123,7 +125,7 @@ func TestWriteDumpFiles_PreservesLiteralLeadingDots(t *testing.T) {
 		"..foo.sql":    "a\n",
 		"foo..bar.sql": "b\n",
 	}
-	count, err := writeDumpFiles(dir, files)
+	count, err := command.WriteDumpFiles(dir, files)
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 	for name := range files {
@@ -139,7 +141,7 @@ func TestWriteDumpFiles_WriteFileError(t *testing.T) {
 	// read-only parent whose permission bits root and Windows ignore.
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "safe.sql"), 0o755))
 
-	count, err := writeDumpFiles(dir, map[string]string{"safe.sql": "x"})
+	count, err := command.WriteDumpFiles(dir, map[string]string{"safe.sql": "x"})
 	require.Error(t, err)
 	assert.Equal(t, 0, count)
 	assert.True(t, strings.HasPrefix(err.Error(), "failed to write dump file: open "), err.Error())
@@ -161,7 +163,7 @@ func TestWriteDumpFiles_StopsOnUnsafeName(t *testing.T) {
 	dir := filepath.Join(parent, "split")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
-	count, err := writeDumpFiles(dir, map[string]string{
+	count, err := command.WriteDumpFiles(dir, map[string]string{
 		"safe.sql":      "ok\n",
 		"../escape.sql": "bad\n",
 	})

@@ -1,4 +1,4 @@
-package command
+package command_test
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/winebarrel/pistachio/cmd/command"
 )
 
 func TestStartPager_NoPagerFlag(t *testing.T) {
@@ -20,7 +22,7 @@ func TestStartPager_NoPagerFlag(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	disabled := false
-	w, closer, err := StartPager(f, &disabled)
+	w, closer, err := command.StartPager(f, &disabled)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -36,7 +38,7 @@ func TestStartPager_NonFileWriter(t *testing.T) {
 	defer restore()
 
 	var buf bytes.Buffer
-	w, closer, err := StartPager(&buf, nil)
+	w, closer, err := command.StartPager(&buf, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -57,7 +59,7 @@ func TestStartPager_NotATerminal(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := StartPager(f, nil)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -80,7 +82,7 @@ func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	forced := true
-	w, closer, err := StartPager(f, &forced)
+	w, closer, err := command.StartPager(f, &forced)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -103,7 +105,7 @@ func TestStartPager_ForcedButEnvUnset(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	forced := true
-	w, closer, err := StartPager(f, &forced)
+	w, closer, err := command.StartPager(f, &forced)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -124,7 +126,7 @@ func TestStartPager_EnvUnset(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := StartPager(f, nil)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -145,7 +147,7 @@ func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := StartPager(f, nil)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -183,7 +185,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := StartPager(f, nil)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -207,7 +209,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 }
 
 func TestIsTerminalDefault(t *testing.T) {
-	if isTerminalDefault(nil) {
+	if command.IsTerminalDefault(nil) {
 		t.Errorf("nil *os.File should not look like a terminal")
 	}
 
@@ -216,7 +218,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { f.Close() })
-	if isTerminalDefault(f) {
+	if command.IsTerminalDefault(f) {
 		t.Errorf("a regular file should not look like a terminal")
 	}
 
@@ -225,7 +227,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { r.Close(); w.Close() })
-	if isTerminalDefault(r) || isTerminalDefault(w) {
+	if command.IsTerminalDefault(r) || command.IsTerminalDefault(w) {
 		t.Errorf("a pipe should not look like a terminal")
 	}
 
@@ -236,7 +238,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed.Close()
-	if isTerminalDefault(closed) {
+	if command.IsTerminalDefault(closed) {
 		t.Errorf("a closed file should not look like a terminal")
 	}
 }
@@ -258,7 +260,7 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// `sh -c` will start successfully and the missing binary surfaces as
 	// a non-zero exit on Wait, not an error from Start. Verify StartPager
 	// still returns a usable writer and tolerates the pager exiting early.
-	w, closer, err := StartPager(f, nil)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager unexpectedly errored: %v", err)
 	}
@@ -273,7 +275,7 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 // setIsTerminalForTest swaps the TTY check StartPager uses and returns a
 // function that restores the previous implementation.
 func setIsTerminalForTest(fn func(*os.File) bool) func() {
-	old := isTerminalFn
-	isTerminalFn = fn
-	return func() { isTerminalFn = old }
+	old := *command.IsTerminalFnPtr
+	*command.IsTerminalFnPtr = fn
+	return func() { *command.IsTerminalFnPtr = old }
 }
