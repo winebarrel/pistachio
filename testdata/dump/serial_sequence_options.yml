@@ -21,19 +21,3 @@ dump: |
   );
 
   ALTER SEQUENCE public.t_id_seq OWNED BY public.t.id;
-dump_pg18: |
-  -- public.t_id_seq
-  CREATE SEQUENCE public.t_id_seq
-      AS integer
-      START WITH 100
-      INCREMENT BY 10
-      MINVALUE 1
-      MAXVALUE 2147483647
-      CACHE 5;
-
-  -- public.t
-  CREATE TABLE public.t (
-      id integer DEFAULT nextval('t_id_seq'::regclass) CONSTRAINT t_id_not_null NOT NULL
-  );
-
-  ALTER SEQUENCE public.t_id_seq OWNED BY public.t.id;
