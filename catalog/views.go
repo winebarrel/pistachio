@@ -2,10 +2,8 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -111,38 +109,26 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			c.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get view info: %w", err)
-	}
-	defer rows.Close()
-
 	var views []*model.View
-	for rows.Next() {
-		var v model.View
-		var checkOption *string
-		var reloptions, toastReloptions []string
-		var columnCommentNames, columnComments []string
-		err := rows.Scan(
-			&v.OID,
-			&v.Schema,
-			&v.Name,
-			&v.Definition,
-			&v.Materialized,
-			&checkOption,
-			&reloptions,
-			&toastReloptions,
-			&v.Comment,
-			&columnCommentNames,
-			&columnComments,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
-		}
+	var row model.View
+	var checkOption *string
+	var reloptions, toastReloptions []string
+	var columnCommentNames, columnComments []string
+	dest := []any{
+		&row.OID,
+		&row.Schema,
+		&row.Name,
+		&row.Definition,
+		&row.Materialized,
+		&checkOption,
+		&reloptions,
+		&toastReloptions,
+		&row.Comment,
+		&columnCommentNames,
+		&columnComments,
+	}
+	err := c.eachRow(ctx, "view info", q, dest, func() {
+		v := row
 		if checkOption != nil {
 			v.CheckOption = *checkOption
 		}
@@ -154,10 +140,9 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			v.ColumnComments.Set(name, columnComments[i])
 		}
 		views = append(views, &v)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan view info rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return views, nil

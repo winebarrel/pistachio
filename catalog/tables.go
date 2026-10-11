@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -108,41 +107,29 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			c.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get table info: %w", err)
-	}
-	defer rows.Close()
-
 	var tables []*model.Table
-	for rows.Next() {
-		var t model.Table
-		var parentSchema, parentName *string
-		var reloptions, toastReloptions []string
-		err := rows.Scan(
-			&t.OID,
-			&t.Schema,
-			&t.Name,
-			&t.TableSpace,
-			&t.Unlogged,
-			&t.Partitioned,
-			&t.PartitionDef,
-			&parentSchema,
-			&parentName,
-			&t.PartitionBound,
-			&t.RowSecurity,
-			&t.ForceRowSecurity,
-			&reloptions,
-			&toastReloptions,
-			&t.Comment,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan table info: %w", err)
-		}
+	var row model.Table
+	var parentSchema, parentName *string
+	var reloptions, toastReloptions []string
+	dest := []any{
+		&row.OID,
+		&row.Schema,
+		&row.Name,
+		&row.TableSpace,
+		&row.Unlogged,
+		&row.Partitioned,
+		&row.PartitionDef,
+		&parentSchema,
+		&parentName,
+		&row.PartitionBound,
+		&row.RowSecurity,
+		&row.ForceRowSecurity,
+		&reloptions,
+		&toastReloptions,
+		&row.Comment,
+	}
+	err := c.eachRow(ctx, "table info", q, dest, func() {
+		t := row
 		// Qualify the parent with its schema so PartitionOf matches the keys
 		// used elsewhere (Table.FQTN, the parser). A bare relname would not
 		// resolve in the dependency graph, and would reference the wrong
@@ -163,9 +150,9 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		t.Policies = orderedmap.New[string, *model.Policy]()
 		t.Triggers = orderedmap.New[string, *model.Trigger]()
 		tables = append(tables, &t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan table info rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Each of these is one query for all the tables, keyed by table OID.
