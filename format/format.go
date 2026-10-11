@@ -205,13 +205,11 @@ func parenDepth(toks []*token) []int {
 	level := 0
 
 	for i, t := range toks {
-		switch {
-		case t.isComment():
-			depth[i] = level
-		case t.orig == "(", t.orig == "[":
+		switch t.orig {
+		case "(", "[":
 			depth[i] = level
 			level++
-		case t.orig == ")", t.orig == "]":
+		case ")", "]":
 			if level > 0 {
 				level--
 			}
@@ -812,12 +810,12 @@ func closesUp(prev, cur *token) bool {
 // joins reports whether two adjacent tokens still read as those two tokens
 // when nothing separates them.
 func joins(a, b string) bool {
-	result, err := pg_query.Scan(a + b)
+	text := a + b
+	result, err := pg_query.Scan(text)
 	if err != nil || len(result.Tokens) != 2 {
 		return false
 	}
 
-	text := a + b
 	first := text[result.Tokens[0].Start:result.Tokens[0].End]
 	second := text[result.Tokens[1].Start:result.Tokens[1].End]
 

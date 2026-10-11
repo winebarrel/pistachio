@@ -373,6 +373,8 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		}
 	}
 
+	viewAllowed := dc.IsDropAllowed("view")
+
 	// New or modified views (CREATE OR REPLACE / recreate for materialized)
 	for k, desiredView := range desired.All() {
 		currentView, ok := current.GetOk(k)
@@ -406,7 +408,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				// require DROP and recreate. Only proceed if drops are allowed;
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
-				if dc.IsDropAllowed("view") {
+				if viewAllowed {
 					result.DropStmts = append(result.DropStmts, "DROP "+currentView.ObjType()+" "+dropName+";")
 					result.DroppedViews = append(result.DroppedViews, dropName)
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
@@ -463,7 +465,6 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	}
 
 	// Dropped views. When the view-drop policy disallows it, emit a commented DROP.
-	viewAllowed := dc.IsDropAllowed("view")
 	for k, v := range current.All() {
 		if _, ok := desired.GetOk(k); !ok {
 			drop := "DROP " + v.ObjType() + " " + k + ";"

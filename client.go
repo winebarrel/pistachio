@@ -135,13 +135,14 @@ func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, er
 		return nil, err
 	}
 
-	if readOnly && !client.Engine.isDSQL() {
-		cfg.RuntimeParams["default_transaction_read_only"] = "on"
-	}
-	// Run as part of the connect, so a failure fails the connection.
-	if readOnly && client.Engine.isDSQL() {
-		cfg.AfterConnect = func(ctx context.Context, conn *pgconn.PgConn) error {
-			return conn.Exec(ctx, "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY").Close()
+	if readOnly {
+		if client.Engine.isDSQL() {
+			// Run as part of the connect, so a failure fails the connection.
+			cfg.AfterConnect = func(ctx context.Context, conn *pgconn.PgConn) error {
+				return conn.Exec(ctx, "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY").Close()
+			}
+		} else {
+			cfg.RuntimeParams["default_transaction_read_only"] = "on"
 		}
 	}
 

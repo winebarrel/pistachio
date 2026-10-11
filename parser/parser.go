@@ -482,8 +482,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			attrDirectives := extractInlineDirectives(rawStmtSQL)
 			for _, attr := range compositeType.Attributes {
 				if oldName, ok := attrDirectives.Columns[attr.Name]; ok {
-					old := oldName
-					attr.RenameFrom = &old
+					attr.RenameFrom = &oldName
 				}
 			}
 
@@ -512,8 +511,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			inlineDirectives := extractInlineDirectives(rawStmtSQL)
 			for colName, oldName := range inlineDirectives.Columns {
 				if col, ok := table.Columns.GetOk(colName); ok {
-					old := oldName
-					col.RenameFrom = &old
+					col.RenameFrom = &oldName
 				}
 			}
 			for colName, expr := range inlineDirectives.RetypeUsing {
@@ -523,11 +521,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 			for conName, oldName := range inlineDirectives.Constraints {
 				if con, ok := table.Constraints.GetOk(conName); ok {
-					old := oldName
-					con.RenameFrom = &old
+					con.RenameFrom = &oldName
 				} else if fk, ok := table.ForeignKeys.GetOk(conName); ok {
-					old := oldName
-					fk.RenameFrom = &old
+					fk.RenameFrom = &oldName
 				}
 			}
 			addLintIgnores([]LintTarget{{Kind: LintTable, Table: table.FQTN()}}, lintIgnore)
@@ -2639,6 +2635,11 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 	var constraints []*model.Constraint
 	var fks []*model.ForeignKey
 
+	schema := as.Relation.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
 		if cmd == nil || cmd.Subtype != pg_query.AlterTableType_AT_AddConstraint {
@@ -2647,11 +2648,6 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 		con := cmd.Def.GetConstraint()
 		if con == nil {
 			continue
-		}
-
-		schema := as.Relation.Schemaname
-		if schema == "" {
-			schema = defaultSchema
 		}
 
 		if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {

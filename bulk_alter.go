@@ -143,15 +143,11 @@ func extractFirstIdentifier(s string) string {
 // action keyword are intentionally excluded so they pass through untouched.
 func isMergeableAction(action string) bool {
 	switch {
-	case strings.HasPrefix(action, "ADD COLUMN "):
-		return true
-	case strings.HasPrefix(action, "DROP COLUMN "):
-		return true
-	case strings.HasPrefix(action, "ALTER COLUMN "):
-		return true
-	case strings.HasPrefix(action, "ADD CONSTRAINT "):
-		return true
-	case strings.HasPrefix(action, "DROP CONSTRAINT "):
+	case strings.HasPrefix(action, "ADD COLUMN "),
+		strings.HasPrefix(action, "DROP COLUMN "),
+		strings.HasPrefix(action, "ALTER COLUMN "),
+		strings.HasPrefix(action, "ADD CONSTRAINT "),
+		strings.HasPrefix(action, "DROP CONSTRAINT "):
 		return true
 	}
 	return false
