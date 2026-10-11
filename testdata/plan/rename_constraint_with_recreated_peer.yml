@@ -21,6 +21,6 @@ desired: |
       CONSTRAINT by CHECK ((y > 0))
   );
 plan: |
-  ALTER TABLE public.t RENAME CONSTRAINT xa TO by;
   ALTER TABLE public.t DROP CONSTRAINT a;
+  ALTER TABLE public.t RENAME CONSTRAINT xa TO by;
   ALTER TABLE public.t ADD CONSTRAINT b CHECK (x > 1);

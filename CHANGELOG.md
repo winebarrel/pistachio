@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `plan` now drops a removed or changed constraint before it changes the type of a column. PostgreSQL rebuilds the `CHECK` constraints on a column whose type changes, so a `CHECK` the new type rejects failed the change, as when a `text` column with a `CHECK` on its values became an enum.
+
 * `DEFAULT NULL` on a column or a domain, with or without a cast, no longer appears in the plan on every run where PostgreSQL stores no default for it.
 
 ## [1.82.0] - 2026-10-11

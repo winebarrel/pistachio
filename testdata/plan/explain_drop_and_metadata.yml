@@ -21,7 +21,7 @@ desired: |
   );
 plan: |
   DROP INDEX public.users_note_idx;
-  ALTER TABLE public.users ALTER COLUMN note SET DEFAULT 'y';
   ALTER TABLE public.users DROP CONSTRAINT users_name_key;
+  ALTER TABLE public.users ALTER COLUMN note SET DEFAULT 'y';
   ALTER TABLE public.users DROP COLUMN name;
   DROP TABLE public.old;

@@ -14,6 +14,6 @@ desired: |
       CONSTRAINT users_email_key UNIQUE (email, name)
   );
 plan: |
-  ALTER TABLE public.users ADD COLUMN name text;
   ALTER TABLE public.users DROP CONSTRAINT users_email_key;
+  ALTER TABLE public.users ADD COLUMN name text;
   ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email, name);
