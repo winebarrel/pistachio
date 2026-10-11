@@ -5,7 +5,8 @@
 # The site follows releases, not main: a release tag publishes it, so it never
 # describes a change that has not been released. release-tag.yml pushes the
 # tag with the App token, which is what lets that push start this workflow.
-# Running it by hand on a tag republishes that tag's docs.
+# Running it by hand on a tag republishes that tag's docs. Running it by hand
+# on main publishes main, for a docs fix that should not wait for a release.
 name: docs
 
 on:
@@ -50,10 +51,12 @@ jobs:
         with:
           path: site
 
-  # Only a release tag publishes. A pull request builds to catch a broken link
-  # and stops there.
+  # A release tag or a manual run on main or a tag publishes. A pull request
+  # builds to catch a broken link and stops there.
   deploy:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
