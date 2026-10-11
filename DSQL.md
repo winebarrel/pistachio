@@ -6,19 +6,21 @@ so that a change to that support starts from evidence rather than from the
 PostgreSQL manual.
 
 The findings were verified against a live DSQL cluster (PostgreSQL 16 wire
-protocol, ap-northeast-1) on 2026-07-23, and again on 2026-10-10
-(`server_version` 16.15, `sys.dsql_major_version()` 1).
+protocol, ap-northeast-1) on 2026-07-23, again on 2026-10-10
+(`server_version` 16.15, `sys.dsql_major_version()` 1), and on 2026-10-11.
+DSQL adds features over time, so a finding below can go stale; the AWS
+release notes say when.
 
-The features that DSQL does not support (foreign keys, triggers, PL/pgSQL,
-and so on) are out of scope. A schema that is written for DSQL never
+The features that DSQL does not support (triggers, PL/pgSQL, and so on) are
+out of scope. A schema that is written for DSQL never
 contains them. DSQL refuses them at apply.
 
 Support policy:
 - Work correctly within DSQL's supported feature set. Do not reproduce
   every PostgreSQL feature on DSQL.
-- Refuse at plan the changes that DSQL has no path for: `DROP COLUMN`,
-  `SET NOT NULL`, a column `TYPE` change, adding a NOT NULL column, adding
-  a PK or CHECK constraint to an existing table, and `CONCURRENTLY`. Do not
+- Refuse at plan the changes that DSQL has no path for: `SET NOT NULL`, a
+  column `TYPE` change, adding a NOT NULL column, adding a PK to an
+  existing table, and `CONCURRENTLY`. Do not
   add recreation or back-fill machinery to force these through.
 - Keep the DSQL paths opt-in and additive. Without `--engine dsql`, the
   behavior is exactly what it was before. The DSQL code sits in the `dsql`
@@ -31,8 +33,8 @@ PostgreSQL. `make test-dsql` runs it, and `make test` skips it. A change to
 any statement pistachio sends, catalog queries included, breaks the replay:
 record it again with `DSQL_HOST=<endpoint> make record-dsql` on a cluster
 whose public schema is empty. The script refuses a recording that names the
-cluster or holds something that looks like a credential. OIDs and index
-build job IDs are numbered in the recording, so recording again with no
+cluster or holds something that looks like a credential. OIDs and job
+IDs are numbered in the recording, so recording again with no
 change leaves the file as it was.
 
 The `dsql` CI job runs `make test-dsql` and is a required check. A pull
@@ -136,22 +138,34 @@ statements this way):
   `ALTER TABLE ... ADD CONSTRAINT name UNIQUE USING INDEX index_name`. This
   was confirmed. It requires the job wait between the two statements,
   which `--engine dsql` does after every `CREATE INDEX ASYNC`.
+- Add a CHECK or a foreign key to an existing table (verified 2026-10-11).
+  `ADD CONSTRAINT ... CHECK` or `FOREIGN KEY` without `NOT VALID` fails
+  with `unsupported ALTER TABLE ADD CONSTRAINT statement`, and with `NOT
+  VALID` it succeeds, `ALTER TABLE ONLY` included. A plain `ALTER TABLE
+  ... VALIDATE CONSTRAINT` fails with `unsupported ALTER TABLE VALIDATE
+  CONSTRAINT statement`. `ALTER TABLE ASYNC [ONLY] ... VALIDATE CONSTRAINT`
+  returns a `job_id`; `sys.jobs` shows `VALIDATE_CONSTRAINT`. After
+  `sys.wait_for_job` returns true, `convalidated` is true and the
+  definition loses `NOT VALID`. A validation that finds a violating row
+  makes `sys.wait_for_job` return false, leaves the constraint NOT VALID,
+  and puts the error in `sys.jobs.details`. `--engine dsql` writes a
+  validated CHECK or foreign key as ADD CONSTRAINT ... NOT VALID followed by
+  `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT`, and waits for the job. A
+  foreign key on a new table takes the same path, since pistachio adds it
+  after `CREATE TABLE`.
 
 No alternative path (DSQL cannot do these to an existing table at all;
 the actions are absent from the `ALTER TABLE` grammar):
-- `DROP COLUMN` -> `unsupported ALTER TABLE DROP COLUMN statement`.
 - `ALTER COLUMN ... SET NOT NULL` -> `unsupported ... SET NOT NULL
   statement`. `DROP NOT NULL` works, but there is no way to add NOT NULL
-  to an existing column. There is no `SET NOT NULL`, and there is no
-  `ADD CONSTRAINT CHECK` fallback, because ADD CONSTRAINT is limited to
-  `UNIQUE USING INDEX`.
+  to an existing column. A CHECK (col IS NOT NULL) can be added, but it
+  does not set `attnotnull`.
 - `ALTER COLUMN ... TYPE` -> `unsupported ... SET DATA TYPE statement`.
 - Add a NOT NULL column to an existing table. This is possible only at
   CREATE TABLE time. `ADD COLUMN` cannot carry NOT NULL, and there is no
   SET NOT NULL afterwards.
-- Add a PRIMARY KEY or CHECK constraint to an existing table. The
-  `USING INDEX` exception is for UNIQUE only. PK and CHECK are possible
-  only at CREATE TABLE time.
+- Add a PRIMARY KEY to an existing table. The `USING INDEX` exception is
+  for UNIQUE only. A PK is possible only at CREATE TABLE time.
 
 Supported directly (no change needed): `ALTER COLUMN SET DEFAULT`,
 `DROP DEFAULT`, `DROP NOT NULL`, and an inline PRIMARY KEY, UNIQUE or CHECK
@@ -209,3 +223,21 @@ Findings of 2026-10-10:
 - Limits: a transaction lasts at most 5 minutes and a connection at most
   60 minutes. Neither can be changed, and `sys.wait_for_job` takes no
   timeout.
+
+Findings of 2026-10-11, on a new cluster:
+- `DROP COLUMN` works (AWS release of 2026-08-03). A dropped column also
+  leaves the primary key's `INCLUDE`.
+- A foreign key in `CREATE TABLE` works (2026-08-26). Its
+  `pg_get_constraintdef` is the same as PostgreSQL's.
+- `ALTER CONSTRAINT ... DEFERRABLE INITIALLY DEFERRED` on a foreign key
+  works.
+- A partial index (2026-09-15) and an expression index (2026-08-13) work
+  with ASYNC.
+- `SET STORAGE` and `DROP EXPRESSION` work.
+- Still failing: `SET NOT NULL`, a type change, adding a primary key,
+  `ADD COLUMN` with a constraint (`NOT NULL` or `DEFAULT`), `CREATE INDEX`
+  without ASYNC, `USING`, `CONCURRENTLY`, and an identity on an added
+  column.
+- The catalog values are as before: `btree_index`, every column of a
+  primary key's table in `INCLUDE`, `attcompression = 'l'` on text columns,
+  and `default_toast_compression = lz4`.

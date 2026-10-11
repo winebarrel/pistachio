@@ -41,9 +41,9 @@ func TestValidateApplyEngine(t *testing.T) {
 	require.EqualError(t, ValidateApplyEngine(EngineDSQL, opts), "--bulk-alter cannot be used with --engine dsql")
 	require.EqualError(t, ValidateApplyEngine(EngineDSQL, &ApplyOptions{WithTx: true}), "--with-tx cannot be used with --engine dsql")
 
-	noWait := &ApplyOptions{DSQLNoWaitIndexBuild: true}
+	noWait := &ApplyOptions{DSQLNoWaitJob: true}
 	require.NoError(t, ValidateApplyEngine(EngineDSQL, noWait))
-	require.EqualError(t, ValidateApplyEngine(EnginePostgres, noWait), "--dsql-no-wait-index-build requires --engine dsql")
+	require.EqualError(t, ValidateApplyEngine(EnginePostgres, noWait), "--dsql-no-wait-job requires --engine dsql")
 
 	require.NoError(t, ValidateApplyEngine(EngineDSQL, &ApplyOptions{DSQLIgnoreAsync: true}))
 	require.EqualError(t, ValidateApplyEngine(EnginePostgres, &ApplyOptions{DSQLIgnoreAsync: true}), "--dsql-ignore-async requires --engine dsql")
@@ -59,13 +59,13 @@ func TestValidateApplyFromEngine(t *testing.T) {
 
 	dsqlPlan := write(t, `{"version":5,"scope":{"engine":"dsql"}}`)
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan}))
-	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, DSQLNoWaitIndexBuild: true}))
+	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, DSQLNoWaitJob: true}))
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, TryTx: true}), "--try-tx cannot be used with --engine dsql")
 
 	// A plan file written before the engine was recorded is postgres.
 	oldPlan := write(t, `{"version":5,"scope":{}}`)
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: oldPlan, WithTx: true}))
-	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: oldPlan, DSQLNoWaitIndexBuild: true}), "--dsql-no-wait-index-build requires --engine dsql")
+	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: oldPlan, DSQLNoWaitJob: true}), "--dsql-no-wait-job requires --engine dsql")
 
 	unknownPlan := write(t, `{"version":5,"scope":{"engine":"mysql"}}`)
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: unknownPlan}), "plan file "+unknownPlan+`: unknown engine "mysql"`)

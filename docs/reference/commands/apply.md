@@ -140,8 +140,8 @@ The [general options](index.md#general-options) apply as well.
 `--exclusive-wait=`*duration*
 :   This option is like `--exclusive`, but it waits up to *duration* for the other apply to finish. `0` waits without limit. The value is a Go duration, for example `30s` or `5m`. The environment variable is `PISTA_EXCLUSIVE_WAIT`.
 
-`--dsql-no-wait-index-build`
-:   Do not wait for an index build to finish before the next statement runs. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_NO_WAIT_INDEX_BUILD`. See [Aurora DSQL](../../guides/aurora-dsql.md#index-builds).
+`--dsql-no-wait-job`
+:   Do not wait for an index build or a constraint validation to finish before the next statement runs. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_NO_WAIT_JOB`. See [Aurora DSQL](../../guides/aurora-dsql.md#jobs).
 
 ## Exit status
 

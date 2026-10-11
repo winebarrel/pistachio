@@ -237,6 +237,36 @@ func TestFinish(t *testing.T) {
 			expected: []string{"ALTER TABLE public.t ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (CACHE 1);"},
 		},
 		{
+			name:     "a check is added NOT VALID and validated in a job",
+			input:    []string{"ALTER TABLE public.t ADD CONSTRAINT t_c_check CHECK (c > 0);"},
+			expected: []string{"ALTER TABLE public.t ADD CONSTRAINT t_c_check CHECK (c > 0) NOT VALID;", "ALTER TABLE ASYNC public.t VALIDATE CONSTRAINT t_c_check;"},
+		},
+		{
+			name:     "a foreign key is added NOT VALID and validated in a job",
+			input:    []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_u_fkey FOREIGN KEY (u) REFERENCES public.u(id) ON DELETE CASCADE;"},
+			expected: []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_u_fkey FOREIGN KEY (u) REFERENCES public.u(id) ON DELETE CASCADE NOT VALID;", "ALTER TABLE ASYNC public.t VALIDATE CONSTRAINT t_u_fkey;"},
+		},
+		{
+			name:     "a NOT VALID constraint is left as it is",
+			input:    []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_c_check CHECK (c > 0) NOT VALID;", "ALTER TABLE ONLY public.t ADD CONSTRAINT t_u_fkey FOREIGN KEY (u) REFERENCES public.u(id) NOT VALID;"},
+			expected: []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_c_check CHECK (c > 0) NOT VALID;", "ALTER TABLE ONLY public.t ADD CONSTRAINT t_u_fkey FOREIGN KEY (u) REFERENCES public.u(id) NOT VALID;"},
+		},
+		{
+			name:     "a unique constraint needs no validation",
+			input:    []string{"ALTER TABLE public.t ADD CONSTRAINT t_key UNIQUE USING INDEX t_key;"},
+			expected: []string{"ALTER TABLE public.t ADD CONSTRAINT t_key UNIQUE USING INDEX t_key;"},
+		},
+		{
+			name:     "VALIDATE CONSTRAINT runs in a job",
+			input:    []string{"ALTER TABLE public.t VALIDATE CONSTRAINT \"T_check\";"},
+			expected: []string{"ALTER TABLE ASYNC public.t VALIDATE CONSTRAINT \"T_check\";"},
+		},
+		{
+			name:     "a column is dropped",
+			input:    []string{"ALTER TABLE public.t DROP COLUMN c;"},
+			expected: []string{"ALTER TABLE public.t DROP COLUMN c;"},
+		},
+		{
 			name:     "other statements are left alone",
 			input:    []string{"ALTER TABLE public.t ALTER COLUMN v SET DEFAULT 'x'::text;", "DROP INDEX public.i;", "COMMENT ON TABLE public.t IS 'x';"},
 			expected: []string{"ALTER TABLE public.t ALTER COLUMN v SET DEFAULT 'x'::text;", "DROP INDEX public.i;", "COMMENT ON TABLE public.t IS 'x';"},
@@ -260,13 +290,11 @@ func TestFinishRefuses(t *testing.T) {
 	}{
 		{"CREATE INDEX CONCURRENTLY", "CREATE INDEX CONCURRENTLY i ON public.t USING btree (c);", "CONCURRENTLY"},
 		{"DROP INDEX CONCURRENTLY", "DROP INDEX CONCURRENTLY public.i;", "CONCURRENTLY"},
-		{"DROP COLUMN", "ALTER TABLE public.t DROP COLUMN c;", "DROP COLUMN"},
 		{"SET NOT NULL", "ALTER TABLE public.t ALTER COLUMN c SET NOT NULL;", "SET NOT NULL"},
 		{"type change", "ALTER TABLE public.t ALTER COLUMN c TYPE bigint;", "type"},
 		{"NOT NULL column", "ALTER TABLE public.t ADD COLUMN c integer NOT NULL;", "NOT NULL"},
 		{"NOT NULL column with a default", "ALTER TABLE public.t ADD COLUMN c integer DEFAULT 1 NOT NULL;", "NOT NULL"},
 		{"primary key", "ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (id);", "PRIMARY KEY"},
-		{"check", "ALTER TABLE public.t ADD CONSTRAINT t_c_check CHECK (c > 0);", "CHECK"},
 	}
 
 	for _, tt := range tests {
@@ -362,6 +390,13 @@ func TestExec(t *testing.T) {
 		conn := &fakeConn{rows: []fakeRow{{value: "job1"}, {value: true}}}
 		require.NoError(t, dsql.Exec(ctx, conn, "CREATE UNIQUE INDEX ASYNC i ON public.t (c);"))
 		assert.Len(t, conn.queries, 2)
+	})
+
+	t.Run("a validation is waited for", func(t *testing.T) {
+		conn := &fakeConn{rows: []fakeRow{{value: "job1"}, {value: true}}}
+		require.NoError(t, dsql.Exec(ctx, conn, "ALTER TABLE ASYNC public.t VALIDATE CONSTRAINT c;"))
+		assert.Equal(t, []string{"ALTER TABLE ASYNC public.t VALIDATE CONSTRAINT c;", "CALL sys.wait_for_job('job1')"}, conn.queries)
+		assert.Empty(t, conn.execs)
 	})
 
 	t.Run("a failed build is an error", func(t *testing.T) {

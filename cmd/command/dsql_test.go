@@ -26,8 +26,8 @@ func TestAfterApply_EngineDSQL(t *testing.T) {
 	require.EqualError(t, apply.AfterApply(), "--with-tx cannot be used with --engine dsql")
 
 	apply = &command.Apply{Options: postgres}
-	apply.DSQLNoWaitIndexBuild = true
-	require.EqualError(t, apply.AfterApply(), "--dsql-no-wait-index-build requires --engine dsql")
+	apply.DSQLNoWaitJob = true
+	require.EqualError(t, apply.AfterApply(), "--dsql-no-wait-job requires --engine dsql")
 
 	dump := &command.Dump{Options: dsql}
 	require.NoError(t, dump.AfterApply())

@@ -2,7 +2,7 @@
 
 Use `--engine dsql` to manage a schema on Amazon Aurora DSQL. Write the schema in normal PostgreSQL syntax. pistachio changes the generated statements into the form that DSQL accepts. `plan` fails for the changes listed in [Changes that plan rejects](#changes-that-plan-rejects).
 
-DSQL supports only part of PostgreSQL. For example, it has no foreign keys, enums, triggers, policies, partitioned tables, composite types or column collations. pistachio does not check for these. DSQL rejects them when you apply.
+DSQL supports only part of PostgreSQL. For example, it has no enums, triggers, policies, partitioned tables, composite types or column collations. pistachio does not check for these. DSQL rejects them when you apply.
 
 ## Connecting
 
@@ -22,6 +22,8 @@ pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" sc
 | Create an index | `CREATE INDEX ASYNC`, without `USING btree`. DSQL has only one index method and rejects `USING`. Any other method, such as `USING gin`, is kept, and DSQL rejects it. |
 | Add a column with a `DEFAULT` | `ADD COLUMN` without the default, then `ALTER COLUMN ... SET DEFAULT`. Existing rows get `NULL`, not the default. DSQL cannot fill them. |
 | Add a unique constraint to an existing table | `CREATE UNIQUE INDEX ASYNC`, then `ADD CONSTRAINT ... UNIQUE USING INDEX`. |
+| Add a check constraint to an existing table, or a foreign key | `ADD CONSTRAINT ... NOT VALID`, then `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT`. DSQL adds these constraints only `NOT VALID`. A constraint the schema writes `NOT VALID` is added as it is. |
+| Validate a `NOT VALID` constraint | `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT`. |
 | Create an identity column | `CACHE 1` is added when no cache size is given. DSQL requires a cache size. |
 
 `dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back.
@@ -38,11 +40,10 @@ DSQL reports some things that are not in your schema. pistachio ignores them:
 
 DSQL can make these changes only in `CREATE TABLE`, or not at all. `plan` fails if the schema needs one of them:
 
-- `DROP COLUMN`
 - `ALTER COLUMN ... SET NOT NULL`
 - Changing a column's type
 - Adding a column with `NOT NULL`
-- Adding a primary key or a check constraint to an existing table
+- Adding a primary key to an existing table
 - `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`, including those from `-- pista:concurrently`
 - `-- pista:bulk-alter`
 
@@ -58,10 +59,10 @@ DSQL can make these changes only in `CREATE TABLE`, or not at all. `plan` fails 
 
 `apply-from` reads the engine from the plan file and rejects the same options.
 
-## Index builds
+## Jobs
 
-DSQL builds indexes in the background. `CREATE INDEX ASYNC` starts a job and returns at once. `apply` waits for each job with `sys.wait_for_job` before it runs the next statement. If a build fails, `apply` stops. The failed index stays in the database as an invalid index. Drop it before you run `apply` again.
+DSQL builds indexes and validates constraints in the background. `CREATE INDEX ASYNC` and `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT` start a job and return at once. `apply` waits for each job with `sys.wait_for_job` before it runs the next statement. If a job fails, `apply` stops. A failed build leaves an invalid index in the database. Drop it before you run `apply` again. A failed validation leaves the constraint `NOT VALID`, and `sys.jobs` shows the reason. Fix the rows and run `apply` again.
 
-With `--dsql-no-wait-index-build`, `apply` does not wait. It can finish before the builds do, and it does not report a build that fails. A unique constraint must wait for its index, so `apply` refuses this option when it adds one with `USING INDEX` on an index it also builds.
+With `--dsql-no-wait-job`, `apply` does not wait. It can finish before the jobs do, and it does not report a job that fails. A unique constraint must wait for its index, so `apply` refuses this option when it adds one with `USING INDEX` on an index it also builds.
 
-A DSQL transaction can last at most 5 minutes, and a connection at most 60 minutes. If a build takes more than 5 minutes, the wait may fail. Use `--dsql-no-wait-index-build` for such an index. If `apply` runs for more than 60 minutes, it loses its connection and fails.
+A DSQL transaction can last at most 5 minutes, and a connection at most 60 minutes. If a job takes more than 5 minutes, the wait may fail. Use `--dsql-no-wait-job` for such a job. If `apply` runs for more than 60 minutes, it loses its connection and fails.

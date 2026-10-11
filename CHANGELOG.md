@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: Rename `--dsql-no-wait-index-build` to `--dsql-no-wait-job`, and `PISTA_DSQL_NO_WAIT_INDEX_BUILD` to `PISTA_DSQL_NO_WAIT_JOB`. It now also skips the wait for a constraint validation.
+
+* With `--engine dsql`, `plan` no longer rejects `DROP COLUMN` or adding a check constraint. A check constraint or a foreign key is added `NOT VALID`, then validated with `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT`, and `apply` waits for the job.
+
 ## [1.81.0] - 2026-10-11
 
 * **Amazon Aurora DSQL support**: `plan`, `apply`, `apply-from` and `dump` take `--engine dsql` for Amazon Aurora DSQL. See the Aurora DSQL guide.

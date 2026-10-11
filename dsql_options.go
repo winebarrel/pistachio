@@ -82,11 +82,11 @@ func execRefused(o *ExecOptions) []dsqlRefused {
 	}
 }
 
-// requireDSQL refuses --dsql-no-wait-index-build without --engine dsql. The
+// requireDSQL refuses --dsql-no-wait-job without --engine dsql. The
 // flag is DSQL's, and does nothing anywhere else.
 func requireDSQL(engine Engine, o *ExecOptions) error {
-	if o.DSQLNoWaitIndexBuild && !engine.isDSQL() {
-		return errors.New("--dsql-no-wait-index-build requires --engine dsql")
+	if o.DSQLNoWaitJob && !engine.isDSQL() {
+		return errors.New("--dsql-no-wait-job requires --engine dsql")
 	}
 	return nil
 }
