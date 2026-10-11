@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -184,7 +185,7 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil || is.Relation == nil {
-		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt with relation")
+		return "", errors.New("failed to parse index definition: expected IndexStmt with relation")
 	}
 	is.Relation.Relname = newTableName
 	deparsed, err := pg_query.Deparse(result)
@@ -432,7 +433,7 @@ func updateIndexName(def string, newName string) (string, error) {
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil {
-		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt")
+		return "", errors.New("failed to parse index definition: expected IndexStmt")
 	}
 	is.Idxname = newName
 	deparsed, err := pg_query.Deparse(result)

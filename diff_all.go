@@ -476,7 +476,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	}
 	if client.Engine.isDSQL() {
 		if len(bulkAlterTables) > 0 {
-			return nil, fmt.Errorf("-- pista:bulk-alter cannot be used with --engine dsql")
+			return nil, errors.New("-- pista:bulk-alter cannot be used with --engine dsql")
 		}
 		tableDiff.Stmts = dsql.Split(tableDiff.Stmts)
 	}

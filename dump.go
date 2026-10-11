@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -444,7 +445,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, err
 	}
 	if options.OmitSchema && len(client.Schemas) > 1 {
-		return nil, fmt.Errorf("--omit-schema cannot be used with multiple schemas")
+		return nil, errors.New("--omit-schema cannot be used with multiple schemas")
 	}
 
 	conn, err := client.connect(ctx, !options.NoReadOnly)
