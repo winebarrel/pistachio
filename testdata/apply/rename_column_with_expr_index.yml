@@ -1,0 +1,31 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users (lower(email));
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from email
+      email_addr text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users (lower(email_addr));
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email_addr text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users USING btree (lower(email_addr));
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email_addr text CONSTRAINT users_email_not_null NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users USING btree (lower(email_addr));

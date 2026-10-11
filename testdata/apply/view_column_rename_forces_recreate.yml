@@ -1,0 +1,44 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name AS display_name FROM public.users;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users_view
+  CREATE OR REPLACE VIEW public.users_view AS
+  SELECT users.id,
+      users.name AS display_name
+     FROM users;
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users_view
+  CREATE OR REPLACE VIEW public.users_view AS
+  SELECT id,
+      name AS display_name
+     FROM users;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

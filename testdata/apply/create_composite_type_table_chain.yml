@@ -1,0 +1,22 @@
+init: ""
+desired: |
+  CREATE TABLE public.people (
+      id   int,
+      home public.addr
+  );
+  CREATE TYPE public.addr AS (
+      street text,
+      city   text
+  );
+applied: |
+  -- public.addr
+  CREATE TYPE public.addr AS (
+      street text,
+      city text
+  );
+
+  -- public.people
+  CREATE TABLE public.people (
+      id integer,
+      home addr
+  );

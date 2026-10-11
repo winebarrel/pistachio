@@ -1,0 +1,31 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.name IS 'user display name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from name
+      display_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.display_name IS 'user display name';
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      display_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.display_name IS 'user display name';
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      display_name text CONSTRAINT users_name_not_null NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.display_name IS 'user display name';

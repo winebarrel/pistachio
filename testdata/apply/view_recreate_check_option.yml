@@ -1,0 +1,53 @@
+# A view recreated for a column change is created with its clause.
+drop_policy:
+  allow_drop: [view]
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status, note FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_items
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE items.status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+applied_pg16: &applied_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_items
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

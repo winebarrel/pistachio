@@ -1,0 +1,62 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_shrink AS SELECT id, name, legacy FROM public.t;
+  CREATE VIEW public.v_extend AS SELECT id FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_shrink AS SELECT id, name FROM public.t;
+  CREATE VIEW public.v_extend AS SELECT id, name FROM public.t;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.v_extend
+  CREATE OR REPLACE VIEW public.v_extend AS
+  SELECT t.id,
+      t.name
+     FROM t;
+
+  -- public.v_shrink
+  CREATE OR REPLACE VIEW public.v_shrink AS
+  SELECT t.id,
+      t.name
+     FROM t;
+applied_pg16: &applied_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.v_extend
+  CREATE OR REPLACE VIEW public.v_extend AS
+  SELECT id,
+      name
+     FROM t;
+
+  -- public.v_shrink
+  CREATE OR REPLACE VIEW public.v_shrink AS
+  SELECT id,
+      name
+     FROM t;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

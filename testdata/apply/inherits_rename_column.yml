@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.parent (id integer);
+  CREATE TABLE public.child (extra text) INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (extra);
+desired: |
+  CREATE TABLE public.parent (
+      id integer
+  );
+  CREATE TABLE public.child (
+      -- pista:renamed-from extra
+      note text
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (note);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      note text
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (note);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer
+  );

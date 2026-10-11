@@ -1,0 +1,50 @@
+# A rename keeps the column comments, so only the changed ones are emitted,
+# under the new name.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.active_users
+  CREATE VIEW public.user_list AS SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.user_list.id IS 'User ID';
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_list
+  CREATE OR REPLACE VIEW public.user_list AS
+  SELECT users.id,
+      users.name
+     FROM users;
+  COMMENT ON COLUMN public.user_list.id IS 'User ID';
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_list
+  CREATE OR REPLACE VIEW public.user_list AS
+  SELECT id,
+      name
+     FROM users;
+  COMMENT ON COLUMN public.user_list.id IS 'User ID';
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

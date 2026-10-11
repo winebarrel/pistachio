@@ -1,0 +1,29 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.status,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.user_status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from status
+      state public.user_status,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      state user_status,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
