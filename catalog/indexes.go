@@ -2,10 +2,8 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -65,46 +63,33 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			ci.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get index info: %w", err)
-	}
-	defer rows.Close()
-
 	var indexes []*model.Index
-	for rows.Next() {
-		var idx model.Index
-		var onPartitioned bool
-		err := rows.Scan(
-			&idx.OID,
-			&idx.Schema,
-			&idx.Name,
-			&idx.Table,
-			&idx.Definition,
-			&idx.TableSpace,
-			&idx.Comment,
-			&idx.Attached,
-			&onPartitioned,
-			&idx.Invalid,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan index info: %w", err)
-		}
+	var idx model.Index
+	var onPartitioned bool
+	dest := []any{
+		&idx.OID,
+		&idx.Schema,
+		&idx.Name,
+		&idx.Table,
+		&idx.Definition,
+		&idx.TableSpace,
+		&idx.Comment,
+		&idx.Attached,
+		&onPartitioned,
+		&idx.Invalid,
+	}
+	err := c.eachRow(ctx, "index info", q, dest, func() {
+		i := idx
 		if onPartitioned {
 			// pg_get_indexdef writes ONLY for every index on a partitioned
 			// table. Without it, the index attaches the partitions' matching
 			// indexes when the plan creates it after them.
-			idx.Definition = strings.Replace(idx.Definition, " ON ONLY ", " ON ", 1)
+			i.Definition = strings.Replace(i.Definition, " ON ONLY ", " ON ", 1)
 		}
-		indexes = append(indexes, &idx)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan index info rows: %w", err)
+		indexes = append(indexes, &i)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return indexes, nil

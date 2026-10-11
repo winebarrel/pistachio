@@ -154,10 +154,7 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 
 	inheritsChildren := inheritsChildOIDs(tables)
 
-	tableNames := make(map[uint32]string, len(tables))
-	for _, t := range tables {
-		tableNames[t.OID] = t.Name
-	}
+	tableByOID := tablesByOID(tables)
 
 	args := pgx.NamedArgs{
 		"table_oids": oids,
@@ -225,7 +222,7 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 		// src/backend/catalog/pg_constraint.c). Treat that name as no name.
 		// A table or column rename keeps the old name, so after a rename the
 		// name stays and dump writes it.
-		if col.NotNullName != nil && *col.NotNullName == parser.MakeObjectName(tableNames[tableOID], col.Name, "not_null") {
+		if col.NotNullName != nil && *col.NotNullName == parser.MakeObjectName(tableByOID[tableOID].Name, col.Name, "not_null") {
 			col.NotNullName = nil
 		}
 		colsByTable[tableOID] = append(colsByTable[tableOID], &col)

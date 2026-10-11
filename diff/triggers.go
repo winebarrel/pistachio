@@ -308,7 +308,7 @@ func equalTriggerDef(current, desired, schema string) (bool, error) {
 // TRIGGER. PostgreSQL has no OR REPLACE for one, so a change to or from one
 // needs a DROP in between.
 func isConstraintTrigger(def string) bool {
-	_, ct, err := parseTriggerDef(def, "")
+	_, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
 		return false
 	}

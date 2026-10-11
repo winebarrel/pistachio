@@ -559,16 +559,9 @@ func rewriteColumnRefsInExpr(node *pg_query.Node, renames map[string]string) {
 // b->c) do not cascade; each original column name is matched once against
 // the renames map.
 func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, is, err := parseIndexDef(def)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse index definition: %w", err)
-	}
-	if len(result.Stmts) == 0 {
-		return "", fmt.Errorf("empty index definition")
-	}
-	is := result.Stmts[0].Stmt.GetIndexStmt()
-	if is == nil {
-		return "", fmt.Errorf("expected IndexStmt in index definition")
+		return "", err
 	}
 	rewriteIndexElems := func(params []*pg_query.Node) {
 		for _, p := range params {
@@ -732,16 +725,9 @@ func rewriteTriggerWhenColumnRefs(node *pg_query.Node, renames map[string]string
 // All renames are applied in a single pass, so chained renames (a->b and
 // b->c) do not cascade.
 func rewriteColumnsInTriggerDef(def string, renames map[string]string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse trigger definition: %w", err)
-	}
-	if len(result.Stmts) != 1 {
-		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
-	}
-	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
-	if ct == nil {
-		return "", fmt.Errorf("expected CreateTrigStmt in trigger definition: %s", def)
+		return "", err
 	}
 	for _, n := range ct.Columns {
 		if s := n.GetString_(); s != nil {

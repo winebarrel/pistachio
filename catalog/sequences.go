@@ -2,9 +2,7 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -82,43 +80,30 @@ func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model
 			c.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get sequence info: %w", err)
-	}
-	defer rows.Close()
-
 	seqByKey := orderedmap.New[string, *model.Sequence]()
-	for rows.Next() {
-		var s model.Sequence
-		err := rows.Scan(
-			&s.OID,
-			&s.Schema,
-			&s.Name,
-			&s.DataType,
-			&s.Start,
-			&s.Min,
-			&s.Max,
-			&s.Increment,
-			&s.Cache,
-			&s.Cycle,
-			&s.Unlogged,
-			&s.OwnerTable,
-			&s.OwnerColumn,
-			&s.Comment,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan sequence info: %w", err)
-		}
-		seqByKey.Set(s.FQN(), &s)
+	var seq model.Sequence
+	dest := []any{
+		&seq.OID,
+		&seq.Schema,
+		&seq.Name,
+		&seq.DataType,
+		&seq.Start,
+		&seq.Min,
+		&seq.Max,
+		&seq.Increment,
+		&seq.Cache,
+		&seq.Cycle,
+		&seq.Unlogged,
+		&seq.OwnerTable,
+		&seq.OwnerColumn,
+		&seq.Comment,
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan sequence info rows: %w", err)
+	err := c.eachRow(ctx, "sequence info", q, dest, func() {
+		s := seq
+		seqByKey.Set(s.FQN(), &s)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return seqByKey, nil
