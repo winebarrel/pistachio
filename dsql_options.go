@@ -91,29 +91,14 @@ func requireDSQL(engine Engine, o *ExecOptions) error {
 	return nil
 }
 
-// requireDSQLIgnoreAsync refuses --dsql-ignore-async without --engine dsql.
-// ASYNC is not PostgreSQL syntax, so a schema with it is DSQL's.
-func requireDSQLIgnoreAsync(engine Engine, set bool) error {
-	if set && !engine.isDSQL() {
-		return errors.New("--dsql-ignore-async requires --engine dsql")
-	}
-	return nil
-}
-
 // ValidatePlanEngine refuses the plan options --engine dsql cannot use.
 func ValidatePlanEngine(engine Engine, o *PlanOptions) error {
-	if err := requireDSQLIgnoreAsync(engine, o.DSQLIgnoreAsync); err != nil {
-		return err
-	}
 	return refuseWithDSQL(engine, planRefused(o)...)
 }
 
 // ValidateApplyEngine refuses the apply options --engine dsql cannot use.
 func ValidateApplyEngine(engine Engine, o *ApplyOptions) error {
 	if err := requireDSQL(engine, &o.ExecOptions); err != nil {
-		return err
-	}
-	if err := requireDSQLIgnoreAsync(engine, o.DSQLIgnoreAsync); err != nil {
 		return err
 	}
 	return refuseWithDSQL(engine, append(planRefused(&PlanOptions{
@@ -149,7 +134,8 @@ func ValidateDumpEngine(engine Engine, o *DumpOptions) error {
 }
 
 // parseStrippingAsync parses the desired schema files with the ASYNC of each
-// CREATE INDEX ASYNC blanked out, for --dsql-ignore-async.
+// CREATE INDEX ASYNC blanked out. ASYNC is how DSQL builds an index, not part
+// of its definition, and the plan adds it to every index it creates.
 func parseStrippingAsync(files []string, defaultSchema string) (*parser.ParseResult, error) {
 	sources, err := parser.ReadSQLFiles(files)
 	if err != nil {

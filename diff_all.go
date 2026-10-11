@@ -54,12 +54,11 @@ func (client *Client) loadDesiredInput(
 	files []string,
 	preSQL, preSQLFile string,
 	concurrentlyPreSQL, concurrentlyPreSQLFile string,
-	dsqlIgnoreAsync bool,
 ) (*desiredInput, error) {
 	// Not wrapped: the parser's message already names the file.
 	var schema *parser.ParseResult
 	var err error
-	if dsqlIgnoreAsync {
+	if client.Engine.isDSQL() {
 		schema, err = parseStrippingAsync(files, client.Schemas[0])
 	} else {
 		schema, err = parser.ParseSQLFilesWithSchema(files, client.Schemas[0])

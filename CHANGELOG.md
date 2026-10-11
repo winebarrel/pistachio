@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: Remove `--dsql-ignore-async` and `PISTA_DSQL_IGNORE_ASYNC`. With `--engine dsql`, `plan` and `apply` now always ignore `ASYNC` in `CREATE INDEX ASYNC` in the desired schema.
+
 ## [1.82.1] - 2026-10-11
 
 * `dump` now writes the sequence of a `serial` column with its options when they are not the defaults. Before, it wrote the column as `serial`, so the restored sequence lost options such as `INCREMENT BY` and `START WITH`.

@@ -334,8 +334,6 @@ func TestRun_EngineDSQLRefusesOptions(t *testing.T) {
 		{[]string{"apply", "--engine", "dsql", "--exclusive", desired}, "--exclusive cannot be used with --engine dsql"},
 		{[]string{"apply", "--engine", "dsql", "--exclusive-wait", "1s", desired}, "--exclusive-wait cannot be used with --engine dsql"},
 		{[]string{"apply", "--dsql-no-wait-job", desired}, "--dsql-no-wait-job requires --engine dsql"},
-		{[]string{"plan", "--dsql-ignore-async", desired}, "--dsql-ignore-async requires --engine dsql"},
-		{[]string{"apply", "--dsql-ignore-async", desired}, "--dsql-ignore-async requires --engine dsql"},
 		{[]string{"dump", "--engine", "dsql", "--explain"}, "--explain cannot be used with --engine dsql"},
 	}
 	for _, tt := range tests {

@@ -294,21 +294,27 @@ const dsqlUsersAsync = `CREATE TABLE public.users (
 CREATE INDEX ASYNC users_name_idx ON public.users (name);
 `
 
-// --dsql-ignore-async reads a desired schema written with ASYNC. Without it,
-// ASYNC is a syntax error, as for any other server.
+// --engine dsql ignores ASYNC in the desired schema and adds it to the
+// statements it writes. Any other engine reads ASYNC as a syntax error.
 func TestDSQL_IgnoreAsync(t *testing.T) {
 	ctx := context.Background()
 	client := localDSQLClient(t, "")
 	desired := writeDSQLSchema(t, dsqlUsersAsync)
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
-	require.ErrorContains(t, err, "syntax error")
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}, DSQLIgnoreAsync: true})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "CREATE INDEX ASYNC users_name_idx ON public.users (name);")
 
 	var buf bytes.Buffer
-	_, err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desired}, DSQLIgnoreAsync: true}, &buf)
+	_, err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desired}}, &buf)
 	require.ErrorContains(t, err, "CREATE INDEX ASYNC", "local PostgreSQL has no ASYNC, so the apply reaches it and stops")
+
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+	postgres := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+	_, err = postgres.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
+	require.ErrorContains(t, err, "syntax error")
 }
