@@ -1,0 +1,31 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products (quantity) WHERE quantity > 0;
+applied: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products USING btree (quantity) WHERE (quantity > 0);
+applied_pg18: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer CONSTRAINT products_qty_not_null NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products USING btree (quantity) WHERE (quantity > 0);

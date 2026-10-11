@@ -1,0 +1,14 @@
+init: |
+  CREATE SEQUENCE public.old_seq;
+desired: |
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq;
+applied: |
+  -- public.new_seq
+  CREATE SEQUENCE public.new_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;

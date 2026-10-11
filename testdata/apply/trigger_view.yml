@@ -1,0 +1,38 @@
+# An INSTEAD OF trigger on a view. CREATE OR REPLACE VIEW leaves the view's
+# triggers in place, so a definition change alongside does not disturb them.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT events.id
+     FROM events;
+
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+applied_pg16: &applied_pg16plus |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT id
+     FROM events;
+
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

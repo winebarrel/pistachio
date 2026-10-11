@@ -3772,11 +3772,25 @@ CREATE SEQUENCE public.s1;`
 
 func TestParseSQL_SequenceValueOverflow(t *testing.T) {
 	// A literal past int64 arrives as a Float node and fails ParseInt.
-	sql := `CREATE SEQUENCE public.s1 MAXVALUE 99999999999999999999;`
+	tests := []struct {
+		option string
+		clause string
+	}{
+		{"increment", "INCREMENT BY"},
+		{"minvalue", "MINVALUE"},
+		{"maxvalue", "MAXVALUE"},
+		{"start", "START WITH"},
+		{"cache", "CACHE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.option, func(t *testing.T) {
+			sql := `CREATE SEQUENCE public.s1 ` + tt.clause + ` 99999999999999999999;`
 
-	_, err := parseSQLWithPublicSchema(sql)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option maxvalue`)
+			_, err := parseSQLWithPublicSchema(sql)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option `+tt.option)
+		})
+	}
 }
 
 func TestParseSQL_IdentityValueOverflow(t *testing.T) {

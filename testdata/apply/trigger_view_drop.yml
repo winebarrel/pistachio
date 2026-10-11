@@ -1,0 +1,36 @@
+# A view keeps its triggers through CREATE OR REPLACE VIEW, so one the desired
+# schema drops has to be dropped on its own.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+drop_policy:
+  allow_drop:
+    - trigger
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT events.id
+     FROM events;
+applied_pg16: &applied_pg16plus |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT id
+     FROM events;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

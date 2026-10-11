@@ -7,6 +7,12 @@ import (
 )
 
 func TestDropPolicy_IsDropAllowed(t *testing.T) {
+	t.Run("nil (no drops)", func(t *testing.T) {
+		var p *DropPolicy
+		assert.False(t, p.IsDropAllowed("table"))
+		assert.False(t, p.IsDropAllowed("all"))
+	})
+
 	t.Run("empty (no drops)", func(t *testing.T) {
 		p := &DropPolicy{}
 		assert.False(t, p.IsDropAllowed("table"))
@@ -37,5 +43,16 @@ func TestDropPolicy_IsDropAllowed(t *testing.T) {
 		assert.True(t, p.IsDropAllowed("column"))
 		assert.False(t, p.IsDropAllowed("view"))
 		assert.False(t, p.IsDropAllowed("enum"))
+	})
+
+	t.Run("newer object types", func(t *testing.T) {
+		p := &DropPolicy{AllowDrop: []string{"composite_type", "sequence", "routine", "policy", "trigger"}}
+		assert.True(t, p.IsDropAllowed("composite_type"))
+		assert.True(t, p.IsDropAllowed("sequence"))
+		assert.True(t, p.IsDropAllowed("routine"))
+		assert.True(t, p.IsDropAllowed("policy"))
+		assert.True(t, p.IsDropAllowed("trigger"))
+		assert.False(t, p.IsDropAllowed("table"))
+		assert.False(t, p.IsDropAllowed("index"))
 	})
 }

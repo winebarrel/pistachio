@@ -1,0 +1,18 @@
+# The aliases take the same path as serial to bigserial: the widening names
+# the base type and the owned sequence follows.
+init: |
+  CREATE TABLE public.users (
+      id serial4,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id serial8,
+      name text NOT NULL
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id bigserial NOT NULL,
+      name text NOT NULL
+  );

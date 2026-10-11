@@ -1,0 +1,59 @@
+# Both views change shape, so both are dropped and created again. The
+# dependent is dropped before the view it reads and created after it, so
+# nothing blocks the DROP and the plan is not an error.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name, salary FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+applied: |
+  -- public.employees
+  CREATE TABLE public.employees (
+      id integer NOT NULL,
+      name text,
+      dept text,
+      salary integer
+  );
+
+  -- public.eng_staff
+  CREATE OR REPLACE VIEW public.eng_staff AS
+  SELECT staff.id,
+      staff.name
+     FROM staff
+    WHERE staff.dept = 'eng'::text;
+
+  -- public.staff
+  CREATE OR REPLACE VIEW public.staff AS
+  SELECT employees.id,
+      employees.name,
+      employees.dept
+     FROM employees;
+applied_pg16: &applied_pg16plus |
+  -- public.employees
+  CREATE TABLE public.employees (
+      id integer NOT NULL,
+      name text,
+      dept text,
+      salary integer
+  );
+
+  -- public.eng_staff
+  CREATE OR REPLACE VIEW public.eng_staff AS
+  SELECT id,
+      name
+     FROM staff
+    WHERE dept = 'eng'::text;
+
+  -- public.staff
+  CREATE OR REPLACE VIEW public.staff AS
+  SELECT id,
+      name,
+      dept
+     FROM employees;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

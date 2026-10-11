@@ -1,0 +1,71 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+  CREATE TYPE public.contact AS (home public.address, others public.address[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr public.address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_addrs AS SELECT id, addr FROM public.users;
+desired: |
+  -- pista:renamed-from public.address
+  CREATE TYPE public.postal_address AS (street text, city text);
+  CREATE TYPE public.contact AS (home public.postal_address, others public.postal_address[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr public.postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_addrs AS SELECT id, addr FROM public.users;
+applied: |
+  -- public.contact
+  CREATE TYPE public.contact AS (
+      home postal_address,
+      others postal_address[]
+  );
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_addrs
+  CREATE OR REPLACE VIEW public.user_addrs AS
+  SELECT users.id,
+      users.addr
+     FROM users;
+applied_pg16: &applied_pg16plus |
+  -- public.contact
+  CREATE TYPE public.contact AS (
+      home postal_address,
+      others postal_address[]
+  );
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_addrs
+  CREATE OR REPLACE VIEW public.user_addrs AS
+  SELECT id,
+      addr
+     FROM users;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

@@ -1,0 +1,65 @@
+init: |
+  CREATE DOMAIN public.positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TYPE public.measure AS (value public.positive_int);
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.positive_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.item_qty AS SELECT id, qty FROM public.items;
+desired: |
+  -- pista:renamed-from public.positive_int
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TYPE public.measure AS (value public.pos_int);
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.pos_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.item_qty AS SELECT id, qty FROM public.items;
+applied: |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.measure
+  CREATE TYPE public.measure AS (
+      value pos_int
+  );
+
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty pos_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_qty
+  CREATE OR REPLACE VIEW public.item_qty AS
+  SELECT items.id,
+      items.qty
+     FROM items;
+applied_pg16: &applied_pg16plus |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.measure
+  CREATE TYPE public.measure AS (
+      value pos_int
+  );
+
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty pos_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_qty
+  CREATE OR REPLACE VIEW public.item_qty AS
+  SELECT id,
+      qty
+     FROM items;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

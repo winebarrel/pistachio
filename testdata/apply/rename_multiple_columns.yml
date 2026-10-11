@@ -1,0 +1,32 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      first_name text NOT NULL,
+      last_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from first_name
+      given_name text NOT NULL,
+      -- pista:renamed-from last_name
+      family_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      given_name text NOT NULL,
+      family_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      given_name text CONSTRAINT users_first_name_not_null NOT NULL,
+      family_name text CONSTRAINT users_last_name_not_null NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
