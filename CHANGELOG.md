@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `DEFAULT NULL` on a column or a domain, with or without a cast, no longer appears in the plan on every run. PostgreSQL stores no default for it, and pistachio now reads it as no default.
+* `DEFAULT NULL` on a column or a domain, with or without a cast, no longer appears in the plan on every run where PostgreSQL stores no default for it.
 
 ## [1.82.0] - 2026-10-11
 

@@ -1,15 +1,18 @@
-# PostgreSQL stores no default for a NULL constant, cast or not, so a desired
-# DEFAULT NULL matches a column or domain without one.
+# PostgreSQL stores no default for a NULL constant that needs no coercion to
+# the column's type, so a desired DEFAULT NULL matches a column or domain
+# without one. A NULL it coerces, as to varchar(10), is stored and compared.
 init: |
   CREATE DOMAIN public.d AS text;
   CREATE TABLE public.t (
       a text,
-      b integer
+      b integer,
+      c varchar(10) DEFAULT NULL
   );
 desired: |
   CREATE DOMAIN public.d AS text DEFAULT NULL;
   CREATE TABLE public.t (
       a text DEFAULT NULL,
-      b integer DEFAULT NULL::integer
+      b integer DEFAULT NULL::integer,
+      c varchar(10) DEFAULT NULL::character varying
   );
 plan: ""
