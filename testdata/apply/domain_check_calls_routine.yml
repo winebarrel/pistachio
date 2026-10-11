@@ -1,0 +1,37 @@
+# A routine a domain's CHECK calls is created before the domain, while a
+# routine that takes the domain as an argument still follows it.
+manage_routine: true
+init: ""
+desired: |
+  CREATE DOMAIN public.pos AS integer CONSTRAINT pos_check CHECK (public.is_pos(VALUE));
+  CREATE FUNCTION public.is_pos(x integer) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT x > 0 $$;
+  CREATE FUNCTION public.twice(p public.pos) RETURNS integer LANGUAGE sql AS $$ SELECT p * 2 $$;
+applied: |
+  -- public.pos
+  CREATE DOMAIN public.pos AS integer
+      CONSTRAINT pos_check CHECK (is_pos(VALUE));
+
+  -- public.is_pos(integer)
+  CREATE OR REPLACE FUNCTION public.is_pos(x integer)
+      RETURNS boolean
+      LANGUAGE sql
+      IMMUTABLE
+      AS $$ SELECT x > 0 $$;
+
+  -- public.twice(pos)
+  CREATE OR REPLACE FUNCTION public.twice(p pos)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT p * 2 $$;
+applied_sql: |
+  CREATE OR REPLACE FUNCTION public.is_pos(x integer)
+      RETURNS boolean
+      LANGUAGE sql
+      IMMUTABLE
+      AS $$ SELECT x > 0 $$;
+  CREATE DOMAIN public.pos AS integer
+      CONSTRAINT pos_check CHECK (public.is_pos(value));
+  CREATE OR REPLACE FUNCTION public.twice(p public.pos)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT p * 2 $$;

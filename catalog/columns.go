@@ -24,13 +24,20 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			-- column the child redeclares is local and inherited at once, and
 			-- stays.
 			a.attislocal,
-			-- A serial type only while the sequence has the default name.
-			-- Any other column that takes its default from a sequence it
-			-- owns keeps its own type and default, and catalog/sequences.go
-			-- reads the sequence, so that dump writes its name and options.
+			-- A serial type only while the sequence has the default name and
+			-- the default options for its type. Any other column that takes
+			-- its default from a sequence it owns keeps its own type and
+			-- default, and catalog/sequences.go reads the sequence, so that
+			-- dump writes its name and options.
 			CASE
 				WHEN s.is_serial
 				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+				AND sq.seqmax = CASE sq.seqtypid
+					WHEN 'int2'::regtype THEN 32767
+					WHEN 'int4'::regtype THEN 2147483647
+					ELSE 9223372036854775807
+				END
 				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
 					WHEN 'integer' THEN 'serial'
 					WHEN 'bigint' THEN 'bigserial'
@@ -112,6 +119,7 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
 			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
 			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
 			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
 			AND co.oid != t.typcollation
 			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace

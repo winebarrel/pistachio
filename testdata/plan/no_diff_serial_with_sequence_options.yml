@@ -1,0 +1,12 @@
+# A desired serial column still matches one whose sequence options were
+# changed, as it did before dump wrote such a sequence out.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+  ALTER SEQUENCE public.t_id_seq INCREMENT BY 10 START WITH 100 CACHE 5;
+desired: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+plan: ""

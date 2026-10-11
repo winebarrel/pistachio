@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `dump` now writes the sequence of a `serial` column with its options when they are not the defaults. Before, it wrote the column as `serial`, so the restored sequence lost options such as `INCREMENT BY` and `START WITH`.
+
+* A domain is now created after the routines it may call. Before, a domain whose `CHECK` called a routine created in the same run was created first and failed, as did applying a `dump` of it to an empty database with `--manage-routine`.
+
 ## [1.82.0] - 2026-10-11
 
 * **BREAKING**: Rename `--dsql-no-wait-index-build` to `--dsql-no-wait-job`, and `PISTA_DSQL_NO_WAIT_INDEX_BUILD` to `PISTA_DSQL_NO_WAIT_JOB`. It now also skips the wait for a constraint validation.
