@@ -1,4 +1,4 @@
-package parser
+package parser_test
 
 import (
 	"os"
@@ -8,13 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 func parseOneSequence(t *testing.T, sql string) *model.Sequence {
 	t.Helper()
 	f := filepath.Join(t.TempDir(), "seq.sql")
 	require.NoError(t, os.WriteFile(f, []byte(sql), 0o644))
-	result, err := ParseSQLFilesWithSchema([]string{f}, "public")
+	result, err := parser.ParseSQLFilesWithSchema([]string{f}, "public")
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Sequences.Len())
 	return result.Sequences.CollectValues()[0]
@@ -136,7 +137,7 @@ func TestApplyAlterSeqOwnedBy_OtherOptionIgnored(t *testing.T) {
 }
 
 func TestApplyAlterSeqOwnedBy_UnknownSequence(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	_, err := parser.ParseSQLWithPublicSchema(`
 		CREATE SEQUENCE public.s;
 		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
 		ALTER SEQUENCE public.absent OWNED BY public.t.val;

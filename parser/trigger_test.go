@@ -1,4 +1,4 @@
-package parser
+package parser_test
 
 import (
 	"testing"
@@ -6,12 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 func TestParseSQL_Trigger(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int, name text);
 CREATE TRIGGER t_audit AFTER UPDATE OF name ON public.t FOR EACH ROW WHEN (OLD.name IS DISTINCT FROM NEW.name) EXECUTE FUNCTION public.stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg, ok := result.Tables.Get("public.t").Triggers.GetOk("t_audit")
@@ -29,7 +30,7 @@ func TestParseSQL_Trigger_DefaultSchemaFallback(t *testing.T) {
 	// one and the stored definition comes out qualified.
 	sql := `CREATE TABLE public.t (id int);
 CREATE TRIGGER t_ins BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg := result.Tables.Get("public.t").Triggers.Get("t_ins")
@@ -42,7 +43,7 @@ CREATE TRIGGER t_ins BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION stamp();`
 func TestParseSQL_Trigger_ConstraintTrigger(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 CREATE CONSTRAINT TRIGGER t_check AFTER INSERT ON public.t DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg := result.Tables.Get("public.t").Triggers.Get("t_check")
@@ -56,7 +57,7 @@ func TestParseSQL_Trigger_OrReplaceNormalized(t *testing.T) {
 	// stored definition drops it and the diff decides.
 	sql := `CREATE TABLE public.t (id int);
 CREATE OR REPLACE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg := result.Tables.Get("public.t").Triggers.Get("t_ins")
@@ -71,7 +72,7 @@ CREATE OR REPLACE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE F
 func TestParseSQL_Trigger_ExecuteProcedure(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 CREATE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE PROCEDURE stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg := result.Tables.Get("public.t").Triggers.Get("t_ins")
@@ -84,7 +85,7 @@ func TestParseSQL_Trigger_OnView(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 CREATE VIEW public.v AS SELECT id FROM public.t;
 CREATE TRIGGER v_ins INSTEAD OF INSERT ON public.v FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg, ok := result.Views.Get("public.v").Triggers.GetOk("v_ins")
@@ -94,7 +95,7 @@ CREATE TRIGGER v_ins INSTEAD OF INSERT ON public.v FOR EACH ROW EXECUTE FUNCTION
 
 func TestParseSQL_Trigger_UnknownRelation(t *testing.T) {
 	sql := `CREATE TRIGGER t_ins BEFORE INSERT ON public.missing FOR EACH ROW EXECUTE FUNCTION stamp();`
-	_, err := parseSQLWithPublicSchema(sql)
+	_, err := parser.ParseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "public.missing")
 }
@@ -103,7 +104,7 @@ func TestParseSQL_Trigger_Duplicate(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 CREATE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp();
 CREATE TRIGGER t_ins BEFORE DELETE ON public.t FOR EACH ROW EXECUTE FUNCTION stamp();`
-	_, err := parseSQLWithPublicSchema(sql)
+	_, err := parser.ParseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Equal(t, "duplicate trigger: t_ins on public.t", err.Error())
 }
@@ -115,7 +116,7 @@ func TestParseSQL_Trigger_SameNameOnTwoTables(t *testing.T) {
 CREATE TABLE public.b (id int);
 CREATE TRIGGER stamped BEFORE INSERT ON public.a FOR EACH ROW EXECUTE FUNCTION stamp();
 CREATE TRIGGER stamped BEFORE INSERT ON public.b FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	assert.Equal(t, "a", result.Tables.Get("public.a").Triggers.Get("stamped").Table)
@@ -132,7 +133,7 @@ ALTER TABLE public.t DISABLE TRIGGER t_off;
 ALTER TABLE public.t ENABLE ALWAYS TRIGGER t_always;
 ALTER TABLE public.t ENABLE REPLICA TRIGGER t_replica;
 ALTER TABLE public.t ENABLE TRIGGER t_on;`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	triggers := result.Tables.Get("public.t").Triggers
@@ -147,11 +148,11 @@ ALTER TABLE public.t ENABLE TRIGGER t_on;`
 func TestParseSQL_Trigger_EnableStateUnknownTrigger(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 ALTER TABLE public.t DISABLE TRIGGER nowhere;`
-	_, err := parseSQLWithPublicSchema(sql)
+	_, err := parser.ParseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Equal(t, "ALTER TABLE public.t: trigger nowhere is not declared before it", err.Error())
 
-	result, err := parseSQLWithPublicSchema(`CREATE TABLE public.t (id int);
+	result, err := parser.ParseSQLWithPublicSchema(`CREATE TABLE public.t (id int);
 ALTER TABLE public.t DISABLE TRIGGER ALL;
 ALTER TABLE public.t ENABLE TRIGGER USER;`)
 	require.NoError(t, err)
@@ -162,7 +163,7 @@ func TestParseSQL_Trigger_RenamedFrom(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 -- pista:renamed-from t_old
 CREATE TRIGGER t_new BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp();`
-	result, err := parseSQLWithPublicSchema(sql)
+	result, err := parser.ParseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	trg := result.Tables.Get("public.t").Triggers.Get("t_new")

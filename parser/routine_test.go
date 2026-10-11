@@ -1,4 +1,4 @@
-package parser
+package parser_test
 
 import (
 	"bytes"
@@ -7,10 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 func TestParseSQL_Function(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.add(a integer, b integer DEFAULT 1) RETURNS integer
 		    LANGUAGE sql IMMUTABLE STRICT AS $$ SELECT a + b $$;
 	`)
@@ -35,7 +36,7 @@ func TestParseSQL_Function(t *testing.T) {
 }
 
 func TestParseSQL_Procedure(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE PROCEDURE public.bump(INOUT x integer)
 		    LANGUAGE plpgsql AS $$ BEGIN x := x + 1; END $$;
 	`)
@@ -50,7 +51,7 @@ func TestParseSQL_Procedure(t *testing.T) {
 }
 
 func TestParseSQL_FunctionDefaultSchema(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`CREATE FUNCTION f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;`)
+	result, err := parser.ParseSQLWithPublicSchema(`CREATE FUNCTION f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;`)
 	require.NoError(t, err)
 
 	r, ok := result.Routines.GetOk("public.f()")
@@ -59,7 +60,7 @@ func TestParseSQL_FunctionDefaultSchema(t *testing.T) {
 }
 
 func TestParseSQL_FunctionReturnsTable(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.rows_of() RETURNS TABLE(id integer, name text)
 		    LANGUAGE sql AS $$ SELECT 1, 'x' $$;
 	`)
@@ -88,7 +89,7 @@ func TestParseSQL_FunctionOutParamsWithoutReturns(t *testing.T) {
 		{"inout counts as input", `CREATE FUNCTION public.io(INOUT a integer) LANGUAGE sql AS $$ SELECT 1 $$;`, "public.io(integer)", "integer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := parseSQLWithPublicSchema(tc.sql)
+			result, err := parser.ParseSQLWithPublicSchema(tc.sql)
 			require.NoError(t, err)
 			r, ok := result.Routines.GetOk(tc.key)
 			require.True(t, ok)
@@ -100,7 +101,7 @@ func TestParseSQL_FunctionOutParamsWithoutReturns(t *testing.T) {
 // PostgreSQL discards a type modifier on a parameter, so the parser drops it
 // too: keeping it would differ from what the catalog reports back.
 func TestParseSQL_FunctionArgTypeModifierDropped(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a varchar(10), b numeric(10,2), c timestamp(3) with time zone, d numeric(10,2)[])
 		    RETURNS void LANGUAGE sql AS $$ SELECT $$;
 	`)
@@ -117,7 +118,7 @@ func TestParseSQL_FunctionArgTypeModifierDropped(t *testing.T) {
 // pg_get_functiondef leaves out an attribute set to its default, so a desired
 // schema that spells one out has to normalize to the same model.
 func TestParseSQL_FunctionDefaultAttributesNormalized(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer
 		    LANGUAGE sql VOLATILE PARALLEL UNSAFE COST 100 AS $$ SELECT 1 $$;
 		CREATE FUNCTION public.g() RETURNS SETOF integer
@@ -143,7 +144,7 @@ func TestParseSQL_FunctionDefaultAttributesNormalized(t *testing.T) {
 }
 
 func TestParseSQL_FunctionNonDefaultCostAndRows(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS SETOF integer
 		    LANGUAGE sql COST 5 ROWS 7 AS $$ SELECT 1 $$;
 	`)
@@ -164,7 +165,7 @@ func TestParseSQL_FunctionSetConfig(t *testing.T) {
 		`CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql SET search_path TO 'public', 'pg_temp' AS $$ SELECT 1 $$;`,
 		`CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql SET search_path = public, pg_temp AS $$ SELECT 1 $$;`,
 	} {
-		result, err := parseSQLWithPublicSchema(sql)
+		result, err := parser.ParseSQLWithPublicSchema(sql)
 		require.NoError(t, err)
 		r, _ := result.Routines.GetOk("public.f()")
 		require.Len(t, r.Config, 1)
@@ -173,7 +174,7 @@ func TestParseSQL_FunctionSetConfig(t *testing.T) {
 }
 
 func TestParseSQL_FunctionOverload(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
 	`)
@@ -182,7 +183,7 @@ func TestParseSQL_FunctionOverload(t *testing.T) {
 }
 
 func TestParseSQL_DuplicateRoutine(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	_, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql AS $$ SELECT a $$;
 	`)
@@ -190,7 +191,7 @@ func TestParseSQL_DuplicateRoutine(t *testing.T) {
 }
 
 func TestParseSQL_FunctionIgnoreDirective(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		-- pista:ignore
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 	`)
@@ -202,7 +203,7 @@ func TestParseSQL_FunctionIgnoreDirective(t *testing.T) {
 }
 
 func TestParseSQL_FunctionRenameNotSupported(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	_, err := parser.ParseSQLWithPublicSchema(`
 		-- pista:renamed-from public.old
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 	`)
@@ -221,10 +222,10 @@ func TestParseSQL_UnmanagedRoutinesWarn(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			restore := setWarnWriter(&buf)
+			restore := parser.SetWarnWriter(&buf)
 			defer restore()
 
-			result, err := parseSQLWithPublicSchema(tc.sql)
+			result, err := parser.ParseSQLWithPublicSchema(tc.sql)
 			require.NoError(t, err)
 			assert.Equal(t, 0, result.Routines.Len())
 			assert.Contains(t, buf.String(), "ignored unsupported statement:")
@@ -233,7 +234,7 @@ func TestParseSQL_UnmanagedRoutinesWarn(t *testing.T) {
 }
 
 func TestParseSQL_SQLStandardBody(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.a() RETURNS integer BEGIN ATOMIC SELECT a FROM t; SELECT 1; END;
 		CREATE FUNCTION public.e() RETURNS integer LANGUAGE sql BEGIN ATOMIC END;
 		CREATE FUNCTION public.r(x integer) RETURNS integer LANGUAGE sql RETURN x + 1;
@@ -250,7 +251,7 @@ func TestParseSQL_SQLStandardBody(t *testing.T) {
 }
 
 func TestParseSQL_CommentOnRoutine(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
 		CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;
@@ -273,7 +274,7 @@ func TestParseSQL_CommentOnRoutine(t *testing.T) {
 
 // PostgreSQL lets the argument list be left out when the name is unambiguous.
 func TestParseSQL_CommentOnRoutineWithoutArgs(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		COMMENT ON FUNCTION public.f IS 'only one';
 	`)
@@ -285,7 +286,7 @@ func TestParseSQL_CommentOnRoutineWithoutArgs(t *testing.T) {
 }
 
 func TestParseSQL_CommentOnAmbiguousRoutineIsSkipped(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
 		COMMENT ON FUNCTION public.f IS 'ambiguous';
@@ -308,7 +309,7 @@ func TestParseRoutineDef_Errors(t *testing.T) {
 		{"not a routine", "SELECT 1;", "not a CREATE FUNCTION statement"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseRoutineDef(tc.sql, "public")
+			_, err := parser.ParseRoutineDef(tc.sql, "public")
 			assert.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -317,7 +318,7 @@ func TestParseRoutineDef_Errors(t *testing.T) {
 // PostgreSQL rejects a function with neither a RETURNS clause nor an OUT
 // parameter, but pg_query parses it, so the parser has to say so itself.
 func TestParseSQL_FunctionWithoutReturnType(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`CREATE FUNCTION public.f() LANGUAGE sql AS $$ SELECT $$;`)
+	_, err := parser.ParseSQLWithPublicSchema(`CREATE FUNCTION public.f() LANGUAGE sql AS $$ SELECT $$;`)
 	assert.ErrorContains(t, err, "has no RETURNS clause and no OUT parameter")
 }
 
@@ -336,10 +337,10 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			restore := setWarnWriter(&buf)
+			restore := parser.SetWarnWriter(&buf)
 			defer restore()
 
-			result, err := parseSQLWithPublicSchema(tc.sql)
+			result, err := parser.ParseSQLWithPublicSchema(tc.sql)
 			require.NoError(t, err)
 			assert.Equal(t, 0, result.Routines.Len())
 			assert.Contains(t, buf.String(), "ignored unsupported statement:")
@@ -353,10 +354,10 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 // schema file declares.
 func TestParseSQL_FunctionSetFromCurrent(t *testing.T) {
 	var buf bytes.Buffer
-	restore := setWarnWriter(&buf)
+	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	result, err := parseSQLWithPublicSchema(`CREATE FUNCTION public.f() RETURNS text
+	result, err := parser.ParseSQLWithPublicSchema(`CREATE FUNCTION public.f() RETURNS text
 	    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;`)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Routines.Len())
@@ -370,7 +371,7 @@ func TestParseSQL_FunctionSetFromCurrent(t *testing.T) {
 // An explicit -- pista:ignore must not be undone by a routine that already
 // marked itself, nor the other way round.
 func TestParseSQL_FunctionSetFromCurrentWithIgnoreDirective(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		-- pista:ignore
 		CREATE FUNCTION public.f() RETURNS text
 		    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;
@@ -390,10 +391,10 @@ func TestParseSQL_FunctionSetFromCurrentWithIgnoreDirective(t *testing.T) {
 // The same statements must not fail a plan for someone who never opted in.
 func TestParseSQL_UnsupportedRoutineDoesNotFailTheFile(t *testing.T) {
 	var buf bytes.Buffer
-	restore := setWarnWriter(&buf)
+	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE TABLE public.t1 (id integer);
 		CREATE FUNCTION public.f(a integer) RETURNS integer
 		    LANGUAGE sql SUPPORT public.f_supp AS $$ SELECT a $$;
@@ -404,14 +405,14 @@ func TestParseSQL_UnsupportedRoutineDoesNotFailTheFile(t *testing.T) {
 }
 
 func TestParseSQL_FunctionNameTooManyParts(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`CREATE FUNCTION a.b.c() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;`)
+	_, err := parser.ParseSQLWithPublicSchema(`CREATE FUNCTION a.b.c() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;`)
 	assert.ErrorContains(t, err, "unexpected routine name: a.b.c")
 }
 
 // A SET value can be a number as well as a string, and COST can be
 // fractional. Each lands in a different node type.
 func TestParseSQL_FunctionNumericValues(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer
 		    LANGUAGE sql
 		    COST 1.5
@@ -433,7 +434,7 @@ func TestParseSQL_FunctionNumericValues(t *testing.T) {
 // LANGUAGE c defaults to COST 1 rather than 100, so spelling that out is not
 // a change.
 func TestParseSQL_FunctionLanguageCDefaultCost(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE c COST 1 AS 'obj', 'sym';
 	`)
 	require.NoError(t, err)
@@ -443,7 +444,7 @@ func TestParseSQL_FunctionLanguageCDefaultCost(t *testing.T) {
 }
 
 func TestParseSQL_CommentOnRoutineIsNull(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 		COMMENT ON FUNCTION public.f() IS 'v1';
 		COMMENT ON FUNCTION public.f() IS NULL;
@@ -457,7 +458,7 @@ func TestParseSQL_CommentOnRoutineIsNull(t *testing.T) {
 // A bare name has to skip the routines it does not name before it can tell
 // whether the one it does name is unique.
 func TestParseSQL_CommentOnRoutineWithoutArgsAmongOthers(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.other(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 		COMMENT ON FUNCTION public.f IS 'only one';
@@ -475,7 +476,7 @@ func TestParseSQL_CommentOnRoutineWithoutArgsAmongOthers(t *testing.T) {
 func TestParseSQL_CommentOnRoutineWithBadName(t *testing.T) {
 	// The comment names no routine the parse result holds, so it is dropped
 	// rather than failing the parse.
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 		COMMENT ON FUNCTION a.b.c() IS 'nope';
 	`)
@@ -489,7 +490,7 @@ func TestParseSQL_CommentOnRoutineWithBadName(t *testing.T) {
 // does. Without that it silently fails to attach, and the plan then proposes
 // COMMENT ... IS NULL on a routine that has one.
 func TestParseSQL_CommentOnRoutineWithQualifiedArgType(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f(x public.rowtype) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$;
 		COMMENT ON FUNCTION public.f(public.rowtype) IS 'v1';
 	`)
@@ -503,7 +504,7 @@ func TestParseSQL_CommentOnRoutineWithQualifiedArgType(t *testing.T) {
 
 // The same holds when the schema name needs quoting.
 func TestParseSQL_CommentOnRoutineWithQualifiedArgTypeQuotedSchema(t *testing.T) {
-	result, err := parseSQLNoFile(`
+	result, err := parser.ParseSQLNoFile(`
 		CREATE FUNCTION "App".f(x "App".rowtype) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$;
 		COMMENT ON FUNCTION "App".f("App".rowtype) IS 'v1';
 	`, "App")
@@ -516,7 +517,7 @@ func TestParseSQL_CommentOnRoutineWithQualifiedArgTypeQuotedSchema(t *testing.T)
 }
 
 func TestParseSQL_FunctionSecurityDefinerAndLeakproof(t *testing.T) {
-	result, err := parseSQLWithPublicSchema(`
+	result, err := parser.ParseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer
 		    LANGUAGE sql SECURITY DEFINER LEAKPROOF AS $$ SELECT 1 $$;
 	`)
@@ -529,7 +530,7 @@ func TestParseSQL_FunctionSecurityDefinerAndLeakproof(t *testing.T) {
 }
 
 func TestParseRoutineDef(t *testing.T) {
-	r, err := ParseRoutineDef(
+	r, err := parser.ParseRoutineDef(
 		"CREATE FUNCTION public.add(a integer, b integer) RETURNS integer LANGUAGE sql AS $$ SELECT a + b $$;",
 		"public",
 	)

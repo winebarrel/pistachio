@@ -1,10 +1,11 @@
-package parser
+package parser_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 // The expected values are what PostgreSQL 18 gives for the same column in
@@ -45,7 +46,7 @@ func TestParseSQL_ColumnConstraintAttrs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.column, func(t *testing.T) {
-			result, err := parseSQLWithPublicSchema("CREATE TABLE public.p (id integer PRIMARY KEY);\nCREATE TABLE public.posts (" + tt.column + ");")
+			result, err := parser.ParseSQLWithPublicSchema("CREATE TABLE public.p (id integer PRIMARY KEY);\nCREATE TABLE public.posts (" + tt.column + ");")
 			require.NoError(t, err)
 			table := result.Tables.Get("public.posts")
 
@@ -98,7 +99,7 @@ func TestParseSQL_ColumnConstraintAttrsError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.column, func(t *testing.T) {
-			_, err := parseSQLWithPublicSchema("CREATE TABLE public.p (id integer PRIMARY KEY);\nCREATE TABLE public.posts (" + tt.column + ");")
+			_, err := parser.ParseSQLWithPublicSchema("CREATE TABLE public.p (id integer PRIMARY KEY);\nCREATE TABLE public.posts (" + tt.column + ");")
 			assert.EqualError(t, err, tt.err)
 		})
 	}

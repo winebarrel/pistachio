@@ -45,7 +45,7 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"trigger on a table declared later", "CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION f();\nCREATE TABLE public.t (id integer);", "CREATE TRIGGER trg: table or view public.t is not declared before it"},
 		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: public.v is a view, which cannot hold an index"},
 	} {
-		_, err := parseSQLWithPublicSchema(tc.sql)
+		_, err := ParseSQLWithPublicSchema(tc.sql)
 		require.Error(t, err, tc.name)
 		assert.Equal(t, tc.want, err.Error(), tc.name)
 	}
@@ -53,7 +53,7 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 
 // The first such statement in the input is the one reported.
 func TestParseSQL_AlterUndeclaredTargetErrorNamesTheFirst(t *testing.T) {
-	_, err := parseSQLWithPublicSchema("ALTER SEQUENCE public.s OWNED BY NONE;\nALTER TABLE public.a ADD CONSTRAINT c CHECK (true);")
+	_, err := ParseSQLWithPublicSchema("ALTER SEQUENCE public.s OWNED BY NONE;\nALTER TABLE public.a ADD CONSTRAINT c CHECK (true);")
 	require.Error(t, err)
 	assert.Equal(t, "ALTER SEQUENCE public.s: sequence public.s is not declared before it", err.Error())
 }
@@ -111,7 +111,7 @@ func TestParseSQLFiles_PolicyAndTriggerUndeclaredTargetLocation(t *testing.T) {
 // A statement under -- pista:execute is run as written and not read, so it
 // is not checked.
 func TestParseSQL_AlterUndeclaredTargetUnderExecute(t *testing.T) {
-	_, err := parseSQLWithPublicSchema("-- pista:execute\nALTER TABLE public.t ADD CONSTRAINT c CHECK (true);")
+	_, err := ParseSQLWithPublicSchema("-- pista:execute\nALTER TABLE public.t ADD CONSTRAINT c CHECK (true);")
 	require.NoError(t, err)
 }
 
@@ -120,9 +120,9 @@ func TestParseSQL_AlterUndeclaredTargetUnderExecute(t *testing.T) {
 // On a declared table or sequence the statement is read as usual.
 func TestParseSQL_AlterIfExistsOnDeclared(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	result, err := parseSQLWithPublicSchema(`
+	result, err := ParseSQLWithPublicSchema(`
 CREATE TABLE public.t (id integer);
 CREATE SEQUENCE public.s;
 ALTER TABLE IF EXISTS public.t ADD CONSTRAINT t_chk CHECK (id > 0);
@@ -139,9 +139,9 @@ ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;
 // undeclared name fails whole.
 func TestParseSQL_AlterTableUndeclaredPartFailsWhole(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	_, err := parseSQLWithPublicSchema(`
+	_, err := ParseSQLWithPublicSchema(`
 CREATE TABLE public.t (id integer);
 ALTER TABLE public.t ADD CONSTRAINT t_chk CHECK (id > 0), ADD COLUMN x text, DISABLE TRIGGER trg;
 `)
@@ -155,9 +155,9 @@ ALTER TABLE public.t ADD CONSTRAINT t_chk CHECK (id > 0), ADD COLUMN x text, DIS
 // as an action dropped from it is not warned about.
 func TestParseSQL_AlterTableUndeclaredPartOnIgnoredTable(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	_, err := parseSQLWithPublicSchema(`
+	_, err := ParseSQLWithPublicSchema(`
 -- pista:ignore
 CREATE TABLE public.t (id integer);
 ALTER TABLE public.t DISABLE TRIGGER trg, ALTER COLUMN body SET STORAGE MAIN, ADD COLUMN x text;
@@ -169,7 +169,7 @@ ALTER TABLE public.t DISABLE TRIGGER trg, ALTER COLUMN body SET STORAGE MAIN, AD
 // A partition child declares no columns of its own, so a storage setting on
 // one is not checked against them. dump does not write it; pg_dump may.
 func TestParseSQL_AlterTableStorageOnPartitionChild(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	_, err := ParseSQLWithPublicSchema(`
 CREATE TABLE public.p (id integer, body text) PARTITION BY RANGE (id);
 CREATE TABLE public.c PARTITION OF public.p FOR VALUES FROM (0) TO (10);
 ALTER TABLE public.c ALTER COLUMN body SET STORAGE MAIN;
@@ -183,9 +183,9 @@ ALTER TABLE public.c ALTER COLUMN body SET STORAGE MAIN;
 // so it does not warn.
 func TestParseSQL_AlterSequenceIgnoredOptionsWarn(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	result, err := parseSQLWithPublicSchema(`
+	result, err := ParseSQLWithPublicSchema(`
 CREATE TABLE public.t (id integer);
 CREATE SEQUENCE public.s;
 ALTER SEQUENCE public.s INCREMENT BY 2 OWNED BY public.t.id;
@@ -206,9 +206,9 @@ ALTER SEQUENCE public.quiet MINVALUE 5;
 // undeclared.
 func TestParseSQL_AlterTableOnViewOrSequenceWarns(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	_, err := parseSQLWithPublicSchema(`
+	_, err := ParseSQLWithPublicSchema(`
 CREATE VIEW public.v AS SELECT 1 AS x;
 ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2;
 CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS x;
@@ -226,9 +226,9 @@ ALTER TABLE public.s OWNER TO app;
 // warns.
 func TestParseSQL_AlterDomainAddCheck(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	result, err := parseSQLWithPublicSchema(`
+	result, err := ParseSQLWithPublicSchema(`
 CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_max CHECK (VALUE < 100);
 ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
 ALTER DOMAIN pos_int ADD CHECK (VALUE <> 50);
@@ -247,7 +247,7 @@ ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL;
 
 // A constraint name ALTER DOMAIN adds must not already be on the domain.
 func TestParseSQL_AlterDomainDuplicateConstraint(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	_, err := ParseSQLWithPublicSchema(`
 CREATE DOMAIN public.d AS integer CONSTRAINT c CHECK (VALUE > 0);
 ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 1) NOT VALID;
 `)

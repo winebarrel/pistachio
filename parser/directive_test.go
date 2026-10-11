@@ -1,4 +1,4 @@
-package parser
+package parser_test
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 func TestExtractStmtDirectives(t *testing.T) {
@@ -16,7 +17,7 @@ func TestExtractStmtDirectives(t *testing.T) {
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
 	})
@@ -28,7 +29,7 @@ CREATE TYPE public.new_status AS ENUM ('active');
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 2)
 		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
 		assert.Equal(t, "public.old_users", dirs[result.Stmts[1].StmtLocation])
@@ -38,7 +39,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 		sql := `CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 
@@ -48,7 +49,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.posts (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "public.old_posts", dirs[result.Stmts[1].StmtLocation])
 	})
@@ -58,7 +59,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "public.old_name", dirs[result.Stmts[0].StmtLocation])
 	})
 
@@ -67,7 +68,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
 	})
 
@@ -76,7 +77,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 
@@ -85,7 +86,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := extractStmtDirectives(sql, result.Stmts)
+		dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 }
@@ -98,7 +99,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := extractInlineDirectives(sql).Columns
+		dirs := parser.ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "name", dirs["display_name"])
 	})
@@ -110,7 +111,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     -- pista:renamed-from name
     display_name text NOT NULL
 );`
-		dirs := extractInlineDirectives(sql).Columns
+		dirs := parser.ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 2)
 		assert.Equal(t, "uid", dirs["id"])
 		assert.Equal(t, "name", dirs["display_name"])
@@ -121,7 +122,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     id integer NOT NULL,
     name text NOT NULL
 );`
-		dirs := extractInlineDirectives(sql).Columns
+		dirs := parser.ExtractInlineDirectives(sql).Columns
 		assert.Empty(t, dirs)
 	})
 
@@ -130,7 +131,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     -- pista:renamed-from "Old Name"
     "New Name" text NOT NULL
 );`
-		dirs := extractInlineDirectives(sql).Columns
+		dirs := parser.ExtractInlineDirectives(sql).Columns
 		assert.Equal(t, "Old Name", dirs["New Name"])
 	})
 
@@ -141,7 +142,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     new_col text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := extractInlineDirectives(sql).Columns
+		dirs := parser.ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "old_col", dirs["new_col"])
 	})
@@ -155,7 +156,7 @@ func TestExtractInlineDirectives_Constraint(t *testing.T) {
     -- pista:renamed-from users_code_key
     CONSTRAINT users_code_unique UNIQUE (code)
 );`
-	dirs := extractInlineDirectives(sql)
+	dirs := parser.ExtractInlineDirectives(sql)
 	assert.Empty(t, dirs.Columns)
 	assert.Len(t, dirs.Constraints, 1)
 	assert.Equal(t, "users_code_key", dirs.Constraints["users_code_unique"])
@@ -170,7 +171,7 @@ func TestExtractInlineDirectives_Mixed(t *testing.T) {
     -- pista:renamed-from old_unique
     CONSTRAINT new_unique UNIQUE (display_name)
 );`
-	dirs := extractInlineDirectives(sql)
+	dirs := parser.ExtractInlineDirectives(sql)
 	assert.Len(t, dirs.Columns, 1)
 	assert.Equal(t, "name", dirs.Columns["display_name"])
 	assert.Len(t, dirs.Constraints, 1)
@@ -187,7 +188,7 @@ func TestExtractInlineDirectives_LeadingComma(t *testing.T) {
     -- pista:renamed-from old_c
     ,CONSTRAINT new_c CHECK (id > 0)
 );`
-	dirs := extractInlineDirectives(sql)
+	dirs := parser.ExtractInlineDirectives(sql)
 	assert.Equal(t, map[string]string{"name": "old_name", "New Label": "Old Label"}, dirs.Columns)
 	assert.Equal(t, map[string]string{"new_c": "old_c"}, dirs.Constraints)
 }
@@ -199,7 +200,7 @@ func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
     -- pista:retype-using status::public.item_status
     status public.item_status NOT NULL
 );`
-		dirs := extractInlineDirectives(sql)
+		dirs := parser.ExtractInlineDirectives(sql)
 		assert.Equal(t, map[string]string{"status": "status::public.item_status"}, dirs.RetypeUsing)
 		assert.Empty(t, dirs.Columns)
 	})
@@ -210,7 +211,7 @@ func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
     -- pista:retype-using old_flag <> 0
     "Flag" boolean
 );`
-		dirs := extractInlineDirectives(sql)
+		dirs := parser.ExtractInlineDirectives(sql)
 		assert.Equal(t, map[string]string{"Flag": "old_flag <> 0"}, dirs.RetypeUsing)
 		assert.Equal(t, map[string]string{"Flag": "old_flag"}, dirs.Columns)
 	})
@@ -221,40 +222,40 @@ func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
     -- pista:retype-using id::bigint
     CONSTRAINT t_pkey PRIMARY KEY (id)
 );`
-		assert.Empty(t, extractInlineDirectives(sql).RetypeUsing)
+		assert.Empty(t, parser.ExtractInlineDirectives(sql).RetypeUsing)
 	})
 }
 
 func TestExtractConstraintName(t *testing.T) {
-	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
-	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
-	assert.Empty(t, extractConstraintName("id integer NOT NULL"))
-	assert.Empty(t, extractConstraintName(""))
+	assert.Equal(t, "users_pkey", parser.ExtractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
+	assert.Equal(t, "My Con", parser.ExtractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
+	assert.Empty(t, parser.ExtractConstraintName("id integer NOT NULL"))
+	assert.Empty(t, parser.ExtractConstraintName(""))
 	// Unquoted names are lowercased
-	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
+	assert.Equal(t, "users_pkey", parser.ExtractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
 	// An unterminated quote yields no name rather than a truncated one
-	assert.Empty(t, extractConstraintName(`CONSTRAINT "unterminated UNIQUE (code)`))
-	assert.Empty(t, extractConstraintName("CONSTRAINT "))
+	assert.Empty(t, parser.ExtractConstraintName(`CONSTRAINT "unterminated UNIQUE (code)`))
+	assert.Empty(t, parser.ExtractConstraintName("CONSTRAINT "))
 }
 
 func TestNormalizeUnqualifiedDirective(t *testing.T) {
-	assert.Equal(t, "old_name", normalizeUnqualifiedDirective("old_name"))
-	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`"Old Name"`))
-	assert.Equal(t, `has"quote`, normalizeUnqualifiedDirective(`"has""quote"`))
+	assert.Equal(t, "old_name", parser.NormalizeUnqualifiedDirective("old_name"))
+	assert.Equal(t, "Old Name", parser.NormalizeUnqualifiedDirective(`"Old Name"`))
+	assert.Equal(t, `has"quote`, parser.NormalizeUnqualifiedDirective(`"has""quote"`))
 	// Schema-qualified: take last part only
-	assert.Equal(t, "old_idx", normalizeUnqualifiedDirective("public.old_idx"))
-	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`public."Old Name"`))
+	assert.Equal(t, "old_idx", parser.NormalizeUnqualifiedDirective("public.old_idx"))
+	assert.Equal(t, "Old Name", parser.NormalizeUnqualifiedDirective(`public."Old Name"`))
 	// Unquoted names are lowercased
-	assert.Equal(t, "oldcolumn", normalizeUnqualifiedDirective("OldColumn"))
+	assert.Equal(t, "oldcolumn", parser.NormalizeUnqualifiedDirective("OldColumn"))
 }
 
 func TestQualifyRenameFrom(t *testing.T) {
-	assert.Equal(t, "public.old_name", qualifyRenameFrom("old_name", "public"))
-	assert.Equal(t, "public.old_name", qualifyRenameFrom("public.old_name", "public"))
-	assert.Equal(t, "myschema.old_name", qualifyRenameFrom("myschema.old_name", "public"))
-	assert.Equal(t, `public."Old Name"`, qualifyRenameFrom(`"Old Name"`, "public"))
+	assert.Equal(t, "public.old_name", parser.QualifyRenameFrom("old_name", "public"))
+	assert.Equal(t, "public.old_name", parser.QualifyRenameFrom("public.old_name", "public"))
+	assert.Equal(t, "myschema.old_name", parser.QualifyRenameFrom("myschema.old_name", "public"))
+	assert.Equal(t, `public."Old Name"`, parser.QualifyRenameFrom(`"Old Name"`, "public"))
 	// Quoted identifier containing a dot should be treated as single name
-	assert.Equal(t, `public."a.b"`, qualifyRenameFrom(`"a.b"`, "public"))
+	assert.Equal(t, `public."a.b"`, parser.QualifyRenameFrom(`"a.b"`, "public"))
 }
 
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
@@ -262,39 +263,39 @@ func TestExtractStmtDirectives_QuotedName(t *testing.T) {
 CREATE TABLE public.users (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
-	dirs := extractStmtDirectives(sql, result.Stmts)
+	dirs := parser.ExtractStmtDirectives(sql, result.Stmts)
 	assert.Equal(t, `"My Schema"."Old Name"`, dirs[result.Stmts[0].StmtLocation])
 }
 
 func TestScanQuotedIdent(t *testing.T) {
-	name, ok := scanQuotedIdent(`"My Name" text NOT NULL`)
+	name, ok := parser.ScanQuotedIdent(`"My Name" text NOT NULL`)
 	assert.True(t, ok)
 	assert.Equal(t, "My Name", name)
 
-	name, ok = scanQuotedIdent(`"has""quote" text`)
+	name, ok = parser.ScanQuotedIdent(`"has""quote" text`)
 	assert.True(t, ok)
 	assert.Equal(t, `has"quote`, name)
 
-	_, ok = scanQuotedIdent(`not_quoted`)
+	_, ok = parser.ScanQuotedIdent(`not_quoted`)
 	assert.False(t, ok)
 
-	_, ok = scanQuotedIdent(`"unterminated`)
+	_, ok = parser.ScanQuotedIdent(`"unterminated`)
 	assert.False(t, ok)
 
-	_, ok = scanQuotedIdent(``)
+	_, ok = parser.ScanQuotedIdent(``)
 	assert.False(t, ok)
 }
 
 func TestExtractColumnName(t *testing.T) {
-	assert.Equal(t, "id", extractColumnName("id integer NOT NULL,"))
-	assert.Equal(t, "name", extractColumnName("name text NOT NULL"))
-	assert.Equal(t, "My Col", extractColumnName(`"My Col" text NOT NULL,`))
-	assert.Empty(t, extractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
-	assert.Empty(t, extractColumnName(""))
+	assert.Equal(t, "id", parser.ExtractColumnName("id integer NOT NULL,"))
+	assert.Equal(t, "name", parser.ExtractColumnName("name text NOT NULL"))
+	assert.Equal(t, "My Col", parser.ExtractColumnName(`"My Col" text NOT NULL,`))
+	assert.Empty(t, parser.ExtractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
+	assert.Empty(t, parser.ExtractColumnName(""))
 	// Unquoted names are lowercased
-	assert.Equal(t, "displayname", extractColumnName("DisplayName text NOT NULL"))
+	assert.Equal(t, "displayname", parser.ExtractColumnName("DisplayName text NOT NULL"))
 	// An unterminated quote yields no name rather than a truncated one
-	assert.Empty(t, extractColumnName(`"unterminated text NOT NULL`))
+	assert.Empty(t, parser.ExtractColumnName(`"unterminated text NOT NULL`))
 }
 
 func TestExtractExecuteDirectives_WithCheckSQL(t *testing.T) {
@@ -304,7 +305,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
@@ -319,7 +320,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	// Trailing semicolon should be stripped from check SQL
@@ -333,7 +334,7 @@ GRANT SELECT ON public.users TO readonly_role;`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "GRANT select")
@@ -349,7 +350,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
@@ -367,7 +368,7 @@ CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGU
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Empty(t, stmts[0].CheckSQL)
@@ -381,7 +382,7 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, skip)
@@ -394,7 +395,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
@@ -410,7 +411,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
@@ -428,7 +429,7 @@ CREATE OR REPLACE FUNCTION public.f2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.True(t, stmts[0].First)
@@ -444,7 +445,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
@@ -465,7 +466,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
 
-		_, _, err = extractExecuteDirectives(sql, result.Stmts)
+		_, _, err = parser.ExtractExecuteDirectives(sql, result.Stmts)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot both apply to one statement")
 	}
@@ -480,7 +481,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
@@ -495,7 +496,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := parser.ExtractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
@@ -504,19 +505,19 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 }
 
 func TestFormatExecuteStmt_First(t *testing.T) {
-	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", First: true}
-	assert.Equal(t, "-- pista:execute-first\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+	es := &parser.ExecuteStmt{SQL: "CREATE FUNCTION f();", First: true}
+	assert.Equal(t, "-- pista:execute-first\nCREATE FUNCTION f();", parser.FormatExecuteStmt(es))
 }
 
 func TestFormatExecuteStmt_FirstWithCheck(t *testing.T) {
-	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true", First: true}
-	assert.Equal(t, "-- pista:execute-first SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+	es := &parser.ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true", First: true}
+	assert.Equal(t, "-- pista:execute-first SELECT true\nCREATE FUNCTION f();", parser.FormatExecuteStmt(es))
 }
 
 func TestValidateDirectives_ExecuteFirstIsKnown(t *testing.T) {
-	require.NoError(t, validateDirectives("-- pista:execute-first\nSELECT 1;"))
-	require.NoError(t, validateDirectives("-- pista:execute-first SELECT true\nSELECT 1;"))
-	require.Error(t, validateDirectives("-- pista:execute-last\nSELECT 1;"))
+	require.NoError(t, parser.ValidateDirectives("-- pista:execute-first\nSELECT 1;"))
+	require.NoError(t, parser.ValidateDirectives("-- pista:execute-first SELECT true\nSELECT 1;"))
+	require.Error(t, parser.ValidateDirectives("-- pista:execute-last\nSELECT 1;"))
 }
 
 func TestExtractConcurrentlyDirectives(t *testing.T) {
@@ -527,7 +528,7 @@ CREATE INDEX idx_email ON public.users USING btree (email);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractConcurrentlyDirectives(sql, result.Stmts)
+	directives := parser.ExtractConcurrentlyDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 	assert.False(t, directives[result.Stmts[1].StmtLocation])
 }
@@ -540,7 +541,7 @@ CREATE INDEX idx_name ON public.users USING btree (name);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractConcurrentlyDirectives(sql, result.Stmts)
+	directives := parser.ExtractConcurrentlyDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 }
 
@@ -550,7 +551,7 @@ func TestExtractConcurrentlyDirectives_noDirective(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractConcurrentlyDirectives(sql, result.Stmts)
+	directives := parser.ExtractConcurrentlyDirectives(sql, result.Stmts)
 	assert.Empty(t, directives)
 }
 
@@ -562,7 +563,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	directives := parser.ExtractBulkAlterDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 	assert.False(t, directives[result.Stmts[1].StmtLocation])
 }
@@ -575,7 +576,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	directives := parser.ExtractBulkAlterDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 }
 
@@ -585,18 +586,18 @@ func TestExtractBulkAlterDirectives_noDirective(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	directives := parser.ExtractBulkAlterDirectives(sql, result.Stmts)
 	assert.Empty(t, directives)
 }
 
 func TestValidateDirectives_Valid(t *testing.T) {
-	assert.NoError(t, validateDirectives("-- pista:renamed-from old"))
-	assert.NoError(t, validateDirectives("-- pista:execute SELECT true"))
-	assert.NoError(t, validateDirectives("-- pista:execute"))
-	assert.NoError(t, validateDirectives("-- pista:concurrently"))
-	assert.NoError(t, validateDirectives("-- pista:bulk-alter"))
-	assert.NoError(t, validateDirectives("-- pista:ignore"))
-	assert.NoError(t, validateDirectives("SELECT 1; -- no directives"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:renamed-from old"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:execute SELECT true"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:execute"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:concurrently"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:bulk-alter"))
+	assert.NoError(t, parser.ValidateDirectives("-- pista:ignore"))
+	assert.NoError(t, parser.ValidateDirectives("SELECT 1; -- no directives"))
 }
 
 // A renamed-from with no name matched nothing and raised nothing, so the
@@ -608,7 +609,7 @@ func TestValidateDirectives_RenamedFromWithoutArg(t *testing.T) {
 		"-- pista:renamed-from\r\nCREATE TABLE t (id int);",
 		"CREATE TABLE t (\n  -- pista:renamed-from\n  id int\n);",
 	} {
-		err := validateDirectives(sql)
+		err := parser.ValidateDirectives(sql)
 		require.Error(t, err, sql)
 		assert.Contains(t, err.Error(), "-- pista:renamed-from requires an argument")
 	}
@@ -620,56 +621,56 @@ func TestValidateDirectives_RetypeUsingWithoutArg(t *testing.T) {
 		"CREATE TABLE t (\n  -- pista:retype-using   \n  id int\n);",
 		"CREATE TABLE t (\n  -- pista:retype-using\r\n  id int\n);",
 	} {
-		err := validateDirectives(sql)
+		err := parser.ValidateDirectives(sql)
 		require.Error(t, err, sql)
 		assert.Contains(t, err.Error(), "-- pista:retype-using requires an argument")
 	}
 }
 
 func TestParseSQL_RenamedFromWithoutArg(t *testing.T) {
-	_, err := parseSQLWithPublicSchema("-- pista:renamed-from\nCREATE TABLE public.t (id int);")
+	_, err := parser.ParseSQLWithPublicSchema("-- pista:renamed-from\nCREATE TABLE public.t (id int);")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-- pista:renamed-from requires an argument")
 }
 
 func TestValidateDirectives_IgnoreWithArgs(t *testing.T) {
-	err := validateDirectives("-- pista:ignore extra")
+	err := parser.ValidateDirectives("-- pista:ignore extra")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-- pista:ignore does not accept arguments")
 }
 
 func TestValidateDirectives_BulkAlterWithArgs(t *testing.T) {
-	err := validateDirectives("-- pista:bulk-alter extra")
+	err := parser.ValidateDirectives("-- pista:bulk-alter extra")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-- pista:bulk-alter does not accept arguments")
 }
 
 func TestValidateDirectives_ConcurrentlyWithArgs(t *testing.T) {
-	err := validateDirectives("-- pista:concurrently extra")
+	err := parser.ValidateDirectives("-- pista:concurrently extra")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-- pista:concurrently does not accept arguments")
 }
 
 func TestValidateDirectives_UnknownDirective(t *testing.T) {
-	err := validateDirectives("-- pista:exec")
+	err := parser.ValidateDirectives("-- pista:exec")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pista:exec")
 }
 
 func TestValidateDirectives_Typo(t *testing.T) {
-	err := validateDirectives("-- pista:rename-from old")
+	err := parser.ValidateDirectives("-- pista:rename-from old")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pista:rename-from")
 }
 
 func TestValidateDirectives_UnknownFoobar(t *testing.T) {
-	err := validateDirectives("-- pista:foobar something")
+	err := parser.ValidateDirectives("-- pista:foobar something")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pista:foobar")
 }
 
 func TestValidateDirectives_SpaceAfterColon(t *testing.T) {
-	err := validateDirectives("-- pista: exec")
+	err := parser.ValidateDirectives("-- pista: exec")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pista:exec")
 }
@@ -681,39 +682,39 @@ func TestValidateDirectives_SpaceBeforeKnownName(t *testing.T) {
 		"  --pista:  concurrently",
 		"-- pista:\u00a0renamed-from old_users",
 	} {
-		err := validateDirectives(sql)
+		err := parser.ValidateDirectives(sql)
 		require.Error(t, err, sql)
 		assert.Contains(t, err.Error(), "no space is allowed after -- pista:", sql)
 	}
 }
 
 func TestValidateDirectives_MissingName(t *testing.T) {
-	err := validateDirectives("-- pista:")
+	err := parser.ValidateDirectives("-- pista:")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing directive name")
 }
 
 func TestFormatExecuteStmtWithNote(t *testing.T) {
-	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
+	es := &parser.ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
 	// A multi-line note is folded onto one comment line.
 	assert.Equal(t, "-- pista:execute SELECT true\n-- check failed: ERROR: relation missing\nCREATE FUNCTION f();",
-		FormatExecuteStmtWithNote(es, "check failed:  ERROR:\n  relation missing"))
+		parser.FormatExecuteStmtWithNote(es, "check failed:  ERROR:\n  relation missing"))
 }
 
 func TestFormatExecuteStmt_WithCheck(t *testing.T) {
-	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
-	assert.Equal(t, "-- pista:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+	es := &parser.ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
+	assert.Equal(t, "-- pista:execute SELECT true\nCREATE FUNCTION f();", parser.FormatExecuteStmt(es))
 }
 
 func TestFormatExecuteStmt_WithoutSemicolon(t *testing.T) {
 	// Deparse output has no trailing semicolon; FormatExecuteStmt should add one
-	es := &ExecuteStmt{SQL: "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql", CheckSQL: ""}
-	assert.Equal(t, "-- pista:execute\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql;", FormatExecuteStmt(es))
+	es := &parser.ExecuteStmt{SQL: "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql", CheckSQL: ""}
+	assert.Equal(t, "-- pista:execute\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql;", parser.FormatExecuteStmt(es))
 }
 
 func TestFormatExecuteStmt_WithoutCheck(t *testing.T) {
-	es := &ExecuteStmt{SQL: "GRANT SELECT ON t TO r;", CheckSQL: ""}
-	assert.Equal(t, "-- pista:execute\nGRANT SELECT ON t TO r;", FormatExecuteStmt(es))
+	es := &parser.ExecuteStmt{SQL: "GRANT SELECT ON t TO r;", CheckSQL: ""}
+	assert.Equal(t, "-- pista:execute\nGRANT SELECT ON t TO r;", parser.FormatExecuteStmt(es))
 }
 
 // pg_query leaves StmtLen at 0 for a final statement with no semicolon, so
@@ -724,7 +725,7 @@ func TestDirectivesOnTrailingStatementWithoutSemicolon(t *testing.T) {
 	tests := []struct {
 		name      string
 		sql       string
-		check     func(t *testing.T, r *ParseResult)
+		check     func(t *testing.T, r *parser.ParseResult)
 		noWarning bool
 	}{
 		{
@@ -732,7 +733,7 @@ func TestDirectivesOnTrailingStatementWithoutSemicolon(t *testing.T) {
 			sql: `CREATE TABLE public.a (id integer);
 -- pista:renamed-from public.old_b
 CREATE TABLE public.b (id integer)`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				b := r.Tables.Get("public.b")
 				require.NotNil(t, b.RenameFrom)
@@ -744,7 +745,7 @@ CREATE TABLE public.b (id integer)`,
 			sql: `CREATE TABLE public.a (id integer);
 -- pista:ignore
 CREATE TABLE public.b (id integer)`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.b").Ignore)
 			},
@@ -754,7 +755,7 @@ CREATE TABLE public.b (id integer)`,
 			sql: `CREATE TABLE public.a (id integer);
 -- pista:concurrently
 CREATE INDEX idx ON public.a (id)`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.a").Indexes.Get("idx").Concurrently)
 			},
@@ -763,7 +764,7 @@ CREATE INDEX idx ON public.a (id)`,
 			name: "bulk-alter",
 			sql: `-- pista:bulk-alter
 CREATE TABLE public.a (id integer)`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.a").BulkAlter)
 			},
@@ -773,7 +774,7 @@ CREATE TABLE public.a (id integer)`,
 			sql: `CREATE TABLE public.a (id integer);
 -- pista:execute
 GRANT SELECT ON public.a TO someone`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				require.Len(t, r.ExecuteStmts, 1)
 				assert.Contains(t, r.ExecuteStmts[0].SQL, "GRANT")
@@ -789,7 +790,7 @@ GRANT SELECT ON public.a TO someone`,
     -- pista:renamed-from old_name
     name text
 )`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				col := r.Tables.Get("public.b").Columns.Get("name")
 				require.NotNil(t, col.RenameFrom)
@@ -802,7 +803,7 @@ GRANT SELECT ON public.a TO someone`,
     -- pista:renamed-from old_a
     'a'
 )`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.Equal(t, map[string]string{"a": "old_a"}, r.Enums.Get("public.e").ValueRenameFrom)
 			},
@@ -813,7 +814,7 @@ GRANT SELECT ON public.a TO someone`,
     -- pista:renamed-from old_x
     x integer
 )`,
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				attr := r.CompositeTypes.Get("public.ct").Attributes[0]
 				require.NotNil(t, attr.RenameFrom)
@@ -835,9 +836,9 @@ GRANT SELECT ON public.a TO someone`,
 			for _, ending := range endings {
 				t.Run(ending.name, func(t *testing.T) {
 					var warnings bytes.Buffer
-					defer setWarnWriter(&warnings)()
+					defer parser.SetWarnWriter(&warnings)()
 
-					r, err := parseSQLWithSchema(tt.sql+ending.suffix, "public", nil)
+					r, err := parser.ParseSQLWithSchema(tt.sql+ending.suffix, "public", nil)
 					require.NoError(t, err)
 					tt.check(t, r)
 					if tt.noWarning {
@@ -859,12 +860,12 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 	bodies := []struct {
 		name  string
 		sql   string
-		check func(t *testing.T, r *ParseResult)
+		check func(t *testing.T, r *parser.ParseResult)
 	}{
 		{
 			name: "ignore",
 			sql:  "-- pista:ignore%s\nCREATE TABLE public.b (id integer);\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.b").Ignore)
 			},
@@ -872,7 +873,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "concurrently",
 			sql:  "CREATE TABLE public.a (id integer);\n-- pista:concurrently%s\nCREATE INDEX idx ON public.a (id);\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.a").Indexes.Get("idx").Concurrently)
 			},
@@ -880,7 +881,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "bulk-alter",
 			sql:  "-- pista:bulk-alter%s\nCREATE TABLE public.a (id integer);\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				assert.True(t, r.Tables.Get("public.a").BulkAlter)
 			},
@@ -888,7 +889,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "execute",
 			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute%s\nGRANT SELECT ON public.a TO someone;\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				require.Len(t, r.ExecuteStmts, 1)
 				assert.False(t, r.ExecuteStmts[0].First)
@@ -898,7 +899,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "execute with check",
 			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute SELECT true%s\nGRANT SELECT ON public.a TO someone;\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				require.Len(t, r.ExecuteStmts, 1)
 				assert.Equal(t, "SELECT true", r.ExecuteStmts[0].CheckSQL)
@@ -907,7 +908,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "execute-first",
 			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute-first%s\nGRANT SELECT ON public.a TO someone;\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				require.Len(t, r.ExecuteStmts, 1)
 				assert.True(t, r.ExecuteStmts[0].First)
@@ -916,7 +917,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		{
 			name: "renamed-from",
 			sql:  "-- pista:renamed-from public.old_b%s\nCREATE TABLE public.b (id integer);\n",
-			check: func(t *testing.T, r *ParseResult) {
+			check: func(t *testing.T, r *parser.ParseResult) {
 				t.Helper()
 				b := r.Tables.Get("public.b")
 				require.NotNil(t, b.RenameFrom)
@@ -936,7 +937,7 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 		t.Run(body.name, func(t *testing.T) {
 			for _, ending := range endings {
 				t.Run(ending.name, func(t *testing.T) {
-					r, err := parseSQLWithSchema(strings.ReplaceAll(body.sql, "%s", ending.text), "public", nil)
+					r, err := parser.ParseSQLWithSchema(strings.ReplaceAll(body.sql, "%s", ending.text), "public", nil)
 					require.NoError(t, err)
 					body.check(t, r)
 				})
@@ -951,14 +952,14 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 func TestValidateDirectivesAcrossLineEndings(t *testing.T) {
 	for _, ending := range []struct{ name, text string }{{"lf", ""}, {"crlf", "\r"}} {
 		t.Run(ending.name, func(t *testing.T) {
-			require.NoError(t, validateDirectives("-- pista:ignore"+ending.text))
-			require.NoError(t, validateDirectives("-- pista:concurrently"+ending.text))
-			require.NoError(t, validateDirectives("-- pista:bulk-alter"+ending.text))
+			require.NoError(t, parser.ValidateDirectives("-- pista:ignore"+ending.text))
+			require.NoError(t, parser.ValidateDirectives("-- pista:concurrently"+ending.text))
+			require.NoError(t, parser.ValidateDirectives("-- pista:bulk-alter"+ending.text))
 
-			require.Error(t, validateDirectives("-- pista:ignore extra"+ending.text))
-			require.Error(t, validateDirectives("-- pista:concurrently extra"+ending.text))
-			require.Error(t, validateDirectives("-- pista:bulk-alter extra"+ending.text))
-			require.Error(t, validateDirectives("-- pista:unknown"+ending.text))
+			require.Error(t, parser.ValidateDirectives("-- pista:ignore extra"+ending.text))
+			require.Error(t, parser.ValidateDirectives("-- pista:concurrently extra"+ending.text))
+			require.Error(t, parser.ValidateDirectives("-- pista:bulk-alter extra"+ending.text))
+			require.Error(t, parser.ValidateDirectives("-- pista:unknown"+ending.text))
 		})
 	}
 }
@@ -988,7 +989,7 @@ func TestFindLeadingCommentEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, findLeadingCommentEnd(tt.s))
+			assert.Equal(t, tt.want, parser.FindLeadingCommentEnd(tt.s))
 		})
 	}
 }
@@ -1011,7 +1012,7 @@ func TestBlankBlockComments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := blankBlockComments(tt.s)
+			got := parser.BlankBlockComments(tt.s)
 			assert.Equal(t, tt.want, got)
 			assert.Len(t, got, len(tt.s), "blanking must not change the length")
 		})
@@ -1022,7 +1023,7 @@ func TestBlankBlockComments(t *testing.T) {
 // block comment is commented out.
 func TestDirectivesAroundBlockComments(t *testing.T) {
 	t.Run("after a block comment", func(t *testing.T) {
-		r, err := parseSQLWithSchema(`/* the table this replaces */
+		r, err := parser.ParseSQLWithSchema(`/* the table this replaces */
 -- pista:renamed-from public.old_b
 CREATE TABLE public.b (id integer);`, "public", nil)
 		require.NoError(t, err)
@@ -1032,7 +1033,7 @@ CREATE TABLE public.b (id integer);`, "public", nil)
 	})
 
 	t.Run("inside a block comment", func(t *testing.T) {
-		r, err := parseSQLWithSchema(`/*
+		r, err := parser.ParseSQLWithSchema(`/*
 -- pista:renamed-from public.old_b
 */
 CREATE TABLE public.b (id integer);`, "public", nil)
@@ -1041,7 +1042,7 @@ CREATE TABLE public.b (id integer);`, "public", nil)
 	})
 
 	t.Run("schema commented out with a block comment", func(t *testing.T) {
-		r, err := parseSQLWithSchema(`/*
+		r, err := parser.ParseSQLWithSchema(`/*
 -- pista:ignore
 CREATE TABLE public.b (id integer);
 */
@@ -1052,7 +1053,7 @@ CREATE TABLE public.c (id integer);`, "public", nil)
 	})
 
 	t.Run("check SQL after a block comment", func(t *testing.T) {
-		r, err := parseSQLWithSchema(`CREATE TABLE public.a (id integer);
+		r, err := parser.ParseSQLWithSchema(`CREATE TABLE public.a (id integer);
 /* why */
 -- pista:execute-first SELECT count(*) = 0 FROM public.a
 GRANT SELECT ON public.a TO someone;`, "public", nil)

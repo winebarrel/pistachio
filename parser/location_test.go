@@ -366,7 +366,7 @@ func TestAnnotateError_WideGutter(t *testing.T) {
 
 func TestParseSQLFiles_IgnoredStatementWarningLocation(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": `CREATE TABLE public.items (id integer);
@@ -385,7 +385,7 @@ DROP TABLE public.items;
 
 func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
 	dir := t.TempDir()
 	first := filepath.Join(dir, "a.sql")
@@ -404,7 +404,7 @@ func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 // position of the statement it came from.
 func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": "CREATE TABLE public.items (id integer);\nALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100;\n",
@@ -434,9 +434,9 @@ func TestParseSQLFiles_CreateTableLikeErrorLocation(t *testing.T) {
 // positions were added.
 func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
-	_, err := parseSQLNoFile("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
+	_, err := ParseSQLNoFile("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
 	require.NoError(t, err)
 	assert.Equal(t, "pista: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
 }
@@ -445,7 +445,7 @@ func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 // indent, a block comment, and whatever shares the line before it.
 func TestParseSQLFiles_IgnoredStatementWarningSkipsToTheStatement(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": `CREATE TABLE public.items (id integer); DROP TABLE public.items;
@@ -587,7 +587,7 @@ func TestParseSQLSources_DirectiveWithoutStatement(t *testing.T) {
 
 func TestParseSQLSources_DirectivePlacementAccepted(t *testing.T) {
 	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
+	defer SetWarnWriter(&buf)()
 
 	sources := []Source{
 		{Name: "a.sql", SQL: `-- pista:renamed-from public.old_a
