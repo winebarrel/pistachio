@@ -8,6 +8,8 @@
 
 * A domain is now created after the routines it may call. Before, a domain whose `CHECK` called a routine created in the same run was created first and failed, as did applying a `dump` of it to an empty database with `--manage-routine`.
 
+* `DEFAULT NULL` on a column or a domain, with or without a cast, no longer appears in the plan on every run where PostgreSQL stores no default for it.
+
 ## [1.82.0] - 2026-10-11
 
 * **BREAKING**: Rename `--dsql-no-wait-index-build` to `--dsql-no-wait-job`, and `PISTA_DSQL_NO_WAIT_INDEX_BUILD` to `PISTA_DSQL_NO_WAIT_JOB`. It now also skips the wait for a constraint validation.
