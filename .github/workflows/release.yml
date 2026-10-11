@@ -14,6 +14,11 @@ env:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    # GoReleaser publishes with the app token, so GITHUB_TOKEN only checks out.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - &checkout
         name: Checkout
@@ -54,6 +59,16 @@ jobs:
             release --clean --release-notes-tmpl .github/release-notes.md.tmpl
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      # checksums.txt lists every release asset but itself, so attest the
+      # listed assets and then checksums.txt.
+      - name: Attest release assets
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+      - name: Attest checksums.txt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/checksums.txt
 
   docker-build:
     strategy:
