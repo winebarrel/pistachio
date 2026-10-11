@@ -127,6 +127,13 @@ test-dsql:
 record-dsql:
 	bash scripts/record-dsql.sh
 
+# CLI scenario tests on the aws-samples DSQL schemas, against a live cluster.
+# DSQL_HOST names the cluster endpoint, and its public schema must be empty.
+# CI does not run them. See test/dsql/run.sh.
+.PHONY: test-dsql-scenario
+test-dsql-scenario:
+	bash test/dsql/run.sh
+
 # The CHANGELOG.md merge driver that changelog-merge.yml runs. No database.
 .PHONY: test-changelog
 test-changelog:

@@ -39,6 +39,7 @@ make test-fidelity  # restore fidelity check (bash, requires PostgreSQL and pg_d
 make test-changelog # CHANGELOG.md merge driver test (bash, no database)
 make test-dsql      # TestDSQL: replays the Aurora DSQL recording (no database)
 make record-dsql    # records TestDSQL again against a live cluster (DSQL_HOST)
+make test-dsql-scenario # CLI scenario tests on the aws-samples DSQL schemas (bash, live cluster, DSQL_HOST)
 make fuzz           # fuzz targets (no database; FUZZTIME per target, default 1m)
 make lint           # golangci-lint run
 make fix            # golangci-lint run --fix (auto-fix lint errors)
@@ -65,6 +66,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `internal/testutil/fuzzseed/` - the SQL seed corpus the fuzz targets start from. The targets themselves are `parser/fuzz_test.go` (parse arbitrary text, then render the result), `diff/fuzz_test.go` (a schema diffed against itself must need no DDL) and `format/fuzz_test.go` (formatting a formatted file changes nothing). None needs a database, and `make test` replays their seed corpus.
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 - `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
+- `test/dsql/` - CLI scenario tests against a live Aurora DSQL cluster. They download schemas from aws-samples/aurora-dsql-samples at a pinned commit, then build, change and drop them step by step, checking for drift after each. CI does not run them.
 - `test/fidelity/` - restore fidelity check: applies `pista dump` output to an empty database and diffs `pg_dump` against the original
 - `test/changelog/` - tests for `scripts/merge-changelog.sh`, the merge driver that `.github/workflows/changelog-merge.yml` runs when main's `CHANGELOG.md` changes. It merges main into every open pull request that changes `CHANGELOG.md` and conflicts nowhere else, and pushes when the driver's `CHANGELOG.md` differs from a text merge's: a conflict, or an entry a release would otherwise put under the released version.
 - `docs/` - the documentation site, built with MkDocs and published to GitHub Pages. The Markdown is the source; `mkdocs build --strict` fails on a broken internal link. The social plugin draws a preview card per page, so a local build needs Cairo and Pango installed as well as `requirements-docs.txt`. `CHANGELOG.md` and `LIMITATIONS.md` stay at the repository root and are symlinked into `docs/about/`.
