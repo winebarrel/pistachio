@@ -82,6 +82,12 @@ fix:
 deadcode:
 	bash scripts/check-deadcode.sh
 
+# Fails when non-test code imports a package only the tests may use. See
+# scripts/check-test-imports.sh.
+.PHONY: check-test-imports
+check-test-imports:
+	bash scripts/check-test-imports.sh
+
 # Fuzzing. The targets need no database, so this is the one test target that
 # runs anywhere. FUZZTIME is per target, not for the run as a whole, and each
 # has to be started on its own because `go test -fuzz` takes one target at a
