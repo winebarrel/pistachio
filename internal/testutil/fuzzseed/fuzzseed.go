@@ -1,4 +1,4 @@
-//go:build testonly
+//go:build tests
 
 // Package fuzzseed loads the SQL corpus the fuzz targets start from.
 package fuzzseed

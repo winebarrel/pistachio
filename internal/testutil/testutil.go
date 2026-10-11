@@ -1,4 +1,4 @@
-//go:build testonly
+//go:build tests
 
 package testutil
 

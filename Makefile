@@ -40,12 +40,12 @@ install:
 json-schema:
 	go run -tags tools ./cmd/gen-json-schema
 
-# Code that must stay out of a release is built only with a tag: testonly on
+# Code that must stay out of a release is built only with a tag: tests on
 # the test helpers (internal/testutil), tools on the JSON Schema generator
 # (cmd/gen-json-schema, internal/jsonschema). Every command that compiles the
 # tests passes both. `make build-check` builds everything without them, as a
 # release does, so non-test code that imports such a package fails there.
-GOTAGS := -tags testonly,tools
+GOTAGS := -tags tests,tools
 
 .PHONY: vet
 vet:
