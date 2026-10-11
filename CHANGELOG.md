@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `DEFAULT NULL` on a column or a domain, with or without a cast, no longer appears in the plan on every run where PostgreSQL stores no default for it.
+
 ## [1.82.0] - 2026-10-11
 
 * **BREAKING**: Rename `--dsql-no-wait-index-build` to `--dsql-no-wait-job`, and `PISTA_DSQL_NO_WAIT_INDEX_BUILD` to `PISTA_DSQL_NO_WAIT_JOB`. It now also skips the wait for a constraint validation.

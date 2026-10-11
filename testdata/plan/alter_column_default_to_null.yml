@@ -1,0 +1,14 @@
+# DEFAULT NULL in the desired schema replaces a default the column has.
+init: |
+  CREATE DOMAIN public.d AS text DEFAULT 'x';
+  CREATE TABLE public.t (
+      a text DEFAULT 'x'
+  );
+desired: |
+  CREATE DOMAIN public.d AS text DEFAULT NULL;
+  CREATE TABLE public.t (
+      a text DEFAULT NULL
+  );
+plan: |
+  ALTER DOMAIN public.d SET DEFAULT NULL;
+  ALTER TABLE public.t ALTER COLUMN a SET DEFAULT NULL;
