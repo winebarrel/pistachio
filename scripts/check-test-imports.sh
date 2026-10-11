@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
-# Fail when non-test code imports internal/testutil or a package under it.
+# Fail when non-test code imports a package that only the tests may use.
 #
-# `go list` reports the imports of a package's non-test files in .Imports and
-# those of its tests in .TestImports and .XTestImports, so reading .Imports
-# alone finds the non-test code that reaches for a test helper. The helpers
-# themselves import each other and are left out.
+# `go list` reports the imports of a package's non-test files in .Imports;
+# the imports of its tests are kept apart, so the tests themselves are free
+# to import these packages.
 
 set -euo pipefail
 
-found=$(go list -f '{{.ImportPath}}{{range .Imports}} {{.}}{{end}}' ./... |
-    awk '$1 !~ /\/internal\/testutil(\/|$)/ {
-        for (i = 2; i <= NF; i++)
-            if ($i ~ /\/internal\/testutil(\/|$)/)
-                print $1 " -> " $i
-    }')
+# The packages only the tests may import. A pattern ending in /... takes the
+# packages under it too.
+test_only=$(go list \
+    ./internal/testutil/...)
 
-if [ -n "$found" ]; then
-    printf 'Non-test code imports a test helper:\n%s\n' "$found" >&2
-    exit 1
-fi
+status=0
+while read -r pkg imports; do
+    # The test-only packages may import each other.
+    if grep -qxF "$pkg" <<<"$test_only"; then
+        continue
+    fi
+    for imp in $imports; do
+        if grep -qxF "$imp" <<<"$test_only"; then
+            echo "$pkg imports $imp, which only the tests may use" >&2
+            status=1
+        fi
+    done
+done < <(go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...)
+
+exit "$status"

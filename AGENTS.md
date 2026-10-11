@@ -42,7 +42,7 @@ make record-dsql    # records TestDSQL again against a live cluster (DSQL_HOST)
 make test-dsql-scenario # CLI scenario tests on the aws-samples DSQL schemas (bash, live cluster, DSQL_HOST)
 make fuzz           # fuzz targets (no database; FUZZTIME per target, default 1m)
 make lint           # golangci-lint run
-make check-test-imports # fails when non-test code imports internal/testutil
+make check-test-imports # fails when non-test code imports a package only the tests may use
 make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 

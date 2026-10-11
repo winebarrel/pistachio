@@ -82,7 +82,7 @@ fix:
 deadcode:
 	bash scripts/check-deadcode.sh
 
-# Fails when non-test code imports internal/testutil. See
+# Fails when non-test code imports a package only the tests may use. See
 # scripts/check-test-imports.sh.
 .PHONY: check-test-imports
 check-test-imports:
