@@ -2006,6 +2006,14 @@ func TestEqualDefault(t *testing.T) {
 	assert.False(t, equalDefault(new("0"), new("1")))
 }
 
+func TestEqualDefault_nullMatchesNone(t *testing.T) {
+	// PostgreSQL stores no default for a NULL constant of the column's type.
+	assert.True(t, equalDefault(nil, new("NULL")))
+	assert.True(t, equalDefault(nil, new("NULL::integer")))
+	assert.False(t, equalDefault(new("NULL::character varying"), nil))
+	assert.False(t, equalDefault(nil, new("'NULL'")))
+}
+
 func TestEqualDefault_Exported(t *testing.T) {
 	assert.True(t, EqualDefault(new("nextval('s'::regclass)"), new("nextval('s'::regclass)")))
 	assert.False(t, EqualDefault(new("nextval('s'::regclass)"), new("0")))

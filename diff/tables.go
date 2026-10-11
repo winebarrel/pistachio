@@ -2552,7 +2552,7 @@ func schemaOf(fqtn string) string {
 //     A_Expr rather than at the top.
 func equalDefault(current, desired *string) bool {
 	if current == nil || desired == nil {
-		return current == desired
+		return current == desired || current == nil && isNullDefault(*desired)
 	}
 	if *current == *desired {
 		return true
@@ -2587,6 +2587,21 @@ func equalDefault(current, desired *string) bool {
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
 	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
+}
+
+// isNullDefault reports whether def is a NULL constant, cast or not.
+// PostgreSQL stores no default for one when it needs no coercion to the
+// column's type, so it matches a column without a default.
+func isNullDefault(def string) bool {
+	_, target, err := pgast.ParseExpr(def)
+	if err != nil {
+		return false
+	}
+	n := target.Val
+	if tc := n.GetTypeCast(); tc != nil {
+		n = tc.Arg
+	}
+	return isNullConst(n)
 }
 
 // EqualDefault reports whether two column defaults are the same expression,
