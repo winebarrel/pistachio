@@ -1,0 +1,35 @@
+# PostgreSQL rebuilds the CHECK constraints on a column whose type changes, so
+# a CHECK that the new type rejects is dropped before the column changes.
+init: |
+  CREATE TYPE public.status AS ENUM ('new', 'done');
+  CREATE TABLE public.t (
+      a integer CONSTRAINT t_a_check CHECK (a > 0),
+      s text CONSTRAINT t_s_check CHECK (s IN ('new', 'done'))
+  );
+desired: |
+  CREATE TYPE public.status AS ENUM ('new', 'done');
+  CREATE TABLE public.t (
+      -- pista:retype-using a::text
+      a text CONSTRAINT t_a_check CHECK (length(a) > 0),
+      -- pista:retype-using s::public.status
+      s public.status
+  );
+applied: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'new',
+      'done'
+  );
+
+  -- public.t
+  CREATE TABLE public.t (
+      a text,
+      s status,
+      CONSTRAINT t_a_check CHECK (length(a) > 0)
+  );
+applied_sql: |
+  ALTER TABLE public.t DROP CONSTRAINT t_a_check;
+  ALTER TABLE public.t DROP CONSTRAINT t_s_check;
+  ALTER TABLE public.t ALTER COLUMN a SET DATA TYPE text USING a::text;
+  ALTER TABLE public.t ALTER COLUMN s SET DATA TYPE public.status USING s::public.status;
+  ALTER TABLE public.t ADD CONSTRAINT t_a_check CHECK (length(a) > 0);
