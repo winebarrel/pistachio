@@ -1,4 +1,10 @@
 version: "2"
+run:
+  # The tests and the JSON Schema generator are built only with these tags.
+  # See GOTAGS in the Makefile.
+  build-tags:
+    - testonly
+    - tools
 linters:
   enable:
     - asasalint

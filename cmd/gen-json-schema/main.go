@@ -1,3 +1,5 @@
+//go:build tools
+
 // Command gen-json-schema writes the JSON Schema of the document pistachio
 // writes in JSON. `make json-schema` runs it, and a test fails when the file
 // on disk is not what it writes.

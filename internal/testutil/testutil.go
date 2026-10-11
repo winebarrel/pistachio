@@ -1,3 +1,5 @@
+//go:build testonly
+
 package testutil
 
 import (

@@ -53,7 +53,7 @@ jobs:
           restore-keys: fuzz-${{ matrix.target }}-
       - name: Fuzz ${{ matrix.target }}
         run: |
-          go test ${{ matrix.package }} -run='^$' \
+          go test -tags testonly,tools ${{ matrix.package }} -run='^$' \
             -fuzz='^${{ matrix.target }}$' \
             -fuzztime=${{ github.event_name == 'schedule' && '15m' || '1m' }}
       # A failing input is written into the package's testdata/fuzz/, where it
