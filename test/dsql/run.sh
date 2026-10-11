@@ -41,8 +41,6 @@ export PGPASSWORD
 # connection string without one would take it.
 export PISTA_CONN_STR="postgres://admin@$DSQL_HOST:5432/postgres?sslmode=require"
 export PISTA_ENGINE=dsql
-# The samples write CREATE INDEX ASYNC.
-export PISTA_DSQL_IGNORE_ASYNC=true
 
 rc=0
 for script in test/dsql/*.test.sh; do

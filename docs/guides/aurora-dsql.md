@@ -6,10 +6,7 @@ DSQL supports only part of PostgreSQL. For example, it has no enums, triggers, p
 
 ## Writing the schema
 
-!!! note "Write `CREATE INDEX` without `ASYNC`"
-    Write indexes in the schema as `CREATE INDEX`, not `CREATE INDEX ASYNC`. pistachio adds `ASYNC` to the statements it generates.
-
-A schema written for DSQL may already have `CREATE INDEX ASYNC`. Remove `ASYNC` with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it.
+You can write an index as `CREATE INDEX` or `CREATE INDEX ASYNC`. pistachio ignores `ASYNC` when it reads the schema, and adds it when it creates an index. Without `--engine dsql`, `ASYNC` is a syntax error. `pista fmt --dsql-strip-async` removes it.
 
 ## Connecting
 
@@ -33,7 +30,7 @@ pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" sc
 | Validate a `NOT VALID` constraint | `ALTER TABLE ASYNC ... VALIDATE CONSTRAINT`. |
 | Create an identity column | `CACHE 1` is added when no cache size is given. DSQL requires a cache size. |
 
-`dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back.
+`dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`. This is not a problem, because `apply` adds `ASYNC` when it creates an index.
 
 DSQL reports some things that are not in your schema. pistachio ignores them:
 

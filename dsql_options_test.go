@@ -30,9 +30,6 @@ func TestValidatePlanEngine(t *testing.T) {
 	require.NoError(t, ValidatePlanEngine("", opts))
 	require.EqualError(t, ValidatePlanEngine(EngineDSQL, opts), "--explain cannot be used with --engine dsql")
 	require.NoError(t, ValidatePlanEngine(EngineDSQL, &PlanOptions{}))
-
-	require.NoError(t, ValidatePlanEngine(EngineDSQL, &PlanOptions{DSQLIgnoreAsync: true}))
-	require.EqualError(t, ValidatePlanEngine(EnginePostgres, &PlanOptions{DSQLIgnoreAsync: true}), "--dsql-ignore-async requires --engine dsql")
 }
 
 func TestValidateApplyEngine(t *testing.T) {
@@ -44,9 +41,6 @@ func TestValidateApplyEngine(t *testing.T) {
 	noWait := &ApplyOptions{DSQLNoWaitJob: true}
 	require.NoError(t, ValidateApplyEngine(EngineDSQL, noWait))
 	require.EqualError(t, ValidateApplyEngine(EnginePostgres, noWait), "--dsql-no-wait-job requires --engine dsql")
-
-	require.NoError(t, ValidateApplyEngine(EngineDSQL, &ApplyOptions{DSQLIgnoreAsync: true}))
-	require.EqualError(t, ValidateApplyEngine(EnginePostgres, &ApplyOptions{DSQLIgnoreAsync: true}), "--dsql-ignore-async requires --engine dsql")
 }
 
 func TestValidateApplyFromEngine(t *testing.T) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Helpers for the DSQL scenario tests, on top of the CLI scenario helpers.
-# run.sh sets the connection, --engine dsql and --dsql-ignore-async through
-# the environment, so the scenario helpers run against DSQL unchanged.
+# run.sh sets the connection and --engine dsql through the environment, so
+# the scenario helpers run against DSQL unchanged.
 
 set -euo pipefail
 
