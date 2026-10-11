@@ -1879,7 +1879,7 @@ func viewCheckOption(vs *pg_query.ViewStmt) string {
 func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string) (*model.View, error) {
 	into := as.Into
 	if into == nil || into.Rel == nil {
-		return nil, fmt.Errorf("materialized view has no target relation")
+		return nil, errors.New("materialized view has no target relation")
 	}
 
 	schema := into.Rel.Schemaname

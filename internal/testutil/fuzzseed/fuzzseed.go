@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 )
 
 // Schemas returns the schema files the restore fidelity check uses, plus a few
@@ -31,7 +31,7 @@ func Schemas() ([]string, error) {
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no seed schemas matched %s; has the directory moved?", pattern)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	seeds := make([]string, 0, len(paths)+len(directives))
 	for _, path := range paths {

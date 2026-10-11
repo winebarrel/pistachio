@@ -56,7 +56,7 @@ func ParseRoutineDef(sql, defaultSchema string) (*model.Routine, error) {
 	}
 	cfs := result.Stmts[0].Stmt.GetCreateFunctionStmt()
 	if cfs == nil {
-		return nil, fmt.Errorf("routine definition is not a CREATE FUNCTION statement")
+		return nil, errors.New("routine definition is not a CREATE FUNCTION statement")
 	}
 	return parseCreateFunctionStmt(cfs, defaultSchema)
 }
@@ -100,7 +100,7 @@ func splitFuncName(names []*pg_query.Node, defaultSchema string) (string, string
 	for _, n := range names {
 		s := n.GetString_()
 		if s == nil {
-			return "", "", fmt.Errorf("unexpected routine name component")
+			return "", "", errors.New("unexpected routine name component")
 		}
 		parts = append(parts, s.GetSval())
 	}
@@ -127,7 +127,7 @@ func parseRoutineParams(params []*pg_query.Node, routine *model.Routine) error {
 	for _, p := range params {
 		fp := p.GetFunctionParameter()
 		if fp == nil {
-			return fmt.Errorf("unexpected routine parameter")
+			return errors.New("unexpected routine parameter")
 		}
 		mode, ok := paramModes[fp.Mode]
 		if !ok {
@@ -219,7 +219,7 @@ func parseRoutineOptions(options []*pg_query.Node, routine *model.Routine) error
 	for _, o := range options {
 		de := o.GetDefElem()
 		if de == nil {
-			return fmt.Errorf("unexpected routine option")
+			return errors.New("unexpected routine option")
 		}
 
 		switch de.Defname {
@@ -327,7 +327,7 @@ func deparseSQLBody(body *pg_query.Node) (string, error) {
 func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 	vss := arg.GetVariableSetStmt()
 	if vss == nil {
-		return nil, fmt.Errorf("unexpected SET clause on routine")
+		return nil, errors.New("unexpected SET clause on routine")
 	}
 	if len(vss.Args) == 0 {
 		return nil, fmt.Errorf("%w: SET %s", errRoutineConfigFromCurrent, vss.Name)
@@ -374,7 +374,7 @@ func defElemFloat(arg *pg_query.Node) (float64, error) {
 	case arg.GetFloat() != nil:
 		return strconv.ParseFloat(arg.GetFloat().GetFval(), 64)
 	}
-	return 0, fmt.Errorf("unexpected numeric routine option")
+	return 0, errors.New("unexpected numeric routine option")
 }
 
 // normalizeRoutineDefaults drops the attribute values pg_get_functiondef

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -45,7 +46,7 @@ func parseCreatePolicyStmt(
 	offset int32,
 ) (*model.Policy, error) {
 	if cps.Table == nil {
-		return nil, fmt.Errorf("CREATE POLICY: missing table reference")
+		return nil, errors.New("CREATE POLICY: missing table reference")
 	}
 	schema := cps.Table.Schemaname
 	if schema == "" {
@@ -127,7 +128,7 @@ func parsePolicyRoles(nodes []*pg_query.Node) ([]string, error) {
 	for _, n := range nodes {
 		rs := n.GetRoleSpec()
 		if rs == nil {
-			return nil, fmt.Errorf("expected RoleSpec in role list")
+			return nil, errors.New("expected RoleSpec in role list")
 		}
 		switch rs.Roletype {
 		case pg_query.RoleSpecType_ROLESPEC_PUBLIC:
