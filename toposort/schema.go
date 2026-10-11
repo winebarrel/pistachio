@@ -369,14 +369,16 @@ func RoutineNode(qualifiedName string) string {
 // them. Every domain, table and view is then made to depend on every routine,
 // so routines come first: a CHECK constraint, a DEFAULT, a GENERATED
 // expression, an index expression, a policy or a trigger can call one, and
-// those run as part of the domain or table DDL. The edge is drawn wholesale rather than by reading each
-// expression, since the answer is the same "routine first" either way.
+// those run as part of the domain or table DDL. The edge is drawn wholesale
+// rather than by reading each expression, since the answer is the same
+// "routine first" either way.
 //
 // A signature can name a relation or a domain as well as a type: RETURNS SETOF
 // <table>, or a table row type or a domain as a parameter. The routine then
 // follows it, and a domain, table or view it reaches that way gets no
-// wholesale edge, which would close a cycle. When two routines name two different relations, the first
-// still precedes the other relation and the second follows both.
+// wholesale edge, which would close a cycle. When two routines name two
+// different relations, the first still precedes the other relation and the
+// second follows both.
 //
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
