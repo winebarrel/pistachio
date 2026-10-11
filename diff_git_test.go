@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 )
 
 // initGitRepo makes a repository in a temporary directory and changes into
@@ -57,12 +58,12 @@ func writeWorkingTree(t *testing.T, files map[string]string) {
 	}
 }
 
-func diffGit(t *testing.T, gitRange string, files ...string) (*PlanResult, error) {
+func diffGit(t *testing.T, gitRange string, files ...string) (*pistachio.PlanResult, error) {
 	t.Helper()
 
-	client := NewClient(&Options{Schemas: []string{"public"}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
 
-	return client.Diff(&DiffOptions{
+	return client.Diff(&pistachio.DiffOptions{
 		AllowDrop: []string{"all"},
 		Git:       gitRange,
 		Files:     files,
@@ -231,10 +232,10 @@ func TestDiff_GitDirectiveInCurrentRevision(t *testing.T) {
 
 // Without --git the command takes one file per side and nothing else.
 func TestDiff_WrongFileCount(t *testing.T) {
-	client := NewClient(&Options{Schemas: []string{"public"}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
 
 	for _, files := range [][]string{nil, {"only.sql"}, {"a.sql", "b.sql", "c.sql"}} {
-		_, err := client.Diff(&DiffOptions{Files: files})
+		_, err := client.Diff(&pistachio.DiffOptions{Files: files})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "diff takes a current and a desired schema SQL file")
 	}

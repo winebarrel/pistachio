@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"bytes"
@@ -10,23 +10,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
 // writePlan runs plan --out under the given scope and returns the path it
 // wrote to.
-func writePlan(t *testing.T, ctx context.Context, desiredSQL string, scope ScopeOptions) string {
+func writePlan(t *testing.T, ctx context.Context, desiredSQL string, scope pistachio.ScopeOptions) string {
 	t.Helper()
 	dir := t.TempDir()
 	desiredFile := filepath.Join(dir, "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(desiredSQL), 0o644))
 	out := filepath.Join(dir, "plan.json")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString:   testutil.ConnString(),
 		ScopeOptions: scope,
 	})
-	_, err := client.Plan(ctx, &PlanOptions{
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 		Out:       out,
@@ -37,11 +38,11 @@ func writePlan(t *testing.T, ctx context.Context, desiredSQL string, scope Scope
 
 // applyFrom runs apply-from with only the connection given, the way the CLI
 // does: the scope is the plan file's.
-func applyFrom(t *testing.T, ctx context.Context, path string, force bool) (*ApplyResult, string, error) {
+func applyFrom(t *testing.T, ctx context.Context, path string, force bool) (*pistachio.ApplyResult, string, error) {
 	t.Helper()
-	client := NewClient(&Options{ConnString: testutil.ConnString()})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: testutil.ConnString()})
 	var buf bytes.Buffer
-	result, err := client.ApplyFrom(ctx, &ApplyFromOptions{PlanFile: path, Force: force}, &buf)
+	result, err := client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{PlanFile: path, Force: force}, &buf)
 	return result, buf.String(), err
 }
 
@@ -50,7 +51,7 @@ func TestApplyFrom(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx) //nolint:errcheck
 
-	publicScope := ScopeOptions{Schemas: []string{"public"}}
+	publicScope := pistachio.ScopeOptions{Schemas: []string{"public"}}
 
 	t.Run("it runs the statements the plan file holds", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
@@ -124,7 +125,7 @@ CREATE TABLE public.users (
 		testutil.SetupDB(t, ctx, conn, `
 CREATE TABLE public.users (id integer NOT NULL);
 CREATE TABLE public.posts (id integer NOT NULL);`)
-		scope := ScopeOptions{
+		scope := pistachio.ScopeOptions{
 			Schemas: []string{"public"},
 			Exclude: []string{"posts"},
 		}
@@ -163,10 +164,10 @@ CREATE TABLE public.made_by_execute (id integer NOT NULL);`, publicScope)
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
 		path := writePlan(t, ctx, `CREATE TABLE public.users (id integer NOT NULL);`, publicScope)
 
-		plan, err := readPlanFile(path)
+		plan, err := pistachio.ReadPlanFile(path)
 		require.NoError(t, err)
 		plan.ServerVersion++
-		require.NoError(t, writePlanFile(path, plan))
+		require.NoError(t, pistachio.WritePlanFile(path, plan))
 
 		_, _, err = applyFrom(t, ctx, path, false)
 		require.Error(t, err)
@@ -213,11 +214,11 @@ CREATE INDEX CONCURRENTLY users_name_idx ON public.users (name);`), 0o644))
 
 		// No --allow-drop, so the table left out of the desired schema is a
 		// skipped drop rather than a DROP.
-		client := NewClient(&Options{
+		client := pistachio.NewClient(&pistachio.Options{
 			ConnString:   testutil.ConnString(),
 			ScopeOptions: publicScope,
 		})
-		_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}, Out: out})
+		_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}, Out: out})
 		require.NoError(t, err)
 
 		result, _, err := applyFrom(t, ctx, out, false)
@@ -237,13 +238,13 @@ CREATE TABLE public.users (
 
 CREATE INDEX CONCURRENTLY users_name_idx ON public.users (name);`, publicScope)
 
-		plan, err := readPlanFile(path)
+		plan, err := pistachio.ReadPlanFile(path)
 		require.NoError(t, err)
 		require.True(t, plan.HasConcurrentlyIndex)
 
-		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		client := pistachio.NewClient(&pistachio.Options{ConnString: testutil.ConnString()})
 		var buf bytes.Buffer
-		_, err = client.ApplyFrom(ctx, &ApplyFromOptions{
+		_, err = client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{
 			PlanFile: path,
 			WithTx:   true,
 		}, &buf)
@@ -259,9 +260,9 @@ CREATE TABLE public.users (
     name text
 );`, publicScope)
 
-		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		client := pistachio.NewClient(&pistachio.Options{ConnString: testutil.ConnString()})
 		var buf bytes.Buffer
-		result, err := client.ApplyFrom(ctx, &ApplyFromOptions{
+		result, err := client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{
 			PlanFile: path,
 			WithTx:   true,
 		}, &buf)
@@ -284,11 +285,11 @@ CREATE TABLE public.users (
 );`), 0o644))
 		out := filepath.Join(dir, "plan.json")
 
-		client := NewClient(&Options{
+		client := pistachio.NewClient(&pistachio.Options{
 			ConnString:   testutil.ConnString(),
 			ScopeOptions: publicScope,
 		})
-		_, err := client.Plan(ctx, &PlanOptions{
+		_, err := client.Plan(ctx, &pistachio.PlanOptions{
 			AllowDrop: []string{"all"},
 			Files:     []string{desiredFile},
 			PreSQL:    "SET lock_timeout = '5s';",
@@ -341,10 +342,10 @@ CREATE TABLE public.last (id integer NOT NULL);`, publicScope)
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
 		path := writePlan(t, ctx, `CREATE TABLE public.users (id integer NOT NULL);`, publicScope)
 
-		plan, err := readPlanFile(path)
+		plan, err := pistachio.ReadPlanFile(path)
 		require.NoError(t, err)
 		plan.Scope.Schemas = nil
-		require.NoError(t, writePlanFile(path, plan))
+		require.NoError(t, pistachio.WritePlanFile(path, plan))
 
 		_, _, err = applyFrom(t, ctx, path, false)
 		require.Error(t, err)
@@ -366,9 +367,9 @@ CREATE TABLE public.users (
 		holdExclusive(t, ctx, holder)
 		defer releaseExclusive(ctx, holder) //nolint:errcheck
 
-		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		client := pistachio.NewClient(&pistachio.Options{ConnString: testutil.ConnString()})
 		var buf bytes.Buffer
-		_, err := client.ApplyFrom(ctx, &ApplyFromOptions{
+		_, err := client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{
 			PlanFile:  path,
 			Exclusive: true,
 		}, &buf)
@@ -381,9 +382,9 @@ CREATE TABLE public.users (
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
 		path := writePlan(t, ctx, `CREATE TABLE public.users (id integer NOT NULL);`, publicScope)
 
-		client := NewClient(&Options{ConnString: "postgres://postgres@localhost:1/postgres"})
+		client := pistachio.NewClient(&pistachio.Options{ConnString: "postgres://postgres@localhost:1/postgres"})
 		var buf bytes.Buffer
-		_, err := client.ApplyFrom(ctx, &ApplyFromOptions{PlanFile: path}, &buf)
+		_, err := client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{PlanFile: path}, &buf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to connect to database")
 	})
@@ -404,26 +405,26 @@ CREATE TABLE public.users (
 );`), 0o644))
 		out := filepath.Join(dir, "plan.json")
 
-		planClient := NewClient(&Options{
+		planClient := pistachio.NewClient(&pistachio.Options{
 			ConnString: connString,
 			Schemas:    []string{"myschema"},
 			SchemaMap:  map[string]string{"myschema": "public"},
 		})
-		_, err := planClient.Plan(ctx, &PlanOptions{
+		_, err := planClient.Plan(ctx, &pistachio.PlanOptions{
 			AllowDrop: []string{"all"},
 			Files:     []string{desiredFile},
 			Out:       out,
 		})
 		require.NoError(t, err)
 
-		plan, err := readPlanFile(out)
+		plan, err := pistachio.ReadPlanFile(out)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"myschema"}, plan.Scope.Schemas)
 		assert.Equal(t, map[string]string{"myschema": "public"}, plan.Scope.SchemaMap)
 
-		client := NewClient(&Options{ConnString: connString})
+		client := pistachio.NewClient(&pistachio.Options{ConnString: connString})
 		var buf bytes.Buffer
-		result, err := client.ApplyFrom(ctx, &ApplyFromOptions{PlanFile: out}, &buf)
+		result, err := client.ApplyFrom(ctx, &pistachio.ApplyFromOptions{PlanFile: out}, &buf)
 		require.NoError(t, err)
 		assert.True(t, result.Applied)
 		assert.Contains(t, buf.String(), "ALTER TABLE myschema.users ADD COLUMN name text;")
@@ -470,11 +471,11 @@ CREATE TABLE public.users (
 
 func dumpPublic(t *testing.T, ctx context.Context) string {
 	t.Helper()
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: testutil.ConnString(),
 		Schemas:    []string{"public"},
 	})
-	dumped, err := client.Dump(ctx, &DumpOptions{})
+	dumped, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	return dumped.String()
 }

@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"os"
@@ -10,13 +10,14 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 )
 
 // testCLI mirrors the global options plus the meta flags (--config, --version,
 // --pager) so the YAML configuration loader can be exercised without a running
 // database. --help is added by kong automatically.
 type testCLI struct {
-	Options
+	pistachio.Options
 	Config  kong.ConfigFlag `name:"config" short:"C" env:"PISTA_CONFIG"`
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:""`
@@ -36,7 +37,7 @@ func parseWithConfig(t *testing.T, args ...string) (*testCLI, error) {
 	parser, err := kong.New(&cli,
 		kong.Name("pista"),
 		kong.Vars{"version": "test"},
-		kong.Configuration(YAMLConfig),
+		kong.Configuration(pistachio.YAMLConfig),
 		kong.Exit(func(int) {}),
 	)
 	require.NoError(t, err)
@@ -115,7 +116,7 @@ func TestOptions_SearchPathDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, cli.SearchPath)
-	assert.Equal(t, DefaultSearchPath, *cli.SearchPath)
+	assert.Equal(t, pistachio.DefaultSearchPath, *cli.SearchPath)
 	assert.Equal(t, "public", *cli.SearchPath)
 }
 
@@ -258,19 +259,19 @@ func TestYAMLConfig_InvalidYAMLIsError(t *testing.T) {
 // commandCLI mirrors the real CLI closely enough to exercise command-specific
 // flags loaded from a shared config file.
 type commandCLI struct {
-	Options
+	pistachio.Options
 	Config kong.ConfigFlag `name:"config" short:"C"`
 	Plan   struct {
-		PlanOptions
+		pistachio.PlanOptions
 	} `cmd:""`
 	Dump struct {
-		DumpOptions
+		pistachio.DumpOptions
 	} `cmd:""`
 	Apply struct {
-		ApplyOptions
+		pistachio.ApplyOptions
 	} `cmd:""`
 	ApplyFrom struct {
-		ApplyFromOptions
+		pistachio.ApplyFromOptions
 	} `cmd:""`
 }
 
@@ -279,7 +280,7 @@ func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
 	var cli commandCLI
 	parser, err := kong.New(&cli,
 		kong.Name("pista"),
-		kong.Configuration(YAMLConfig),
+		kong.Configuration(pistachio.YAMLConfig),
 		kong.Exit(func(int) {}),
 	)
 	require.NoError(t, err)
@@ -320,7 +321,7 @@ func TestYAMLConfig_ExclusiveWait(t *testing.T) {
 		cli, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
 		require.NoError(t, err)
 		require.NotNil(t, cli.Apply.ExclusiveWait)
-		assert.Equal(t, UnsignedDuration(0), *cli.Apply.ExclusiveWait)
+		assert.Equal(t, pistachio.UnsignedDuration(0), *cli.Apply.ExclusiveWait)
 	})
 
 	t.Run("duration", func(t *testing.T) {
@@ -328,14 +329,14 @@ func TestYAMLConfig_ExclusiveWait(t *testing.T) {
 		cli, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
 		require.NoError(t, err)
 		require.NotNil(t, cli.Apply.ExclusiveWait)
-		assert.Equal(t, UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
+		assert.Equal(t, pistachio.UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
 	})
 
 	t.Run("flag", func(t *testing.T) {
 		cli, err := parseCommandCLI(t, "apply", "--exclusive-wait", "5m", "schema.sql")
 		require.NoError(t, err)
 		require.NotNil(t, cli.Apply.ExclusiveWait)
-		assert.Equal(t, UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
+		assert.Equal(t, pistachio.UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
 	})
 
 	t.Run("environment variable", func(t *testing.T) {
@@ -343,7 +344,7 @@ func TestYAMLConfig_ExclusiveWait(t *testing.T) {
 		cli, err := parseCommandCLI(t, "apply", "schema.sql")
 		require.NoError(t, err)
 		require.NotNil(t, cli.Apply.ExclusiveWait)
-		assert.Equal(t, UnsignedDuration(0), *cli.Apply.ExclusiveWait)
+		assert.Equal(t, pistachio.UnsignedDuration(0), *cli.Apply.ExclusiveWait)
 	})
 
 	t.Run("number without a unit", func(t *testing.T) {

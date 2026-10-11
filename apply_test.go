@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
@@ -126,7 +127,7 @@ func TestApply(t *testing.T) {
 				concurrentlyPreSQLFile = filepath.Join(tmpDir, "concurrently-pre.sql")
 				require.NoError(t, os.WriteFile(concurrentlyPreSQLFile, []byte(tc.ConcurrentlyPreSQLFile), 0o644))
 			}
-			client := NewClient(&Options{
+			client := pistachio.NewClient(&pistachio.Options{
 				ConnString:         db.Config().ConnString(),
 				Schemas:            []string{"public"},
 				Include:            tc.Include,
@@ -137,12 +138,12 @@ func TestApply(t *testing.T) {
 				ManageStorageParam: tc.ManageStorageParam,
 				SkipPartitionChild: tc.SkipPartitionChild,
 			})
-			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
+			dropPolicy := pistachio.DropPolicy{AllowDrop: []string{"all"}}
 			if tc.DropPolicy != nil {
-				dropPolicy = DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
+				dropPolicy = pistachio.DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
 			}
 			var buf bytes.Buffer
-			result, err := client.Apply(ctx, &ApplyOptions{
+			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 				DropPolicy:               dropPolicy,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
@@ -166,18 +167,18 @@ func TestApply(t *testing.T) {
 			// Verify. The dump takes a client of its own: the applied schema
 			// is checked whole, including the objects --include and friends
 			// left out of the apply, and the filters now sit on the client.
-			dumpClient := NewClient(&Options{
+			dumpClient := pistachio.NewClient(&pistachio.Options{
 				ConnString:         db.Config().ConnString(),
 				Schemas:            []string{"public"},
 				ManageRoutine:      tc.ManageRoutine,
 				ManageStorageParam: tc.ManageStorageParam,
 			})
-			got, err := dumpClient.Dump(ctx, &DumpOptions{})
+			got, err := dumpClient.Dump(ctx, &pistachio.DumpOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedApplied(pgMajor)), strings.TrimSpace(got.String()))
 
 			if !tc.SkipDriftCheck {
-				plan, err := client.Plan(ctx, &PlanOptions{
+				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 					DropPolicy:               dropPolicy,
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
@@ -217,15 +218,15 @@ CREATE INDEX idx_events_time ON myschema.events (occurred_at);
 );
 CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	// PG18 keeps the automatic NOT NULL name across the rename.
 	eventTime := "event_time timestamp without time zone NOT NULL"
@@ -273,12 +274,12 @@ CREATE TABLE myschema.department (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public", "myschema"},
 	})
 
-	_, err = client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 }
 
@@ -302,13 +303,13 @@ func TestApply_WithTx(t *testing.T) {
 );
 SELECT * FROM public.missing_table;`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -320,7 +321,7 @@ SELECT * FROM public.missing_table;`), 0o644))
 	assert.Contains(t, out, "-- Transaction rolled back")
 	assert.NotContains(t, out, "-- Transaction committed")
 
-	got, dumpErr := client.Dump(ctx, &DumpOptions{})
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.NotContains(t, got.String(), "CREATE TABLE public.pre_hook")
 	assert.NotContains(t, got.String(), "CREATE TABLE public.users")
@@ -343,13 +344,13 @@ func TestApply_WithTx_Success(t *testing.T) {
 );`), 0o644))
 	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -361,7 +362,7 @@ func TestApply_WithTx_Success(t *testing.T) {
 	assert.Contains(t, out, "-- Transaction committed")
 	assert.NotContains(t, out, "-- Transaction rolled back")
 
-	got, dumpErr := client.Dump(ctx, &DumpOptions{})
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
 }
@@ -381,13 +382,13 @@ func TestApply_Timing_WithTx(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 		Timing: true,
@@ -420,13 +421,13 @@ func TestApply_Timing_StatementFailure(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		PreSQL: "SELECT * FROM public.missing_table;",
 		Timing: true,
@@ -463,13 +464,13 @@ CREATE TABLE public.child (
 -- pista:execute
 INSERT INTO public.child (id, parent_id) VALUES (1, 999);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 		Timing: true,
@@ -498,13 +499,13 @@ func TestApply_WithTx_NoChanges_OmitsTransactionComments(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}, WithTx: true}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}, WithTx: true}, &buf)
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -526,13 +527,13 @@ func TestApply_NoWithTx_OmitsTransactionComments(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -562,13 +563,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	// Function should be executed (check returns true; function doesn't exist yet)
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
@@ -602,13 +603,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	// Function should be SKIPPED (check returns false; function already exists)
 	assert.NotContains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
@@ -636,13 +637,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	// No check SQL -> always execute
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
@@ -669,13 +670,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 	}, &buf)
@@ -710,13 +711,13 @@ CREATE TABLE public.users (
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	// Execute-only (no schema diff) should still run
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
@@ -746,13 +747,13 @@ CREATE OR REPLACE FUNCTION get_count() RETURNS bigint AS $$
 $$ LANGUAGE sql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
 
@@ -784,12 +785,12 @@ func TestApply_ExecuteCheckSQLError(t *testing.T) {
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
 }
@@ -812,12 +813,12 @@ CREATE TABLE public.users (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
 
@@ -846,13 +847,13 @@ CREATE TABLE public.users (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	assert.NotContains(t, buf.String(), "skipped_func")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -883,13 +884,13 @@ CREATE TABLE public.users (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 
 	// strings.Index returns -1 for an absent substring, which would satisfy
@@ -923,12 +924,12 @@ func TestApply_ExecuteSQLError(t *testing.T) {
 INSERT INTO public.does_not_exist VALUES (1);
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to execute SQL")
 }
@@ -951,12 +952,12 @@ func TestApply_ExecError(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.ErrorContains(t, err, "failed to execute SQL")
 	// The server's error is read by SQLSTATE rather than by message, which
 	// lc_messages translates.
@@ -973,19 +974,19 @@ func TestApply_EmptySchemas(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
 
 func TestApply_InvalidConnString(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
 	})
@@ -993,7 +994,7 @@ func TestApply_InvalidConnString(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -1004,12 +1005,12 @@ func TestApply_InvalidDesiredFile(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{"/nonexistent/file.sql"}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{"/nonexistent/file.sql"}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -1026,12 +1027,12 @@ func TestApply_InvalidPreSQLFile(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: "/nonexistent/pre.sql",
 	}, io.Discard)
@@ -1058,13 +1059,13 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`)
 -- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	// Should succeed: no index DDL is generated, so --with-tx is safe
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 	}, io.Discard)
@@ -1089,12 +1090,12 @@ func TestApply_ConcurrentlyDirective_WithTx_Error(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 	}, io.Discard)
@@ -1124,12 +1125,12 @@ func TestApply_ConcurrentlyPreSQL_ExecError(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:              []string{desiredFile},
 		ConcurrentlyPreSQL: "SELECT * FROM public.does_not_exist;",
 	}, io.Discard)
@@ -1150,12 +1151,12 @@ func TestApply_InvalidConcurrentlyPreSQLFile(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:                  []string{desiredFile},
 		ConcurrentlyPreSQLFile: "/nonexistent/file.sql",
 	}, io.Discard)
@@ -1182,12 +1183,12 @@ func TestApply_InlineConcurrently_WithTx_Error(t *testing.T) {
 );
 CREATE INDEX CONCURRENTLY idx_users_id ON public.users USING btree (id);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 	}, io.Discard)
@@ -1213,14 +1214,14 @@ func TestApply_DisableIndexConcurrently_WithTx_OK(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	// CONCURRENTLY is suppressed, so --with-tx is safe even though the directive is present.
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:                    []string{desiredFile},
 		DisableIndexConcurrently: true,
 		WithTx:                   true,
@@ -1253,13 +1254,13 @@ func TestApply_TryTx_Concurrently_SkipsTransaction(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files: []string{desiredFile},
 		TryTx: true,
 	}, &buf)
@@ -1271,7 +1272,7 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.NotContains(t, out, "-- Transaction started")
 	assert.NotContains(t, out, "-- Transaction committed")
 
-	got, dumpErr := client.Dump(ctx, &DumpOptions{})
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.Contains(t, got.String(), "CREATE INDEX idx_users_name")
 }
@@ -1289,13 +1290,13 @@ func TestApply_TryTx_NoConcurrently_UsesTransaction(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files: []string{desiredFile},
 		TryTx: true,
 	}, &buf)
@@ -1306,7 +1307,7 @@ func TestApply_TryTx_NoConcurrently_UsesTransaction(t *testing.T) {
 	assert.Contains(t, out, "-- Transaction committed")
 	assert.NotContains(t, out, "-- Transaction skipped")
 
-	got, dumpErr := client.Dump(ctx, &DumpOptions{})
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
 }
@@ -1333,13 +1334,13 @@ func TestApply_TryTx_NoConcurrently_RollsBackOnError(t *testing.T) {
 );
 SELECT * FROM public.missing_table;`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		TryTx:      true,
@@ -1350,7 +1351,7 @@ SELECT * FROM public.missing_table;`), 0o644))
 	assert.Contains(t, out, "-- Transaction started")
 	assert.Contains(t, out, "-- Transaction rolled back")
 
-	got, dumpErr := client.Dump(ctx, &DumpOptions{})
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.NotContains(t, got.String(), "CREATE TABLE public.pre_hook")
 	assert.NotContains(t, got.String(), "CREATE TABLE public.users")
@@ -1380,13 +1381,13 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}, TryTx: true}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}, TryTx: true}, &buf)
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -1421,13 +1422,13 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`)
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files: []string{desiredFile},
 		TryTx: true,
 	}, &buf)
@@ -1463,13 +1464,13 @@ func TestApply_TryTx_ConcurrentlyPreSQL_RunsOutsideTransaction(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:              []string{desiredFile},
 		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
 		TryTx:              true,
@@ -1497,13 +1498,13 @@ func TestApply_TryTx_MatviewIndex_SkipsTransaction(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files: []string{desiredFile},
 		TryTx: true,
 	}, &buf)
@@ -1536,13 +1537,13 @@ func TestApply_TryTx_ForceIndexConcurrently_SkipsTransaction(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:                  []string{desiredFile},
 		ForceIndexConcurrently: true,
 		TryTx:                  true,
@@ -1577,13 +1578,13 @@ func TestApply_TryTx_DisableIndexConcurrently_UsesTransaction(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:                    []string{desiredFile},
 		DisableIndexConcurrently: true,
 		TryTx:                    true,
@@ -1599,7 +1600,7 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
 func TestApplyOptions_TryTx_XorEnforcement(t *testing.T) {
 	t.Run("try_tx_and_with_tx", func(t *testing.T) {
-		var opts ApplyOptions
+		var opts pistachio.ApplyOptions
 		parser, err := kong.New(&opts)
 		require.NoError(t, err)
 		_, err = parser.Parse([]string{"--with-tx", "--try-tx", "schema.sql"})
@@ -1608,7 +1609,7 @@ func TestApplyOptions_TryTx_XorEnforcement(t *testing.T) {
 	})
 
 	t.Run("try_tx_and_force_index_concurrently", func(t *testing.T) {
-		var opts ApplyOptions
+		var opts pistachio.ApplyOptions
 		parser, err := kong.New(&opts)
 		require.NoError(t, err)
 		_, err = parser.Parse([]string{"--force-index-concurrently", "--try-tx", "schema.sql"})
@@ -1630,12 +1631,12 @@ func TestApply_ConcurrentlyDirective_MatviewIndex_WithTx_Error(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:  []string{desiredFile},
 		WithTx: true,
 	}, io.Discard)
@@ -1653,7 +1654,7 @@ func TestApplyOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var opts ApplyOptions
+			var opts pistachio.ApplyOptions
 			parser, err := kong.New(&opts)
 			require.NoError(t, err)
 			_, err = parser.Parse(tc.args)
@@ -1664,7 +1665,7 @@ func TestApplyOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
 }
 
 func TestPlanOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
-	var opts PlanOptions
+	var opts pistachio.PlanOptions
 	parser, err := kong.New(&opts)
 	require.NoError(t, err)
 	_, err = parser.Parse([]string{"--force-index-concurrently", "--disable-index-concurrently", "schema.sql"})
@@ -1692,13 +1693,13 @@ CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
 CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var out bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	}, &out)

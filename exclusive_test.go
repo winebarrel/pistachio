@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
@@ -30,12 +31,12 @@ func writeDesiredFile(t *testing.T, sql string) string {
 
 func holdExclusive(t *testing.T, ctx context.Context, conn *pgx.Conn) {
 	t.Helper()
-	_, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1, hashtext(current_database()))", exclusiveLockClassID)
+	_, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1, hashtext(current_database()))", pistachio.ExclusiveLockClassID)
 	require.NoError(t, err)
 }
 
 func releaseExclusive(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1, hashtext(current_database()))", exclusiveLockClassID)
+	_, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1, hashtext(current_database()))", pistachio.ExclusiveLockClassID)
 	return err
 }
 
@@ -60,8 +61,8 @@ func (w *waitingWriter) Write(p []byte) (int, error) {
 	return w.Writer.Write(p)
 }
 
-func durationPtr(d time.Duration) *UnsignedDuration {
-	w := UnsignedDuration(d)
+func durationPtr(d time.Duration) *pistachio.UnsignedDuration {
+	w := pistachio.UnsignedDuration(d)
 	return &w
 }
 
@@ -71,13 +72,13 @@ func TestApplyExclusive(t *testing.T) {
 	defer conn.Close(ctx)
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:     []string{writeDesiredFile(t, exclusiveDesired)},
 		Exclusive: true,
 	}, &buf)
@@ -88,7 +89,7 @@ func TestApplyExclusive(t *testing.T) {
 	// Apply's connection is closed, so the exclusion is free again once the
 	// server has ended that session, which can be a moment after apply returns.
 	assert.Eventually(t, func() bool {
-		acquired, err := tryExclusive(ctx, conn)
+		acquired, err := pistachio.TryExclusive(ctx, conn)
 		return err == nil && acquired
 	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, releaseExclusive(ctx, conn))
@@ -105,13 +106,13 @@ func TestApplyExclusiveConflict(t *testing.T) {
 	holdExclusive(t, ctx, holder)
 	defer releaseExclusive(ctx, holder) //nolint:errcheck
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:     []string{writeDesiredFile(t, exclusiveDesired)},
 		Exclusive: true,
 	}, &buf)
@@ -136,7 +137,7 @@ func TestApplyExclusiveWaitTimeout(t *testing.T) {
 	holdExclusive(t, ctx, holder)
 	defer releaseExclusive(ctx, holder) //nolint:errcheck
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -144,7 +145,7 @@ func TestApplyExclusiveWaitTimeout(t *testing.T) {
 	wait := 300 * time.Millisecond
 	start := time.Now()
 	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(wait),
 	}, &buf)
@@ -152,7 +153,7 @@ func TestApplyExclusiveWaitTimeout(t *testing.T) {
 	require.EqualError(t, err, "another exclusive apply did not finish within 300ms")
 	assert.GreaterOrEqual(t, elapsed, wait)
 	// The wait ends on its own deadline, not on the next poll.
-	assert.Less(t, elapsed, exclusivePollInterval)
+	assert.Less(t, elapsed, pistachio.ExclusivePollInterval)
 	assert.Contains(t, buf.String(), "-- Waiting for another exclusive apply to finish")
 }
 
@@ -174,13 +175,13 @@ func TestApplyExclusiveWait(t *testing.T) {
 		release <- releaseExclusive(ctx, holder)
 	}()
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	// 0 waits without limit.
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(0),
 	}, out)
@@ -211,7 +212,7 @@ func TestApplyExclusiveWaitWriter(t *testing.T) {
 		release <- releaseExclusive(ctx, holder)
 	}()
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -219,7 +220,7 @@ func TestApplyExclusiveWaitWriter(t *testing.T) {
 	// Bounded, so a line that never reaches WaitWriter fails here rather
 	// than at the suite's timeout.
 	var buf bytes.Buffer
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(10 * time.Second),
 		WaitWriter:    waitOut,
@@ -250,12 +251,12 @@ func TestApplyExclusiveWaitWithinDeadline(t *testing.T) {
 		release <- releaseExclusive(ctx, holder)
 	}()
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(10 * time.Second),
 	}, out)
@@ -271,13 +272,13 @@ func TestApplyExclusiveWaitUncontended(t *testing.T) {
 	defer conn.Close(ctx)
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	var buf bytes.Buffer
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(5 * time.Second),
 	}, &buf)
@@ -292,7 +293,7 @@ func TestApplyExclusiveWithTx(t *testing.T) {
 	defer conn.Close(ctx)
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -300,7 +301,7 @@ func TestApplyExclusiveWithTx(t *testing.T) {
 	// The exclusion is session-level: it must coexist with --with-tx and be
 	// released when the connection closes, not before.
 	var buf bytes.Buffer
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:     []string{writeDesiredFile(t, exclusiveDesired)},
 		Exclusive: true,
 		WithTx:    true,
@@ -312,7 +313,7 @@ func TestApplyExclusiveWithTx(t *testing.T) {
 	// The server ends apply's session after apply has returned, so the lock
 	// can still be held for a moment.
 	assert.Eventually(t, func() bool {
-		acquired, err := tryExclusive(ctx, conn)
+		acquired, err := pistachio.TryExclusive(ctx, conn)
 		return err == nil && acquired
 	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, releaseExclusive(ctx, conn))
@@ -329,7 +330,7 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 	holdExclusive(t, ctx, holder)
 	defer releaseExclusive(ctx, holder) //nolint:errcheck
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -343,7 +344,7 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := client.Apply(applyCtx, &ApplyOptions{
+	_, err := client.Apply(applyCtx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(0),
 	}, out)
@@ -352,11 +353,11 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 }
 
 func TestUnsignedDuration(t *testing.T) {
-	var d UnsignedDuration
+	var d pistachio.UnsignedDuration
 	require.NoError(t, d.UnmarshalText([]byte("5m")))
-	assert.Equal(t, UnsignedDuration(5*time.Minute), d)
+	assert.Equal(t, pistachio.UnsignedDuration(5*time.Minute), d)
 	require.NoError(t, d.UnmarshalText([]byte("0")))
-	assert.Equal(t, UnsignedDuration(0), d)
+	assert.Equal(t, pistachio.UnsignedDuration(0), d)
 	require.ErrorContains(t, d.UnmarshalText([]byte("-3s")), "negative")
 	require.Error(t, d.UnmarshalText([]byte("bad")))
 }
@@ -399,12 +400,12 @@ func TestApplyExclusiveWaitDuringConcurrentIndexBuild(t *testing.T) {
 		done <- releaseExclusive(ctx, holder)
 	}()
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	result, err := client.Apply(ctx, &ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveIndexDesired)},
 		ExclusiveWait: durationPtr(30 * time.Second),
 	}, out)
@@ -453,7 +454,7 @@ func TestApplyExclusiveWaitHoldsNoSnapshot(t *testing.T) {
 	holderPID := backendPID(t, ctx, holder)
 	holdExclusive(t, ctx, holder)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -461,7 +462,7 @@ func TestApplyExclusiveWaitHoldsNoSnapshot(t *testing.T) {
 	desired := writeDesiredFile(t, exclusiveDesired)
 	applied := make(chan error, 1)
 	go func() {
-		_, err := client.Apply(ctx, &ApplyOptions{
+		_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 			Files:         []string{desired},
 			ExclusiveWait: durationPtr(0),
 		}, io.Discard)
@@ -506,7 +507,7 @@ func TestApplyExclusiveWaitConnectionLost(t *testing.T) {
 	holdExclusive(t, ctx, holder)
 	defer releaseExclusive(ctx, holder) //nolint:errcheck
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -514,7 +515,7 @@ func TestApplyExclusiveWaitConnectionLost(t *testing.T) {
 	desired := writeDesiredFile(t, exclusiveDesired)
 	applied := make(chan error, 1)
 	go func() {
-		_, err := client.Apply(ctx, &ApplyOptions{
+		_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 			Files:         []string{desired},
 			ExclusiveWait: durationPtr(30 * time.Second),
 		}, io.Discard)

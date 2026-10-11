@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 )
 
 func TestConnect_PropagatesCancelledContext(t *testing.T) {
@@ -15,12 +16,12 @@ func TestConnect_PropagatesCancelledContext(t *testing.T) {
 	if connStr == "" {
 		connStr = "postgres://postgres@localhost/postgres"
 	}
-	client := NewClient(&Options{ConnString: connStr})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := client.connect(ctx, false)
+	_, err := client.Connect(ctx, false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 }
@@ -30,10 +31,10 @@ func TestConnect_ReadOnly(t *testing.T) {
 	if connStr == "" {
 		connStr = "postgres://postgres@localhost/postgres"
 	}
-	client := NewClient(&Options{ConnString: connStr})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr})
 
 	ctx := context.Background()
-	conn, err := client.connect(ctx, true)
+	conn, err := client.Connect(ctx, true)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
 
@@ -54,10 +55,10 @@ func TestConnect_Writable(t *testing.T) {
 	if connStr == "" {
 		connStr = "postgres://postgres@localhost/postgres"
 	}
-	client := NewClient(&Options{ConnString: connStr})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr})
 
 	ctx := context.Background()
-	conn, err := client.connect(ctx, false)
+	conn, err := client.Connect(ctx, false)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
 
@@ -71,10 +72,10 @@ func TestConnect_SearchPath(t *testing.T) {
 	if connStr == "" {
 		connStr = "postgres://postgres@localhost/postgres"
 	}
-	client := NewClient(&Options{ConnString: connStr})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr})
 
 	ctx := context.Background()
-	conn, err := client.connect(ctx, true)
+	conn, err := client.Connect(ctx, true)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
 
@@ -95,10 +96,10 @@ func TestConnect_SearchPathIgnoresServerSide(t *testing.T) {
 		connStr = "postgres://postgres@localhost/postgres"
 	}
 	t.Setenv("PGOPTIONS", "-c search_path=pg_catalog")
-	client := NewClient(&Options{ConnString: connStr})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr})
 
 	ctx := context.Background()
-	conn, err := client.connect(ctx, true)
+	conn, err := client.Connect(ctx, true)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
 
@@ -115,10 +116,10 @@ func TestConnect_SearchPathOption(t *testing.T) {
 	// Set on the server side too, to show the option wins over it.
 	t.Setenv("PGOPTIONS", "-c search_path=pg_catalog")
 	searchPath := "public, pg_temp"
-	client := NewClient(&Options{ConnString: connStr, SearchPath: &searchPath})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr, SearchPath: &searchPath})
 
 	ctx := context.Background()
-	conn, err := client.connect(ctx, true)
+	conn, err := client.Connect(ctx, true)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
 
@@ -128,58 +129,58 @@ func TestConnect_SearchPathOption(t *testing.T) {
 }
 
 func TestBuildConnConfig_DbnameOverridesConnString(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@localhost/postgres",
 		DBName:     "mydb",
 	})
 
-	cfg, err := client.buildConnConfig()
+	cfg, err := client.BuildConnConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "mydb", cfg.Database)
 }
 
 func TestBuildConnConfig_DbnameWorksWithEmptyDbnameInConnString(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@localhost:5432/",
 		DBName:     "mydb",
 	})
 
-	cfg, err := client.buildConnConfig()
+	cfg, err := client.BuildConnConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "mydb", cfg.Database)
 }
 
 func TestBuildConnConfig_DbnameEmptyKeepsConnStringDatabase(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@localhost/origdb",
 	})
 
-	cfg, err := client.buildConnConfig()
+	cfg, err := client.BuildConnConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "origdb", cfg.Database)
 }
 
 func TestBuildConnConfig_PasswordOverride(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@localhost/postgres",
 		Password:   "secret",
 	})
 
-	cfg, err := client.buildConnConfig()
+	cfg, err := client.BuildConnConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "secret", cfg.Password)
 }
 
 func TestBuildConnConfig_InvalidConnStringReturnsError(t *testing.T) {
-	client := NewClient(&Options{ConnString: "::not-a-valid-conn-string::"})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: "::not-a-valid-conn-string::"})
 
-	_, err := client.buildConnConfig()
+	_, err := client.BuildConnConfig()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse connection string")
 }
 
 func TestConnInfoComment(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser:secret@myhost:5433/mydb",
 	})
 
@@ -190,7 +191,7 @@ func TestConnInfoComment(t *testing.T) {
 }
 
 func TestConnInfoComment_WithDBNameOverride(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@myhost/origdb",
 		DBName:     "overridden",
 	})
@@ -201,7 +202,7 @@ func TestConnInfoComment_WithDBNameOverride(t *testing.T) {
 }
 
 func TestConnInfoComment_OptionsPasswordNotIncluded(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@myhost:5432/mydb",
 		Password:   "topsecret",
 	})
@@ -214,7 +215,7 @@ func TestConnInfoComment_OptionsPasswordNotIncluded(t *testing.T) {
 func TestConnInfoComment_IPv6HostBracketed(t *testing.T) {
 	// libpq URIs require IPv6 hosts to be bracketed; net.JoinHostPort handles
 	// this. Without brackets the "::1:5432" string is ambiguous.
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@[::1]:5433/mydb",
 	})
 
@@ -227,7 +228,7 @@ func TestConnInfoComment_UnixSocketHost(t *testing.T) {
 	// pgx accepts unix-socket hosts via the libpq URI's host= query parameter.
 	// We surface them as keyword/value form because percent-encoding the
 	// socket path into the URI host component is unreadable in a comment.
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@/mydb?host=/var/run/postgresql&port=5432",
 	})
 
@@ -239,7 +240,7 @@ func TestConnInfoComment_UnixSocketHost(t *testing.T) {
 func TestConnInfoComment_UnixSocketPort(t *testing.T) {
 	// On a socket the port picks the socket file (.s.PGSQL.<port>), so two
 	// clusters sharing a directory differ only in it.
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@/mydb?host=/tmp&port=5499",
 	})
 
@@ -249,7 +250,7 @@ func TestConnInfoComment_UnixSocketPort(t *testing.T) {
 }
 
 func TestConnInfoComment_UnixSocketHostPasswordNotIncluded(t *testing.T) {
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser:secret@/mydb?host=/var/run/postgresql&port=5432",
 	})
 
@@ -262,7 +263,7 @@ func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
 	// User / dbname with characters that have URI meaning must be escaped so
 	// the comment stays a parseable libpq URI. Round-tripping through url.URL
 	// gives us this for free.
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://my%2Fuser@myhost:5432/my%20db",
 	})
 
@@ -278,7 +279,7 @@ func TestConnInfoComment_DBNameWithSlashEscaped(t *testing.T) {
 	// dbname like "team/db" would render as multiple path segments
 	// ("postgres://...:5432/team/db") and break URI round-trip. RawPath plus
 	// url.PathEscape forces the '/' to be encoded as %2F.
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://myuser@myhost:5432/postgres",
 		DBName:     "team/db",
 	})
@@ -289,16 +290,16 @@ func TestConnInfoComment_DBNameWithSlashEscaped(t *testing.T) {
 }
 
 func TestConnInfoComment_InvalidConnString(t *testing.T) {
-	client := NewClient(&Options{ConnString: "::not-valid::"})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: "::not-valid::"})
 
 	_, err := client.ConnInfoComment()
 	require.Error(t, err)
 }
 
 func TestConnect_InvalidConnStringPropagatesBuildError(t *testing.T) {
-	client := NewClient(&Options{ConnString: "::not-a-valid-conn-string::"})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: "::not-a-valid-conn-string::"})
 
-	_, err := client.connect(context.Background(), false)
+	_, err := client.Connect(context.Background(), false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse connection string")
 }

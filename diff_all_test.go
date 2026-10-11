@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/toposort"
@@ -120,15 +121,15 @@ func TestExtractObjectName(t *testing.T) {
 			name = name[:40]
 		}
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, extractObjectName(tt.sql))
+			assert.Equal(t, tt.expected, pistachio.ExtractObjectName(tt.sql))
 		})
 	}
 }
 
 // emptySchema returns one side of a diff with every kind present and empty,
 // for a case to fill in the kinds it is about.
-func emptySchema() *schemaObjects {
-	return &schemaObjects{
+func emptySchema() *pistachio.SchemaObjects {
+	return &pistachio.SchemaObjects{
 		Tables:         orderedmap.New[string, *model.Table](),
 		Views:          orderedmap.New[string, *model.View](),
 		Enums:          orderedmap.New[string, *model.Enum](),
@@ -141,8 +142,8 @@ func emptySchema() *schemaObjects {
 
 // emptyDiffs returns a diff with every kind present and no statement in any
 // of them.
-func emptyDiffs() *objectDiffs {
-	return &objectDiffs{
+func emptyDiffs() *pistachio.ObjectDiffs {
+	return &pistachio.ObjectDiffs{
 		Tables:         &diff.TableDiffResult{},
 		Views:          &diff.ViewDiffResult{},
 		Enums:          &diff.EnumDiffResult{},
@@ -171,7 +172,7 @@ func TestOrderStatements_Fallback(t *testing.T) {
 		PolicyStmts: []string{"CREATE POLICY p ON public.a USING (true);"},
 	}
 
-	result := orderStatements(emptySchema(), desired, diffs)
+	result := pistachio.OrderStatements(emptySchema(), desired, diffs)
 
 	// Should still produce output (via fallback), policies last.
 	require.Len(t, result, 3)
@@ -218,7 +219,7 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(current, desired, diffs)
+	result := pistachio.OrderStatements(current, desired, diffs)
 
 	require.Len(t, result, 2)
 	// view_b depends on view_a -> view_b must be dropped first (reverse topo order)
@@ -243,7 +244,7 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 	diffs.Tables = &diff.TableDiffResult{DropStmts: []string{"DROP TABLE public.text;"}}
 	diffs.Domains = &diff.DomainDiffResult{DropStmts: []string{"DROP DOMAIN public.d1;"}}
 
-	result := orderStatements(current, emptySchema(), diffs)
+	result := pistachio.OrderStatements(current, emptySchema(), diffs)
 	assert.Equal(t, []string{"DROP TABLE public.text;", "DROP DOMAIN public.d1;"}, result)
 }
 
@@ -261,7 +262,7 @@ func TestOrderStatements_FallbackDropsViewsBeforeRoutines(t *testing.T) {
 	diffs.Routines = &diff.RoutineDiffResult{Stmts: []string{"DROP FUNCTION public.f(integer);", "CREATE OR REPLACE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql AS $$SELECT a$$;"}}
 	diffs.Views = &diff.ViewDiffResult{DropStmts: []string{"DROP VIEW public.v;"}}
 
-	result := orderStatements(current, emptySchema(), diffs)
+	result := pistachio.OrderStatements(current, emptySchema(), diffs)
 	assert.Equal(t, "DROP VIEW public.v;", result[0])
 }
 
@@ -298,7 +299,7 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(current, desired, diffs)
+	result := pistachio.OrderStatements(current, desired, diffs)
 
 	require.Len(t, result, 2)
 	// RENAME (unknown pos) must come before ADD COLUMN (known pos)
@@ -329,7 +330,7 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(emptySchema(), desired, diffs)
+	result := pistachio.OrderStatements(emptySchema(), desired, diffs)
 
 	require.Len(t, result, 2)
 	assert.Contains(t, result[0], "CREATE TABLE", "table must be created first")
@@ -338,34 +339,34 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 
 func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
 	// COMMENT ON COLUMN with escaped quotes in identifier
-	got := extractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
+	got := pistachio.ExtractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
 	assert.Equal(t, `"My""Schema"."My""Table"`, got)
 }
 
 func TestCompareTaggedPos(t *testing.T) {
 	// Both unknown: preserve original order via stable sort
-	assert.False(t, compareTaggedPos(-1, -1, false))
-	assert.False(t, compareTaggedPos(-1, -1, true))
+	assert.False(t, pistachio.CompareTaggedPos(-1, -1, false))
+	assert.False(t, pistachio.CompareTaggedPos(-1, -1, true))
 
 	// Only i unknown: unknown sorts before known
-	assert.True(t, compareTaggedPos(-1, 0, false))
-	assert.True(t, compareTaggedPos(-1, 5, true))
+	assert.True(t, pistachio.CompareTaggedPos(-1, 0, false))
+	assert.True(t, pistachio.CompareTaggedPos(-1, 5, true))
 
 	// Only j unknown: known never precedes unknown
-	assert.False(t, compareTaggedPos(0, -1, false))
-	assert.False(t, compareTaggedPos(5, -1, true))
+	assert.False(t, pistachio.CompareTaggedPos(0, -1, false))
+	assert.False(t, pistachio.CompareTaggedPos(5, -1, true))
 
 	// Both known: forward sort
-	assert.True(t, compareTaggedPos(1, 2, false))
-	assert.False(t, compareTaggedPos(2, 1, false))
+	assert.True(t, pistachio.CompareTaggedPos(1, 2, false))
+	assert.False(t, pistachio.CompareTaggedPos(2, 1, false))
 
 	// Both known: reverse sort
-	assert.True(t, compareTaggedPos(2, 1, true))
-	assert.False(t, compareTaggedPos(1, 2, true))
+	assert.True(t, pistachio.CompareTaggedPos(2, 1, true))
+	assert.False(t, pistachio.CompareTaggedPos(1, 2, true))
 }
 
 func TestDroppedKeys(t *testing.T) {
-	constraints, indexes := droppedKeys([]string{
+	constraints, indexes := pistachio.DroppedKeys([]string{
 		"ALTER TABLE public.t DROP CONSTRAINT t_pkey;",
 		`ALTER TABLE "My Schema"."T" DROP CONSTRAINT "Key.One";`,
 		"ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (a, b);",
@@ -383,7 +384,7 @@ func TestDroppedKeys(t *testing.T) {
 	assert.Equal(t, []string{"public.t_code_idx", "public.t_name_idx"}, indexes)
 
 	// keep decides which constraints to list.
-	constraints, _ = droppedKeys([]string{
+	constraints, _ = pistachio.DroppedKeys([]string{
 		"ALTER TABLE public.t DROP CONSTRAINT t_pkey;",
 		"ALTER TABLE public.t DROP CONSTRAINT t_check;",
 	}, func(table, name string) bool { return name != "t_check" })
@@ -391,11 +392,11 @@ func TestDroppedKeys(t *testing.T) {
 }
 
 func TestSplitConstraintKey(t *testing.T) {
-	table, name := splitConstraintKey("public.t.t_pkey")
+	table, name := pistachio.SplitConstraintKey("public.t.t_pkey")
 	assert.Equal(t, "public.t", table)
 	assert.Equal(t, "t_pkey", name)
 
-	table, name = splitConstraintKey(`"My Schema"."T"."Key.One"`)
+	table, name = pistachio.SplitConstraintKey(`"My Schema"."T"."Key.One"`)
 	assert.Equal(t, `"My Schema"."T"`, table)
 	assert.Equal(t, `"Key.One"`, name)
 }

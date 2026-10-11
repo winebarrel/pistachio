@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -10,36 +10,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio"
 )
-
-func setupSchemaDB(t *testing.T, ctx context.Context, schema string, initSQL string) string {
-	t.Helper()
-	conn := testutil.ConnectDB(t)
-
-	_, err := conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
-	require.NoError(t, err)
-	_, err = conn.Exec(ctx, "CREATE SCHEMA "+schema)
-	require.NoError(t, err)
-
-	if initSQL != "" {
-		_, err = conn.Exec(ctx, initSQL)
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
-		conn.Close(ctx)
-	})
-
-	return conn.Config().ConnString()
-}
 
 func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 	// Schema names that need quoting in canonical SQL (e.g. names with
 	// uppercase letters or spaces) appear in catalog/parser output as the
 	// quoted form. The replacer matches only that form.
-	replacer := buildDefReplacer(map[string]string{
+	replacer := pistachio.BuildDefReplacer(map[string]string{
 		"My Schema": "public",
 		"Users":     "people",
 	})
@@ -59,7 +37,7 @@ func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 // schema portion may legitimately be rewritten (`a.` -> `y.`), but the
 // table/column segments (`b.col`) must remain intact.
 func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
-	replacer := buildDefReplacer(map[string]string{
+	replacer := pistachio.BuildDefReplacer(map[string]string{
 		"a.b": "x", // a schema literally named "a.b"
 		"a":   "y",
 	})
@@ -75,7 +53,7 @@ func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
 // ends in the mapped one, and a table named like the schema in a three-part
 // reference, are not rewritten.
 func TestBuildDefReplacer_SchemaBoundary(t *testing.T) {
-	replacer := buildDefReplacer(map[string]string{"staging": "public"})
+	replacer := pistachio.BuildDefReplacer(map[string]string{"staging": "public"})
 
 	assert.Equal(t, "public.t", replacer.Replace("staging.t"))
 	assert.Equal(t, "REFERENCES mystaging.ref(id)", replacer.Replace("REFERENCES mystaging.ref(id)"))
@@ -87,7 +65,7 @@ func TestBuildDefReplacer_SchemaBoundary(t *testing.T) {
 // A string literal is left alone, however it is quoted, and a name after it
 // is still rewritten. A quote inside a quoted identifier does not start one.
 func TestBuildDefReplacer_StringLiteral(t *testing.T) {
-	replacer := buildDefReplacer(map[string]string{"myschema": "public"})
+	replacer := pistachio.BuildDefReplacer(map[string]string{"myschema": "public"})
 
 	tests := []struct {
 		name, in, want string
@@ -122,7 +100,7 @@ func TestBuildDefReplacer_StringLiteral(t *testing.T) {
 // The first part of a two-part column reference is a table or an alias, never
 // a schema, so it keeps its name even when it matches a mapped schema.
 func TestBuildDefReplacer_ColumnQualifier(t *testing.T) {
-	replacer := buildDefReplacer(map[string]string{"staging": "public", "My Schema": "public"})
+	replacer := pistachio.BuildDefReplacer(map[string]string{"staging": "public", "My Schema": "public"})
 
 	tests := []struct {
 		name, in, want string
@@ -164,13 +142,13 @@ CREATE POLICY hosts_policy ON myschema.hosts USING (name <> 'myschema.hidden');
 CREATE FUNCTION myschema.hosts_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
 CREATE TRIGGER hosts_trg BEFORE INSERT ON myschema.hosts FOR EACH ROW WHEN (NEW.name <> 'myschema.trigger') EXECUTE FUNCTION myschema.hosts_trg();
 `)
-	opts := &Options{
+	opts := &pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	}
 
-	got, err := NewClient(opts).Dump(ctx, &DumpOptions{})
+	got, err := pistachio.NewClient(opts).Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	output := got.String()
 	for _, lit := range []string{"'myschema.domain'", "'myschema.invalid'", "'myschema.hidden'", "'myschema.trigger'"} {
@@ -183,7 +161,7 @@ CREATE TRIGGER hosts_trg BEFORE INSERT ON myschema.hosts FOR EACH ROW WHEN (NEW.
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))
-	plan, err := NewClient(opts).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	plan, err := pistachio.NewClient(opts).Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, plan.SQL)
 }
@@ -200,13 +178,13 @@ CREATE TABLE mystaging.ref (id integer NOT NULL, CONSTRAINT ref_pkey PRIMARY KEY
 CREATE TABLE staging.t (id integer NOT NULL, ref_id integer REFERENCES mystaging.ref (id));
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"staging"},
 		SchemaMap:  map[string]string{"staging": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -218,12 +196,12 @@ CREATE TABLE staging.t (id integer NOT NULL, ref_id integer REFERENCES mystaging
 
 func TestAfterApply(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"staging": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"staging": "public"}}
 		assert.NoError(t, o.AfterApply())
 	})
 
 	t.Run("duplicate destinations", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
 		err := o.AfterApply()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate schema-map destination")
@@ -232,7 +210,7 @@ func TestAfterApply(t *testing.T) {
 	// -n 'public, billing' reaches kong as ["public", " billing"], and the
 	// space made a schema of its own.
 	t.Run("trims schemas", func(t *testing.T) {
-		o := &Options{Schemas: []string{" public", "billing "}}
+		o := &pistachio.Options{Schemas: []string{" public", "billing "}}
 		require.NoError(t, o.AfterApply())
 		assert.Equal(t, []string{"public", "billing"}, o.Schemas)
 	})
@@ -240,7 +218,7 @@ func TestAfterApply(t *testing.T) {
 	// -m 'old=new; other=third' reaches kong with " other" as the second
 	// source, a mapping that matches nothing.
 	t.Run("trims schema map", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"old": "new ", " other": " third"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"old": "new ", " other": " third"}}
 		require.NoError(t, o.AfterApply())
 		assert.Equal(t, map[string]string{"old": "new", "other": "third"}, o.SchemaMap)
 	})
@@ -248,7 +226,7 @@ func TestAfterApply(t *testing.T) {
 	// The trim runs before the duplicate check, so "p" and " p" are one
 	// destination.
 	t.Run("trims schema map before validating", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"x": "p", " y": " p"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"x": "p", " y": " p"}}
 		err := o.AfterApply()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), `both "x" and "y" map to it`)
@@ -257,14 +235,14 @@ func TestAfterApply(t *testing.T) {
 	// Two sources that differ only in whitespace would otherwise collapse
 	// into one, keeping whichever destination the map happened to yield.
 	t.Run("sources that collide after trimming", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"x": "a", "x ": "b"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"x": "a", "x ": "b"}}
 		err := o.AfterApply()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), `duplicate schema-map source "x": both "x" and "x " name it`)
 	})
 
 	t.Run("empty destination after trimming", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"x": " "}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"x": " "}}
 		err := o.AfterApply()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), `schema-map destination for "x" is empty`)
@@ -273,39 +251,39 @@ func TestAfterApply(t *testing.T) {
 
 func TestRemapSchema(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
-		o := &Options{}
+		o := &pistachio.Options{}
 		assert.Equal(t, "public", o.RemapSchema("public"))
 	})
 
 	t.Run("mapped", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"myschema": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"myschema": "public"}}
 		assert.Equal(t, "public", o.RemapSchema("myschema"))
 	})
 
 	t.Run("unmapped", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"myschema": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"myschema": "public"}}
 		assert.Equal(t, "other", o.RemapSchema("other"))
 	})
 }
 
 func TestValidateSchemaMap(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
-		o := &Options{}
+		o := &pistachio.Options{}
 		assert.NoError(t, o.ValidateSchemaMap())
 	})
 
 	t.Run("single entry", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"staging": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"staging": "public"}}
 		assert.NoError(t, o.ValidateSchemaMap())
 	})
 
 	t.Run("distinct destinations", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"a": "x", "b": "y"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "x", "b": "y"}}
 		assert.NoError(t, o.ValidateSchemaMap())
 	})
 
 	t.Run("duplicate destinations", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
 		err := o.ValidateSchemaMap()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate schema-map destination")
@@ -315,7 +293,7 @@ func TestValidateSchemaMap(t *testing.T) {
 	// pair every run, so the error a user reads does not change between
 	// invocations of the same command.
 	t.Run("duplicate destinations name the same pair every run", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"c": "public", "a": "public", "b": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"c": "public", "a": "public", "b": "public"}}
 		for range 20 {
 			err := o.ValidateSchemaMap()
 			require.Error(t, err)
@@ -326,14 +304,14 @@ func TestValidateSchemaMap(t *testing.T) {
 	// model.Ident drops an empty component, so an empty side would leave an
 	// object unqualified rather than fail.
 	t.Run("empty source", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"": "public"}}
 		err := o.ValidateSchemaMap()
 		require.Error(t, err)
 		assert.Equal(t, `schema-map source for "public" is empty`, err.Error())
 	})
 
 	t.Run("empty destination", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"staging": ""}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"staging": ""}}
 		err := o.ValidateSchemaMap()
 		require.Error(t, err)
 		assert.Equal(t, `schema-map destination for "staging" is empty`, err.Error())
@@ -342,17 +320,17 @@ func TestValidateSchemaMap(t *testing.T) {
 
 func TestReverseRemapSchema(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
-		o := &Options{}
+		o := &pistachio.Options{}
 		assert.Equal(t, "public", o.ReverseRemapSchema("public"))
 	})
 
 	t.Run("mapped", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"myschema": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"myschema": "public"}}
 		assert.Equal(t, "myschema", o.ReverseRemapSchema("public"))
 	})
 
 	t.Run("unmapped", func(t *testing.T) {
-		o := &Options{SchemaMap: map[string]string{"myschema": "public"}}
+		o := &pistachio.Options{SchemaMap: map[string]string{"myschema": "public"}}
 		assert.Equal(t, "other", o.ReverseRemapSchema("other"))
 	})
 }
@@ -368,13 +346,13 @@ CREATE TABLE "My Schema".users (
 CREATE INDEX users_id_idx ON "My Schema".users (id);
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"My Schema"},
 		SchemaMap:  map[string]string{"My Schema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -397,13 +375,13 @@ CREATE TABLE myschema.users (
 CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -427,13 +405,13 @@ CREATE TABLE myschema.parent (r integer, s myschema.status, tags myschema.status
 CREATE TABLE myschema.child PARTITION OF myschema.parent FOR VALUES FROM (0) TO (10);
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -464,13 +442,13 @@ CREATE TABLE public.parent (r integer, s public.status, tags public.status[]) PA
 CREATE TABLE public.child PARTITION OF public.parent FOR VALUES FROM (0) TO (10);
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, strings.TrimSpace(got.SQL))
@@ -493,13 +471,13 @@ CREATE TABLE myschema.t (
 );
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -538,13 +516,13 @@ CREATE TABLE public.t (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, strings.TrimSpace(got.SQL))
@@ -568,13 +546,13 @@ CREATE TABLE myschema.t (
 );
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -617,13 +595,13 @@ CREATE TABLE public.t (
 );
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, strings.TrimSpace(got.SQL))
@@ -653,7 +631,7 @@ func TestRemapQualifiedName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, remapQualifiedName(tt.in, mapSchema))
+			assert.Equal(t, tt.want, pistachio.RemapQualifiedName(tt.in, mapSchema))
 		})
 	}
 }
@@ -691,7 +669,7 @@ func TestRemapDefaultExpr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, remapDefaultExpr(tt.in, mapSchema))
+			assert.Equal(t, tt.want, pistachio.RemapDefaultExpr(tt.in, mapSchema))
 		})
 	}
 }
@@ -703,13 +681,13 @@ func TestDump_WithSchemaMap_Sequence(t *testing.T) {
 CREATE SEQUENCE myschema.order_seq;
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	// The sequence schema is remapped to "public" (exercises remapSequenceSchemas).
@@ -734,13 +712,13 @@ CREATE TABLE myschema.events (id integer);
 		"CREATE TABLE public.events (id integer);\n"+
 			"CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();\n"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Equal(t,
@@ -759,13 +737,13 @@ CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE SEQUENCE public.order_seq INCREMENT BY 2;"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// The desired public.order_seq is reverse-remapped to myschema.order_seq
@@ -785,18 +763,18 @@ func TestApply_UnqualifiedUserTypeInNonPublicSchema(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte(
 		"CREATE TYPE app.addr AS (x text);\nCREATE TABLE app.people (id integer, home addr);\n"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"app"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	}, io.Discard)
 	require.NoError(t, err)
 
-	plan, err := client.Plan(ctx, &PlanOptions{
+	plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	})
@@ -820,12 +798,12 @@ func TestApply_PublicObjectFromNonPublicSchema(t *testing.T) {
 		"CREATE TABLE app.t1 (id integer, c pubdm);\n"+
 			"CREATE TABLE app.t2 (id integer, c text DEFAULT pubfn());\n"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"app"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	}, io.Discard)
@@ -840,13 +818,13 @@ CREATE TYPE myschema.point AS (x integer, y integer);
 CREATE TYPE myschema.shape AS (name text, origin myschema.point);
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	// The type schema and the schema-qualified attribute type are both remapped
@@ -868,13 +846,13 @@ CREATE TYPE myschema.address AS (street text, city text);
 	require.NoError(t, os.WriteFile(desiredFile, []byte(
 		"CREATE TYPE public.address AS (street text, city text, country text);"), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// The desired public.address is reverse-remapped to myschema.address
@@ -892,13 +870,13 @@ CREATE TABLE myschema.users (
 );
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	files := got.Files()
@@ -924,13 +902,13 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -954,13 +932,13 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// No diff expected since schemas are remapped
@@ -977,12 +955,12 @@ CREATE TABLE myschema.users (
 );
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1005,12 +983,12 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL)
 }
@@ -1031,13 +1009,13 @@ CREATE TABLE myschema.posts (
 );
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1060,13 +1038,13 @@ CREATE TABLE myschema.users (
 CREATE INDEX users_name_idx ON myschema.users (name);
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1091,13 +1069,13 @@ CREATE INDEX users_name_idx ON myschema.users (name);
 COMMENT ON INDEX myschema.users_name_idx IS 'Lookup by name';
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1117,13 +1095,13 @@ CREATE TABLE myschema.users (
 `)
 
 	// Map a different schema, myschema should remain unchanged
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"other": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1147,13 +1125,13 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// "other" schema is not reverse-mapped, so it won't match myschema.
@@ -1192,13 +1170,13 @@ CREATE TABLE public.posts (
 ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -1225,13 +1203,13 @@ CREATE TABLE myschema.users (
 CREATE INDEX users_name_idx ON public.users (name);
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -1256,13 +1234,13 @@ CREATE TABLE myschema.users (
 CREATE VIEW public.active_users AS SELECT id FROM public.users;
 `), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -1277,8 +1255,8 @@ func TestSchemaMap_MatviewIndex(t *testing.T) {
 CREATE TABLE myschema.posts (id integer PRIMARY KEY);
 CREATE MATERIALIZED VIEW myschema.post_count AS SELECT count(*) AS c FROM myschema.posts;
 `
-	opts := func(connString string) *Options {
-		return &Options{
+	opts := func(connString string) *pistachio.Options {
+		return &pistachio.Options{
 			ConnString: connString,
 			Schemas:    []string{"myschema"},
 			SchemaMap:  map[string]string{"myschema": "public"},
@@ -1289,14 +1267,14 @@ CREATE MATERIALIZED VIEW myschema.post_count AS SELECT count(*) AS c FROM mysche
 		connString := setupSchemaDB(t, ctx, "myschema", initSQL+`
 CREATE UNIQUE INDEX post_count_c ON myschema.post_count (c);
 COMMENT ON INDEX myschema.post_count_c IS 'one row';`)
-		got, err := NewClient(opts(connString)).Dump(ctx, &DumpOptions{})
+		got, err := pistachio.NewClient(opts(connString)).Dump(ctx, &pistachio.DumpOptions{})
 		require.NoError(t, err)
 		assert.Contains(t, got.String(), "CREATE UNIQUE INDEX post_count_c ON public.post_count")
 		assert.Contains(t, got.String(), "COMMENT ON INDEX public.post_count_c IS 'one row';")
 
 		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 		require.NoError(t, os.WriteFile(desiredFile, []byte(got.String()), 0o644))
-		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+		plan, err := pistachio.NewClient(opts(connString)).Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 		require.NoError(t, err)
 		assert.Empty(t, plan.SQL)
 	})
@@ -1308,7 +1286,7 @@ COMMENT ON INDEX myschema.post_count_c IS 'one row';`)
 CREATE MATERIALIZED VIEW public.post_count AS SELECT count(*) AS c FROM public.posts;
 CREATE UNIQUE INDEX post_count_c ON public.post_count (c);
 `), 0o644))
-		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+		plan, err := pistachio.NewClient(opts(connString)).Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 		require.NoError(t, err)
 		assert.Equal(t, "CREATE UNIQUE INDEX post_count_c ON myschema.post_count USING btree (c);", plan.SQL)
 	})
@@ -1319,7 +1297,7 @@ CREATE UNIQUE INDEX post_count_c ON public.post_count (c);
 		require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.posts (id integer PRIMARY KEY);
 CREATE MATERIALIZED VIEW public.post_count AS SELECT count(*) AS c FROM public.posts;
 `), 0o644))
-		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+		plan, err := pistachio.NewClient(opts(connString)).Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 		require.NoError(t, err)
 		assert.Equal(t, "DROP INDEX myschema.post_count_c;", plan.SQL)
 	})
@@ -1343,22 +1321,22 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: dump without schema map should show myschema with new column
-	verifyClient := NewClient(&Options{
+	verifyClient := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := verifyClient.Dump(ctx, &DumpOptions{})
+	got, err := verifyClient.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1384,12 +1362,12 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -1412,12 +1390,12 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL)
 }
@@ -1429,13 +1407,13 @@ func TestDump_WithSchemaMap_Domain(t *testing.T) {
 CREATE DOMAIN myschema.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1453,13 +1431,13 @@ CREATE DOMAIN myschema.pos_int AS integer;
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE DOMAIN public.pos_int AS integer NOT NULL;`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, "ALTER DOMAIN myschema.pos_int SET NOT NULL;", strings.TrimSpace(got.SQL))
 }
@@ -1471,13 +1449,13 @@ func TestDump_WithSchemaMap_Enum(t *testing.T) {
 CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -1495,13 +1473,13 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Equal(t, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';", strings.TrimSpace(got.SQL))
@@ -1517,13 +1495,13 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive');`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL)
 }
@@ -1538,21 +1516,21 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
-	verifyClient := NewClient(&Options{
+	verifyClient := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := verifyClient.Dump(ctx, &DumpOptions{})
+	got, err := verifyClient.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "'pending'")
 }
@@ -1574,15 +1552,15 @@ CREATE TABLE myschema.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	_, err := client.Apply(ctx, &ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "name text")
 }
@@ -1613,13 +1591,13 @@ CREATE POLICY owner_select ON myschema.documents FOR SELECT USING (owner = curre
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL)
 }
@@ -1650,13 +1628,13 @@ CREATE POLICY visible ON myschema.documents FOR SELECT USING (myschema.is_admin(
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY visible ON public.documents FOR SELECT USING (public.is_admin());`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL, "schema replacement on policy USING should yield no diff")
 }
@@ -1687,13 +1665,13 @@ CREATE POLICY mod ON myschema.documents FOR ALL USING (myschema.is_admin()) WITH
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY mod ON public.documents FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL, "schema replacement on policy WITH CHECK should yield no diff")
 }
@@ -1722,13 +1700,13 @@ CREATE POLICY owner_select ON myschema.documents FOR SELECT USING (owner = curre
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = session_user);`), 0o644))
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, "ALTER POLICY owner_select ON myschema.documents USING (owner = session_user);", strings.TrimSpace(got.SQL))
 }
@@ -1749,7 +1727,7 @@ CREATE FUNCTION myschema.label(s myschema.status DEFAULT 'active'::myschema.stat
 	// An empty search_path keeps every schema qualified, so the type name in
 	// the signature is remapped rather than reported bare.
 	searchPath := ""
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString:    connString,
 		Schemas:       []string{"myschema"},
 		SchemaMap:     map[string]string{"myschema": "public"},
@@ -1757,7 +1735,7 @@ CREATE FUNCTION myschema.label(s myschema.status DEFAULT 'active'::myschema.stat
 		ManageRoutine: true,
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	out := got.String()
@@ -1788,7 +1766,7 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 			"    LANGUAGE sql AS $$ SELECT s::text $$;\n"), 0o644))
 
 	searchPath := ""
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString:    connString,
 		Schemas:       []string{"myschema"},
 		SchemaMap:     map[string]string{"myschema": "public"},
@@ -1796,7 +1774,7 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 		ManageRoutine: true,
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	})
@@ -1835,13 +1813,13 @@ COMMENT ON POLICY posts_read ON myschema.posts IS 'reads';
 COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamps';
 `)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	dumped, err := client.Dump(ctx, &DumpOptions{})
+	dumped, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	output := dumped.String()
 
@@ -1857,13 +1835,13 @@ COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamps';
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.SQL)
 
 	changed := strings.NewReplacer("'pk'", "'primary key'", "'author'", "'writer'", "'reads'", "'readers'", "'stamps'", "'stamper'", "'domain check'", "'positive'").Replace(output)
 	require.NoError(t, os.WriteFile(desiredFile, []byte(changed), 0o644))
-	got, err = client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, strings.Join([]string{
 		"COMMENT ON CONSTRAINT pos_check ON DOMAIN myschema.pos IS 'positive';",

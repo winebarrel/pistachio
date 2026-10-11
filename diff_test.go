@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 )
 
 type diffTestCase struct {
@@ -54,13 +55,13 @@ func TestDiff(t *testing.T) {
 			desiredFile := filepath.Join(tmpDir, "desired.sql")
 			require.NoError(t, os.WriteFile(desiredFile, []byte(tc.Desired), 0o644))
 
-			client := NewClient(&Options{Schemas: []string{"public"}})
+			client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
 
-			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
+			dropPolicy := pistachio.DropPolicy{AllowDrop: []string{"all"}}
 			if tc.DropPolicy != nil {
-				dropPolicy = DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
+				dropPolicy = pistachio.DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
 			}
-			got, err := client.Diff(&DiffOptions{
+			got, err := client.Diff(&pistachio.DiffOptions{
 				DropPolicy:               dropPolicy,
 				Include:                  tc.Include,
 				Exclude:                  tc.Exclude,
@@ -95,8 +96,8 @@ func TestDiff_MissingCurrentFile(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	client := NewClient(&Options{Schemas: []string{"public"}})
-	_, err := client.Diff(&DiffOptions{Files: []string{"/nonexistent/current.sql", desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	_, err := client.Diff(&pistachio.DiffOptions{Files: []string{"/nonexistent/current.sql", desiredFile}})
 	require.ErrorContains(t, err, "/nonexistent/current.sql")
 }
 
@@ -104,14 +105,14 @@ func TestDiff_MissingDesiredFile(t *testing.T) {
 	currentFile := filepath.Join(t.TempDir(), "current.sql")
 	require.NoError(t, os.WriteFile(currentFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	client := NewClient(&Options{Schemas: []string{"public"}})
-	_, err := client.Diff(&DiffOptions{Files: []string{currentFile, "/nonexistent/desired.sql"}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	_, err := client.Diff(&pistachio.DiffOptions{Files: []string{currentFile, "/nonexistent/desired.sql"}})
 	require.ErrorContains(t, err, "/nonexistent/desired.sql")
 }
 
 func TestDiff_EmptySchemas(t *testing.T) {
-	client := NewClient(&Options{Schemas: []string{}})
-	_, err := client.Diff(&DiffOptions{Files: []string{"current.sql", "desired.sql"}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{}})
+	_, err := client.Diff(&pistachio.DiffOptions{Files: []string{"current.sql", "desired.sql"}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
@@ -125,8 +126,8 @@ func TestDiff_DefaultSchemaQualification(t *testing.T) {
 	desiredFile := filepath.Join(tmpDir, "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE public.users (id int);"), 0o644))
 
-	client := NewClient(&Options{Schemas: []string{"public"}})
-	got, err := client.Diff(&DiffOptions{Files: []string{currentFile, desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	got, err := client.Diff(&pistachio.DiffOptions{Files: []string{currentFile, desiredFile}})
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges)
 	assert.Empty(t, got.SQL)
@@ -142,8 +143,8 @@ func TestDiff_FiltersBothSidesBySchema(t *testing.T) {
 	desiredFile := filepath.Join(tmpDir, "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE other.upcoming (id int);"), 0o644))
 
-	client := NewClient(&Options{Schemas: []string{"public"}})
-	got, err := client.Diff(&DiffOptions{
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	got, err := client.Diff(&pistachio.DiffOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{currentFile, desiredFile},
 	})

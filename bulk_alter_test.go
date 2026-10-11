@@ -1,9 +1,10 @@
-package pistachio
+package pistachio_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/winebarrel/pistachio"
 )
 
 func TestMergeAlterTable(t *testing.T) {
@@ -271,7 +272,7 @@ func TestMergeAlterTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeAlterTable(tt.in, func(string) bool { return true })
+			got := pistachio.MergeAlterTable(tt.in, func(string) bool { return true })
 			if tt.want == nil {
 				assert.Empty(t, got)
 				return
@@ -289,7 +290,7 @@ func TestMergeAlterTable_ShouldMergePerTable(t *testing.T) {
 		"ALTER TABLE public.posts ADD COLUMN body text;",
 	}
 
-	got := mergeAlterTable(in, func(fqtn string) bool { return fqtn == "public.users" })
+	got := pistachio.MergeAlterTable(in, func(fqtn string) bool { return fqtn == "public.users" })
 
 	want := []string{
 		"ALTER TABLE public.users\n  ADD COLUMN email text,\n  ADD COLUMN age integer;",
@@ -321,7 +322,7 @@ func TestParseMergeableAlterTable_Negatives(t *testing.T) {
 
 	for _, stmt := range negatives {
 		t.Run(stmt, func(t *testing.T) {
-			_, _, ok := parseMergeableAlterTable(stmt)
+			_, _, ok := pistachio.ParseMergeableAlterTable(stmt)
 			assert.False(t, ok, "expected non-mergeable: %q", stmt)
 		})
 	}

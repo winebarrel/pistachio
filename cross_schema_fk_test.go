@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
@@ -35,12 +36,12 @@ CREATE TABLE ` + schema + `.base (id integer PRIMARY KEY);
 CREATE TABLE ` + schema + `.item (id integer PRIMARY KEY, base_id integer REFERENCES ` + ref + ` (id));`
 }
 
-func planCrossSchemaFK(t *testing.T, opts *Options, desired string) string {
+func planCrossSchemaFK(t *testing.T, opts *pistachio.Options, desired string) string {
 	t.Helper()
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
 
-	got, err := NewClient(opts).Plan(context.Background(), &PlanOptions{Files: []string{desiredFile}})
+	got, err := pistachio.NewClient(opts).Plan(context.Background(), &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	return got.SQL
 }
@@ -83,7 +84,7 @@ func TestPlan_CrossSchemaFK_NoChange(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			connString := setupCrossSchemaFK(t, tt.dbSchema, tt.dbRef)
-			sql := planCrossSchemaFK(t, &Options{
+			sql := planCrossSchemaFK(t, &pistachio.Options{
 				ConnString: connString,
 				Schemas:    tt.schemas,
 				SearchPath: tt.searchPath,
@@ -108,7 +109,7 @@ func TestPlan_CrossSchemaFK_NoRefColumns(t *testing.T) {
 			connString := setupSchemaDB(t, ctx, "app", `
 CREATE TABLE app.base (id integer PRIMARY KEY);
 CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES app.base (id));`)
-			sql := planCrossSchemaFK(t, &Options{
+			sql := planCrossSchemaFK(t, &pistachio.Options{
 				ConnString: connString,
 				Schemas:    schemas,
 			}, `
@@ -123,7 +124,7 @@ CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES base);
 // the ADD names public.base.
 func TestPlan_CrossSchemaFK_Changed(t *testing.T) {
 	connString := setupCrossSchemaFK(t, "app", "public.base")
-	sql := planCrossSchemaFK(t, &Options{
+	sql := planCrossSchemaFK(t, &pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"public", "app"},
 	}, `
@@ -156,14 +157,14 @@ func TestPlan_CrossSchemaFK_DumpRoundTrip(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(ref+", "+tt.name, func(t *testing.T) {
 				connString := setupCrossSchemaFK(t, "app", ref)
-				opts := &Options{
+				opts := &pistachio.Options{
 					ConnString: connString,
 					Schemas:    tt.schemas,
 					SearchPath: tt.searchPath,
 					SchemaMap:  tt.schemaMap,
 				}
 
-				dumped, err := NewClient(opts).Dump(context.Background(), &DumpOptions{})
+				dumped, err := pistachio.NewClient(opts).Dump(context.Background(), &pistachio.DumpOptions{})
 				require.NoError(t, err)
 				t.Log(dumped.String())
 

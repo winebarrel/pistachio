@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -49,12 +50,12 @@ func TestDump_ServerSideSearchPath(t *testing.T) {
 
 	t.Setenv("PGOPTIONS", searchPathServerSide)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -79,12 +80,12 @@ func TestPlan_ServerSideSearchPath(t *testing.T) {
 
 	t.Setenv("PGOPTIONS", searchPathServerSide)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, got.SQL)
@@ -98,13 +99,13 @@ func TestDump_SearchPathOption(t *testing.T) {
 	connString := setupSchemaDB(t, ctx, "myschema", searchPathInitSchema)
 
 	searchPath := "myschema"
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SearchPath: &searchPath,
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -135,13 +136,13 @@ CREATE TABLE public.users (
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
 	searchPath := ""
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 		SearchPath: &searchPath,
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -171,23 +172,23 @@ CREATE TABLE `+model.Ident(role)+`.users (
 );
 CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(role)+`.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{role},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM "+model.Ident(role)+".users")
 
 	searchPath := `"$user", public`
-	client = NewClient(&Options{
+	client = pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{role},
 		SearchPath: &searchPath,
 	})
 
-	got, err = client.Dump(ctx, &DumpOptions{})
+	got, err = client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM users")
 }
@@ -207,13 +208,13 @@ CREATE DOMAIN "App".good_mood AS "App".mood;
 	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
 
 	searchPath := `"App"`
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"App"},
 		SearchPath: &searchPath,
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, got.SQL)
@@ -237,14 +238,14 @@ COMMENT ON FUNCTION "App".f("App".mood) IS 'f';
 	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
 
 	searchPath := `"App"`
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString:    connString,
 		Schemas:       []string{"App"},
 		SearchPath:    &searchPath,
 		ManageRoutine: true,
 	})
 
-	got, err := client.Plan(ctx, &PlanOptions{
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
 		AllowDrop: []string{"all"},
 		Files:     []string{desiredFile},
 	})

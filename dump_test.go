@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
@@ -60,23 +61,23 @@ func (tc *dumpTestCase) expectedDump(major int) string {
 
 func TestDump_InvalidConnString(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Dump(ctx, &DumpOptions{})
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.Error(t, err)
 }
 
 func TestDump_UnreachableHost(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@192.0.2.1:5432/postgres?connect_timeout=1",
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Dump(ctx, &DumpOptions{})
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect")
 }
@@ -86,12 +87,12 @@ func TestDump_EmptySchemas(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{},
 	})
 
-	_, err := client.Dump(ctx, &DumpOptions{})
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
@@ -103,7 +104,7 @@ func TestDump_CanceledContext(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
@@ -111,7 +112,7 @@ func TestDump_CanceledContext(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	_, err := client.Dump(canceledCtx, &DumpOptions{})
+	_, err := client.Dump(canceledCtx, &pistachio.DumpOptions{})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 }
@@ -130,12 +131,12 @@ CREATE TABLE public.users (
 );
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"public"}, got.Count.Schemas)
 	assert.Equal(t, 1, got.Count.Tables)
@@ -159,12 +160,12 @@ func TestDump_NoReadOnly(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{NoReadOnly: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{NoReadOnly: true})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
 }
@@ -188,15 +189,15 @@ CREATE TABLE public.users (
 CREATE TABLE public.users_active PARTITION OF public.users FOR VALUES IN ('active');
 CREATE VIEW public.v AS SELECT u.id, (SELECT max(x.id) FROM public.users x WHERE x.id <> u.id) AS peak FROM public.users u;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	formatted, err := client.Dump(ctx, &DumpOptions{})
+	formatted, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
-	raw, err := client.Dump(ctx, &DumpOptions{NoFormat: true})
+	raw, err := client.Dump(ctx, &pistachio.DumpOptions{NoFormat: true})
 	require.NoError(t, err)
 
 	assert.Equal(t, formatted.String(), raw.String())
@@ -208,7 +209,7 @@ CREATE VIEW public.v AS SELECT u.id, (SELECT max(x.id) FROM public.users x WHERE
 func TestDumpResult_String_UnparsableKeptAsRendered(t *testing.T) {
 	seqs := orderedmap.New[string, *model.Sequence]()
 	seqs.Set("public.s", &model.Sequence{Schema: "public", Name: "s"})
-	result := &DumpResult{Sequences: seqs}
+	result := &pistachio.DumpResult{Sequences: seqs}
 
 	assert.Equal(t, model.SequencesToSQL(seqs), result.String())
 }
@@ -220,12 +221,12 @@ func TestDump_Count_Empty(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, got.Count.Tables)
 	assert.Equal(t, 0, got.Count.Views)
@@ -249,13 +250,13 @@ CREATE TABLE public.posts (
     CONSTRAINT posts_pkey PRIMARY KEY (id)
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 		Exclude:    []string{"posts"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
 	assert.Equal(t, "1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences", got.Count.Summary())
@@ -276,12 +277,12 @@ CREATE TABLE public.posts (
     CONSTRAINT posts_pkey PRIMARY KEY (id)
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Len(t, files, 2)
@@ -303,12 +304,12 @@ CREATE TABLE public.users (
 );
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Len(t, files, 2)
@@ -324,12 +325,12 @@ func TestDumpResult_Files_Empty(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Empty(t, files)
@@ -343,12 +344,12 @@ func TestDumpResult_Files_Enums(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `
 CREATE TYPE public.status AS ENUM ('active', 'inactive');`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "public.status.sql")
@@ -363,12 +364,12 @@ func TestDumpResult_Files_Domains(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `
 CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "public.pos_int.sql")
@@ -383,12 +384,12 @@ func TestDumpResult_Files_CompositeTypes(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `
 CREATE TYPE public.addr AS (street text, city text);`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "public.addr.sql")
@@ -403,12 +404,12 @@ func TestDumpResult_Files_Sequences(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `
 CREATE SEQUENCE public.order_seq;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "public.order_seq.sql")
@@ -428,12 +429,12 @@ CREATE TABLE public.users (
 );
 ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files["public.custom_seq.sql"], "CREATE SEQUENCE public.custom_seq")
@@ -451,12 +452,12 @@ CREATE TABLE public."My Table" (
     id integer NOT NULL
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "public.My_Table.sql")
@@ -473,12 +474,12 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "users.sql")
@@ -507,27 +508,27 @@ CREATE TABLE public.users (
 );
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 
-	for k, v := range got.tables().All() {
+	for k, v := range pistachio.DumpResultTables(got).All() {
 		assert.Equal(t, model.Ident(v.Name), k, "table key should match unqualified Ident(Name)")
 		assert.Empty(t, v.Schema, "table value Schema should be empty")
 	}
-	for k, v := range got.views().All() {
+	for k, v := range pistachio.DumpResultViews(got).All() {
 		assert.Equal(t, model.Ident(v.Name), k, "view key should match unqualified Ident(Name)")
 		assert.Empty(t, v.Schema, "view value Schema should be empty")
 	}
-	for k, v := range got.enums().All() {
+	for k, v := range pistachio.DumpResultEnums(got).All() {
 		assert.Equal(t, model.Ident(v.Name), k, "enum key should match unqualified Ident(Name)")
 		assert.Empty(t, v.Schema, "enum value Schema should be empty")
 	}
-	for k, v := range got.domains().All() {
+	for k, v := range pistachio.DumpResultDomains(got).All() {
 		assert.Equal(t, model.Ident(v.Name), k, "domain key should match unqualified Ident(Name)")
 		assert.Empty(t, v.Schema, "domain value Schema should be empty")
 	}
@@ -547,19 +548,19 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
 	// Dump with omit-schema, then plan should have no diff
-	got, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 
 	tmpFile := filepath.Join(t.TempDir(), "schema.sql")
 	require.NoError(t, os.WriteFile(tmpFile, []byte(got.String()), 0o644))
 
-	plan, err := client.Plan(ctx, &PlanOptions{Files: []string{tmpFile}})
+	plan, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{tmpFile}})
 	require.NoError(t, err)
 	assert.Empty(t, plan.SQL)
 }
@@ -572,12 +573,12 @@ func TestDumpResult_OmitSchema_Enum_Files(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `
 CREATE TYPE public.status AS ENUM ('active', 'inactive');`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 	files := got.Files()
 	assert.Contains(t, files, "status.sql")
@@ -587,12 +588,12 @@ CREATE TYPE public.status AS ENUM ('active', 'inactive');`)
 
 func TestDump_OmitSchema_MultipleSchemas(t *testing.T) {
 	ctx := context.Background()
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: "postgres://postgres@localhost/postgres",
 		Schemas:    []string{"public", "other"},
 	})
 
-	_, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--omit-schema cannot be used with multiple schemas")
 }
@@ -615,11 +616,11 @@ func TestDump_OmitSchema_PartitionParentInAnotherSchema(t *testing.T) {
 			FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
 	`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connStr,
 		Schemas:    []string{"public"},
 	})
-	result, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	result, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 
 	assert.Contains(t, result.String(), "CREATE TABLE child PARTITION OF other.parent")
@@ -647,12 +648,12 @@ CREATE TABLE app.users (
 CREATE VIEW app.active_users AS SELECT id, name FROM app.users WHERE name IS NOT NULL;`)
 	require.NoError(t, err)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"app"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 	s := got.String()
 	// View name should not have schema prefix
@@ -681,7 +682,7 @@ func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
 	views := orderedmap.New[string, *model.View]()
 	views.Set("users", &model.View{Schema: "", Name: "users", Definition: "SELECT 1"})
 
-	result := &DumpResult{
+	result := &pistachio.DumpResult{
 		Tables: tables,
 		Views:  views,
 	}
@@ -715,7 +716,7 @@ func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
 	tables.Set("users", t1)
 	tables.Set("Users", t2)
 
-	result := &DumpResult{
+	result := &pistachio.DumpResult{
 		Tables: tables,
 		Views:  orderedmap.New[string, *model.View](),
 	}
@@ -736,11 +737,11 @@ CREATE INDEX logs_at_idx ON pista_parent.logs USING btree (at);`)
 	connStr := setupSchemaDB(t, ctx, "pista_child", `
 CREATE TABLE pista_child.logs_2025 PARTITION OF pista_parent.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connStr,
 		Schemas:    []string{"pista_child"},
 	})
-	got, err := client.Dump(ctx, &DumpOptions{OmitPartitionChildIndex: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitPartitionChildIndex: true})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "CREATE INDEX logs_2025_at_idx ON pista_child.logs_2025 USING btree (at);")
 }
@@ -766,7 +767,7 @@ func TestDump(t *testing.T) {
 			}
 			db := pool.Connect(t)
 			testutil.SetupDB(t, ctx, db, tc.Init)
-			client := NewClient(&Options{
+			client := pistachio.NewClient(&pistachio.Options{
 				ConnString:         db.Config().ConnString(),
 				Schemas:            []string{"public"},
 				Include:            tc.Include,
@@ -777,7 +778,7 @@ func TestDump(t *testing.T) {
 				ManageStorageParam: tc.ManageStorageParam,
 				SkipPartitionChild: tc.SkipPartitionChild,
 			})
-			got, err := client.Dump(ctx, &DumpOptions{
+			got, err := client.Dump(ctx, &pistachio.DumpOptions{
 				OmitSchema:              tc.OmitSchema,
 				Explain:                 tc.Explain,
 				OmitPartitionChildIndex: tc.OmitPartitionChildIndex,
@@ -797,7 +798,7 @@ func TestDump(t *testing.T) {
 			// the same scope the dump was read with.
 			desired := filepath.Join(t.TempDir(), "schema.sql")
 			require.NoError(t, os.WriteFile(desired, []byte(got.String()), 0o644))
-			plan, err := client.Plan(ctx, &PlanOptions{Files: []string{desired}})
+			plan, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
 			require.NoError(t, err)
 			assert.Empty(t, plan.SQL, "the dump does not plan clean")
 			assert.Empty(t, plan.DisallowedDrops, "the dump does not plan clean")
@@ -817,13 +818,13 @@ CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a 
 CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
 CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString:    conn.Config().ConnString(),
 		Schemas:       []string{"public"},
 		ManageRoutine: true,
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	files := got.Files()
@@ -844,12 +845,12 @@ func TestDumpResult_Files_RoutinesUnmanaged(t *testing.T) {
 CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 CREATE TABLE public.users (id integer);`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	files := got.Files()
@@ -875,12 +876,12 @@ CREATE TABLE public.users (
 );
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	result, err := client.Dump(ctx, &DumpOptions{})
+	result, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	doc := result.Document()
@@ -904,12 +905,12 @@ func TestDumpResult_Document_OmitSchema(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer);`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	result, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	result, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 
 	doc := result.Document()
@@ -920,7 +921,7 @@ func TestDumpResult_Document_OmitSchema(t *testing.T) {
 
 // A dump that read nothing still carries every object kind, as an empty map.
 func TestDumpResult_Document_Empty(t *testing.T) {
-	doc := (&DumpResult{}).Document()
+	doc := (&pistachio.DumpResult{}).Document()
 
 	assert.Equal(t, 0, doc.Tables.Len())
 	assert.Equal(t, 0, doc.Views.Len())
@@ -940,9 +941,9 @@ func TestDumpResult_Document_MultipleSchemas(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer);`)
 	connStr := setupSchemaDB(t, ctx, "other", `CREATE TABLE other.items (id integer);`)
 
-	client := NewClient(&Options{ConnString: connStr, Schemas: []string{"public", "other"}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connStr, Schemas: []string{"public", "other"}})
 
-	result, err := client.Dump(ctx, &DumpOptions{})
+	result, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	doc := result.Document()

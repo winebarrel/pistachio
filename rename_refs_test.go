@@ -10,8 +10,31 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
 )
+
+func setupSchemaDB(t *testing.T, ctx context.Context, schema string, initSQL string) string {
+	t.Helper()
+	conn := testutil.ConnectDB(t)
+
+	_, err := conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	require.NoError(t, err)
+	_, err = conn.Exec(ctx, "CREATE SCHEMA "+schema)
+	require.NoError(t, err)
+
+	if initSQL != "" {
+		_, err = conn.Exec(ctx, initSQL)
+		require.NoError(t, err)
+	}
+
+	t.Cleanup(func() {
+		conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+		conn.Close(ctx)
+	})
+
+	return conn.Config().ConnString()
+}
 
 const renameRefsInitSchema = `
 CREATE TYPE renschema.mood AS ENUM ('ok', 'sad');

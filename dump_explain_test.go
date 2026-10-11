@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
@@ -25,12 +26,12 @@ CREATE INDEX users_id_idx ON public.users USING btree (id);
 INSERT INTO public.users SELECT g FROM generate_series(1, 3) g;
 ANALYZE public.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{Explain: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{Explain: true})
 	require.NoError(t, err)
 
 	file := got.Files()["public.users.sql"]
@@ -45,7 +46,7 @@ func TestExplainDump_CatalogError(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, conn.Close(ctx))
 
-	err = explainDump(ctx, cat, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View]())
+	err = pistachio.ExplainDump(ctx, cat, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View]())
 	require.Error(t, err)
 }
 
@@ -59,13 +60,13 @@ CREATE INDEX users_id_idx ON staging.users USING btree (id);
 INSERT INTO staging.users SELECT g FROM generate_series(1, 3) g;
 ANALYZE staging.users;`)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connStr,
 		Schemas:    []string{"staging"},
 		SchemaMap:  map[string]string{"staging": "public"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{Explain: true})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{Explain: true})
 	require.NoError(t, err)
 	out := got.String()
 	assert.Contains(t, out, "-- public.users (~3 rows, 8192 bytes, as of ")
