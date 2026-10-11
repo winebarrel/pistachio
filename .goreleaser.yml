@@ -64,6 +64,10 @@ homebrew_casks:
   - repository:
       owner: winebarrel
       name: homebrew-pistachio
+    # Leave the committer out of the API call so GitHub signs the tap commit
+    # as the release app.
+    commit_author:
+      use_github_app_token: true
     homepage: https://github.com/winebarrel/pistachio
     description: pistachio is a declarative schema management tool for PostgreSQL.
     license: MIT
