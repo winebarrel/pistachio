@@ -217,8 +217,8 @@ func (client *Client) applyStmts(
 	commit := func(context.Context) error { return nil }
 
 	// DSQL builds an index and validates a constraint in a background job.
-	// Each job is waited for before the next statement runs. --with-tx is refused with dsql, so the
-	// transaction below never replaces this.
+	// Each job is waited for before the next statement runs. --with-tx is
+	// refused with dsql, so the transaction below never replaces this.
 	if client.Engine.isDSQL() && !options.DSQLNoWaitJob {
 		exec = func(ctx context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
 			return pgconn.CommandTag{}, dsql.Exec(ctx, conn, sql)
