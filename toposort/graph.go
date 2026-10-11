@@ -41,10 +41,6 @@ func (g *graph) Sort() ([]string, error) {
 	inDegree := make(map[string]int)
 	dependents := make(map[string][]string) // to -> [from ...] (who depends on to)
 
-	for n := range g.nodes {
-		inDegree[n] = 0
-	}
-
 	for from, tos := range g.edges {
 		for _, to := range tos {
 			// "from depends on to" means edge to -> from in execution order

@@ -596,7 +596,6 @@ func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]
 		}
 		// The opening parenthesis and a leading comma belong to no element.
 		trimmed := strings.TrimLeft(line, " \t(,")
-		trimmed = strings.TrimLeft(trimmed, " \t")
 		if strings.TrimSpace(trimmed) == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}

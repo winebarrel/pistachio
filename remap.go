@@ -245,10 +245,11 @@ func remapDefaultExpr(expr string, mapSchema func(string) string) string {
 			return false
 		}
 		s := names[0].GetString_()
-		if s == nil || mapSchema(s.Sval) == s.Sval {
+		mapped := mapSchema(s.GetSval())
+		if s == nil || mapped == s.Sval {
 			return false
 		}
-		s.Sval = mapSchema(s.Sval)
+		s.Sval = mapped
 		return true
 	}
 
