@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS sys.jobs (
     object_id oid
 );
 
--- DSQL returns one row with the column succeeded. An index stays invalid
--- until its job is waited for: the proxy builds it at once, and the wait
--- stands in for the build finishing.
+-- DSQL returns one row with the column succeeded. An index stays invalid,
+-- and a constraint NOT VALID, until its job is waited for: the proxy runs the
+-- job at once, and the wait stands in for the job finishing.
 CREATE OR REPLACE PROCEDURE sys.wait_for_job(job_id text, INOUT succeeded boolean DEFAULT NULL)
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -30,6 +30,8 @@ BEGIN
     END IF;
     IF job.job_type = 'INDEX_BUILD' AND job.status = 'completed' THEN
         UPDATE pg_catalog.pg_index SET indisvalid = true WHERE indexrelid = job.object_id;
+    ELSIF job.job_type = 'VALIDATE_CONSTRAINT' AND job.status = 'completed' THEN
+        UPDATE pg_catalog.pg_constraint SET convalidated = true WHERE oid = job.object_id;
     END IF;
     succeeded := job.status = 'completed';
 END $$;
@@ -40,29 +42,36 @@ CREATE SCHEMA IF NOT EXISTS dsql_proxy;
 -- run_job runs the statement of an ASYNC job at once and returns its job ID.
 -- A job that finds a violating row fails, as on DSQL, and leaves the
 -- statement undone. Any other error fails the statement itself. An index it
--- builds is marked invalid until sys.wait_for_job, as one still being built
--- on DSQL is.
+-- builds is marked invalid, and a constraint it validates NOT VALID, until
+-- sys.wait_for_job, as on DSQL while the job runs.
 CREATE OR REPLACE FUNCTION dsql_proxy.run_job(job_type text, stmt text)
 RETURNS TABLE (job_id text)
 LANGUAGE plpgsql AS $$
 DECLARE
     id text := translate(substr(md5(random()::text || clock_timestamp()::text), 1, 26), '0189', 'wxyz');
-    idx oid;
+    obj oid;
     before oid[];
 BEGIN
     BEGIN
         IF job_type = 'INDEX_BUILD' THEN
             SELECT array_agg(indexrelid) INTO before FROM pg_catalog.pg_index;
+        ELSE
+            SELECT array_agg(oid) INTO before FROM pg_catalog.pg_constraint WHERE NOT convalidated;
         END IF;
         EXECUTE stmt;
         IF job_type = 'INDEX_BUILD' THEN
             -- The index the statement created. The xmin of its row is not the
             -- transaction's own: this block runs in a subtransaction.
-            SELECT indexrelid INTO idx FROM pg_catalog.pg_index
+            SELECT indexrelid INTO obj FROM pg_catalog.pg_index
             WHERE NOT indexrelid = ANY (before);
-            UPDATE pg_catalog.pg_index SET indisvalid = false WHERE indexrelid = idx;
+            UPDATE pg_catalog.pg_index SET indisvalid = false WHERE indexrelid = obj;
+        ELSE
+            -- The constraint the statement validated.
+            SELECT oid INTO obj FROM pg_catalog.pg_constraint
+            WHERE oid = ANY (before) AND convalidated;
+            UPDATE pg_catalog.pg_constraint SET convalidated = false WHERE oid = obj;
         END IF;
-        INSERT INTO sys.jobs VALUES (id, 'completed', NULL, job_type, idx);
+        INSERT INTO sys.jobs VALUES (id, 'completed', NULL, job_type, obj);
     EXCEPTION WHEN unique_violation OR check_violation OR foreign_key_violation OR not_null_violation THEN
         INSERT INTO sys.jobs VALUES (id, 'failed', SQLERRM, job_type, NULL);
     END;

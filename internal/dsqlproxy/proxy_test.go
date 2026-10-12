@@ -98,9 +98,14 @@ func TestProxy_ValidateJob(t *testing.T) {
 
 	exec(t, conn, "DELETE FROM t")
 	require.NoError(t, conn.QueryRow(ctx, "ALTER TABLE ASYNC t VALIDATE CONSTRAINT t_n_check").Scan(&jobID))
+
+	// The constraint stays NOT VALID until its job is waited for.
+	var validated bool
+	require.NoError(t, conn.QueryRow(ctx, "SELECT convalidated FROM pg_constraint WHERE conname = 't_n_check'").Scan(&validated))
+	assert.False(t, validated)
+
 	require.NoError(t, conn.QueryRow(ctx, "CALL sys.wait_for_job('"+jobID+"')").Scan(&succeeded))
 	assert.True(t, succeeded)
-	var validated bool
 	require.NoError(t, conn.QueryRow(ctx, "SELECT convalidated FROM pg_constraint WHERE conname = 't_n_check'").Scan(&validated))
 	assert.True(t, validated)
 }
