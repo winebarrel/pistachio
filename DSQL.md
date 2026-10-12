@@ -7,7 +7,8 @@ PostgreSQL manual.
 
 The findings were verified against a live DSQL cluster (PostgreSQL 16 wire
 protocol, ap-northeast-1) on 2026-07-23, again on 2026-10-10
-(`server_version` 16.15, `sys.dsql_major_version()` 1), and on 2026-10-11.
+(`server_version` 16.15, `sys.dsql_major_version()` 1), on 2026-10-11, and
+on 2026-10-12.
 DSQL adds features over time, so a finding below can go stale; the AWS
 release notes say when.
 
@@ -59,6 +60,12 @@ through the proxy gives testdata/dsql/dsql.yaml unchanged.
 two differ, and the `dsql-recording` CI job runs it. When the recording is
 made again, run it as well and bring the proxy in line where the two differ.
 
+TestConformance in internal/dsqlproxy holds the statements below that DSQL
+accepts or refuses, with the SQLSTATE and message of each refusal. `make
+test` runs it against the proxy, and `make record-dsql` against the cluster
+after TestDSQL. A case that fails on the cluster means DSQL changed: correct
+this file, the case and the proxy together.
+
 The rest of this file is the evidence.
 
 Connection:
@@ -94,7 +101,7 @@ Catalog read layer (no incompatibility found):
 
 Objects that DSQL cannot create (out of scope, never in a DSQL desired
 schema):
-- Enums: `CREATE TYPE ... AS ENUM` -> `unsupported statement: CreateEnum`.
+- Enums: `CREATE TYPE ... AS ENUM` -> `CREATE TYPE not supported`.
 - Row-level security: `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` ->
   `unsupported ALTER TABLE ENABLE ROW SECURITY statement`; `CREATE POLICY`
   -> `unsupported statement: CreatePolicy`.
@@ -114,7 +121,8 @@ Sequences:
   or equal to 1`. pistachio always writes CACHE for a sequence, so this
   needs no change.
 - An identity column requires an explicit cache size too
-  (`identity column is not supported without an explicit cache size`),
+  (`identity column is not supported without an explicit cache size.
+  please define CACHE greater than or equal to 65536 or equal to 1`),
   and must be `bigint`. The model leaves CACHE 1 out as the default, so
   `--engine dsql` writes it.
 
@@ -173,11 +181,12 @@ statements this way):
 
 No alternative path (DSQL cannot do these to an existing table at all;
 the actions are absent from the `ALTER TABLE` grammar):
-- `ALTER COLUMN ... SET NOT NULL` -> `unsupported ... SET NOT NULL
-  statement`. `DROP NOT NULL` works, but there is no way to add NOT NULL
-  to an existing column. A CHECK (col IS NOT NULL) can be added, but it
-  does not set `attnotnull`.
-- `ALTER COLUMN ... TYPE` -> `unsupported ... SET DATA TYPE statement`.
+- `ALTER COLUMN ... SET NOT NULL` -> `unsupported ALTER TABLE ALTER
+  COLUMN ... SET NOT NULL statement`. `DROP NOT NULL` works, but there is
+  no way to add NOT NULL to an existing column. A CHECK (col IS NOT NULL)
+  can be added, but it does not set `attnotnull`.
+- `ALTER COLUMN ... TYPE` -> `unsupported ALTER TABLE ALTER COLUMN ...
+  SET DATA TYPE statement`.
 - Add a NOT NULL column to an existing table. This is possible only at
   CREATE TABLE time. `ADD COLUMN` cannot carry NOT NULL, and there is no
   SET NOT NULL afterwards.
@@ -233,7 +242,9 @@ Findings of 2026-10-10:
   functions; `CREATE DOMAIN` and a domain's DEFAULT.
 - These fail: composite types (`unsupported statement: CompositeType`),
   materialized views (`unsupported statement: CreateTableAs`), `ALTER
-  DOMAIN ... ADD CONSTRAINT`, `ALTER DOMAIN ... SET NOT NULL`, a column
+  DOMAIN ... ADD CONSTRAINT` (`ADD CONSTRAINT clause not supported for ALTER
+  DOMAIN`), `ALTER DOMAIN ... SET NOT NULL` (`SET NOT NULL clause not
+  supported for ALTER DOMAIN`), a column
   `COLLATE` (`COLLATE clause not supported`), and adding an identity column
   to an existing table (`ALTER TABLE ADD COLUMN with constraint not
   supported`).
@@ -258,3 +269,14 @@ Findings of 2026-10-11, on a new cluster:
 - The catalog values are as before: `btree_index`, every column of a
   primary key's table in `INCLUDE`, `attcompression = 'l'` on text columns,
   and `default_toast_compression = lz4`.
+
+Findings of 2026-10-12, from TestConformance:
+- Every refusal in the table has SQLSTATE 0A000.
+- `ALTER COLUMN ... SET COMPRESSION` -> `unsupported ALTER TABLE ALTER
+  COLUMN ... SET COMPRESSION statement`, and a `COMPRESSION` clause ->
+  `COMPRESSION clause not supported`.
+- `ALTER TABLE ASYNC` with anything but `VALIDATE CONSTRAINT` -> `ALTER
+  TABLE ASYNC not supported`.
+- Two DDL statements in one simple query string fail like two in one
+  transaction.
+- A stored generated column works in `CREATE TABLE`.

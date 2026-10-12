@@ -8,8 +8,7 @@ import (
 )
 
 // The messages come from DSQL.md, which records what a live cluster
-// answered. The ones marked unrecorded are not in it: the statement is
-// refused on DSQL, but its exact message was not kept.
+// answered. TestConformance checks them against the cluster.
 const (
 	msgAsyncIndex       = "unsupported mode. please use CREATE INDEX ASYNC."
 	msgIndexUsing       = "USING not supported for CREATE INDEX"
@@ -17,19 +16,20 @@ const (
 	msgDropConcurrent   = "DROP INDEX CONCURRENTLY must be first action in transaction"
 	msgAddColumn        = "ALTER TABLE ADD COLUMN with constraint not supported"
 	msgCollate          = "COLLATE clause not supported"
-	msgCompression      = "COMPRESSION clause not supported" // unrecorded
-	msgSetNotNull       = "unsupported ALTER TABLE SET NOT NULL statement"
-	msgSetDataType      = "unsupported ALTER TABLE SET DATA TYPE statement"
-	msgSetCompression   = "unsupported ALTER TABLE SET COMPRESSION statement" // unrecorded
+	msgCompression      = "COMPRESSION clause not supported"
+	msgSetNotNull       = "unsupported ALTER TABLE ALTER COLUMN ... SET NOT NULL statement"
+	msgSetDataType      = "unsupported ALTER TABLE ALTER COLUMN ... SET DATA TYPE statement"
+	msgSetCompression   = "unsupported ALTER TABLE ALTER COLUMN ... SET COMPRESSION statement"
 	msgAddConstraint    = "unsupported ALTER TABLE ADD CONSTRAINT statement"
 	msgValidate         = "unsupported ALTER TABLE VALIDATE CONSTRAINT statement"
-	msgAsyncAlter       = "unsupported ALTER TABLE ASYNC statement" // unrecorded
+	msgAsyncAlter       = "ALTER TABLE ASYNC not supported"
 	msgRowSecurity      = "unsupported ALTER TABLE ENABLE ROW SECURITY statement"
 	msgPartitionBy      = "PARTITION BY clause not supported for CREATE TABLE"
 	msgPartitionOf      = "PARTITION OF clause not supported for CREATE TABLE"
-	msgIdentityCache    = "identity column is not supported without an explicit cache size"
+	msgIdentityCache    = "identity column is not supported without an explicit cache size. please define CACHE greater than or equal to 65536 or equal to 1"
 	msgSequenceCache    = "CREATE SEQUENCE is not supported without an explicit cache size. please define CACHE greater than or equal to 65536 or equal to 1"
-	msgAlterDomain      = "unsupported ALTER DOMAIN statement" // unrecorded
+	msgDomainCheck      = "ADD CONSTRAINT clause not supported for ALTER DOMAIN"
+	msgDomainNotNull    = "SET NOT NULL clause not supported for ALTER DOMAIN"
 	msgMultipleDDL      = "multiple ddl statements not supported in a transaction"
 	msgDefaultReadOnly  = `setting configuration parameter "default_transaction_read_only" not supported`
 	msgAdvisoryLockFunc = "function %s not supported"
@@ -238,12 +238,19 @@ func refusal(node *pg_query.Node) string {
 
 	case node.GetAlterDomainStmt() != nil:
 		switch node.GetAlterDomainStmt().GetSubtype() {
-		case "C", "O":
-			return msgAlterDomain
+		case "C":
+			return msgDomainCheck
+		case "O":
+			return msgDomainNotNull
+		}
+
+	case node.GetVariableSetStmt() != nil:
+		if node.GetVariableSetStmt().GetName() == "default_transaction_read_only" {
+			return msgDefaultReadOnly
 		}
 
 	case node.GetCreateEnumStmt() != nil:
-		return "unsupported statement: CreateEnum"
+		return "CREATE TYPE not supported"
 	case node.GetCompositeTypeStmt() != nil:
 		return "unsupported statement: CompositeType"
 	case node.GetCreatePolicyStmt() != nil:
