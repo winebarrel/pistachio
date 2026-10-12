@@ -84,6 +84,34 @@ func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 	return errors.Join(errs...)
 }
 
+// validatePartitionCycles returns an error for each table that PARTITION OF
+// or INHERITS makes its own ancestor. PostgreSQL refuses such a table, and the
+// diff, which follows PartitionOf up to the root, would never finish. A table
+// below a cycle but not in it is left to the tables in the cycle to report.
+func validatePartitionCycles(tables *orderedmap.Map[string, *model.Table]) error {
+	var errs []error
+	for fqtn, t := range tables.All() {
+		seen := map[string]bool{fqtn: true}
+		for t.PartitionOf != nil {
+			parent := *t.PartitionOf
+			if parent == fqtn {
+				errs = append(errs, fmt.Errorf("circular inheritance: table %s is an ancestor of itself", fqtn))
+				break
+			}
+			if seen[parent] {
+				break
+			}
+			seen[parent] = true
+			next, ok := tables.GetOk(parent)
+			if !ok {
+				break
+			}
+			t = next
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // reportMissing appends one error per distinct refs[i] that is not in cols,
 // preserving first-encounter order so the aggregated error is deterministic.
 func reportMissing(errs *[]error, cols map[string]bool, refs []string, mkErr func(string) error) {

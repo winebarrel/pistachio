@@ -835,3 +835,63 @@ func TestValidateColumnRefs_ColumnExprQuotedName(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `column "Qty" referenced in the GENERATED expression on column total`)
 }
+
+// PostgreSQL never lets a table become its own ancestor, but a desired file
+// can say so, and the diff follows PartitionOf up to the root.
+func TestValidatePartitionCycles_Cycle(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want []string
+	}{
+		{
+			name: "partition of itself",
+			sql:  `CREATE TABLE a PARTITION OF a FOR VALUES FROM (1) TO (2);`,
+			want: []string{"circular inheritance: table public.a is an ancestor of itself"},
+		},
+		{
+			name: "inherits itself",
+			sql:  `CREATE TABLE a (id integer) INHERITS (a);`,
+			want: []string{"circular inheritance: table public.a is an ancestor of itself"},
+		},
+		{
+			name: "two tables",
+			sql: `CREATE TABLE a PARTITION OF b FOR VALUES FROM (1) TO (2);
+CREATE TABLE b PARTITION OF a FOR VALUES FROM (1) TO (2);`,
+			want: []string{
+				"circular inheritance: table public.a is an ancestor of itself",
+				"circular inheritance: table public.b is an ancestor of itself",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSQLWithSchema(tt.sql, "public", nil)
+			require.Error(t, err)
+			assert.Equal(t, strings.Join(tt.want, "\n"), err.Error())
+		})
+	}
+}
+
+// A table that hangs below a cycle without being part of it is not reported;
+// the tables in the cycle are.
+func TestValidatePartitionCycles_BelowCycle(t *testing.T) {
+	sql := `CREATE TABLE a PARTITION OF b FOR VALUES FROM (1) TO (2);
+CREATE TABLE b PARTITION OF a FOR VALUES FROM (1) TO (2);
+CREATE TABLE c PARTITION OF a FOR VALUES FROM (1) TO (2);`
+
+	_, err := parseSQLWithSchema(sql, "public", nil)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "public.c")
+}
+
+func TestValidatePartitionCycles_NoCycle(t *testing.T) {
+	sql := `CREATE TABLE a (id integer) PARTITION BY RANGE (id);
+CREATE TABLE b PARTITION OF a FOR VALUES FROM (1) TO (10) PARTITION BY RANGE (id);
+CREATE TABLE c PARTITION OF b FOR VALUES FROM (1) TO (5);
+CREATE TABLE d PARTITION OF other FOR VALUES FROM (1) TO (5);
+CREATE TABLE e (id integer) INHERITS (a);`
+
+	_, err := parseSQLWithSchema(sql, "public", nil)
+	require.NoError(t, err)
+}

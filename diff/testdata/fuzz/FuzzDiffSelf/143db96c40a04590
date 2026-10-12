@@ -1,0 +1,2 @@
+go test fuzz v1
+string("CREATE TABLE A PARTITION OF A(A)FOR VALUES FROM('')TO('')")
