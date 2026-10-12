@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.83.1] - 2026-10-12
 
 * `plan` and `apply` now reject a desired table that `PARTITION OF` or `INHERITS` makes its own ancestor, such as `CREATE TABLE a PARTITION OF a ...`. Before, `plan` never finished.
 
