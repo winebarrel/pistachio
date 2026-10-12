@@ -135,10 +135,18 @@ record-dsql:
 
 # CLI scenario tests on the aws-samples DSQL schemas, against a live cluster.
 # DSQL_HOST names the cluster endpoint, and its public schema must be empty.
-# CI does not run them. See test/dsql/run.sh.
+# See test/dsql/run.sh.
 .PHONY: test-dsql-scenario
 test-dsql-scenario:
 	bash test/dsql/run.sh
+
+# The same scenarios against internal/dsqlproxy, a proxy that makes the local
+# server answer the way DSQL does. It uses a database pista_dsql of its own on
+# the server PGPORT selects. DSQL speaks the PostgreSQL 16 protocol, so run it
+# on 16 (PGPORT=5416 with compose.yaml).
+.PHONY: test-dsql-proxy
+test-dsql-proxy:
+	DSQL_PROXY=1 bash test/dsql/run.sh
 
 # The CHANGELOG.md merge driver that changelog-merge.yml runs. No database.
 .PHONY: test-changelog

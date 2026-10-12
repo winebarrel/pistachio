@@ -10,7 +10,9 @@ set -euo pipefail
 # The packages only the tests may import. A pattern ending in /... takes the
 # packages under it too.
 test_only=$(go list \
-    ./internal/testutil/...)
+    ./internal/testutil/... \
+    ./internal/dsqlproxy \
+    ./test/...)
 
 status=0
 while read -r pkg imports; do
