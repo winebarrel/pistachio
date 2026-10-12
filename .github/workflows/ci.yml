@@ -313,6 +313,35 @@ jobs:
           go-version-file: go.mod
       - run: make test-dsql-proxy
 
+  dsql-recording:
+    runs-on: ubuntu-latest
+    # Records TestDSQL through internal/dsqlproxy and compares the result with
+    # testdata/dsql/dsql.yaml, which a live cluster made, so a proxy that no
+    # longer answers the way the cluster did fails here. A pull request that
+    # changes a statement pistachio sends fails here as well as in dsql until
+    # the recording is made again; the diff in the log then shows what the
+    # new recording should hold.
+    env:
+      PGPORT: "5432"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make check-dsql-recording
+
   samples:
     runs-on: ubuntu-latest
     # Checks pista against real-world sample schemas: downloads each from its

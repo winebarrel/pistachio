@@ -148,6 +148,14 @@ test-dsql-scenario:
 test-dsql-proxy:
 	DSQL_PROXY=1 bash test/dsql/run.sh
 
+# Records TestDSQL through internal/dsqlproxy and fails when the recording
+# differs from the one the live cluster made. Like test-dsql-proxy, it runs on
+# the server PGPORT selects, which should be PostgreSQL 16. See
+# scripts/check-dsql-recording.sh.
+.PHONY: check-dsql-recording
+check-dsql-recording:
+	bash scripts/check-dsql-recording.sh
+
 # The CHANGELOG.md merge driver that changelog-merge.yml runs. No database.
 .PHONY: test-changelog
 test-changelog:

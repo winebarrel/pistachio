@@ -29,7 +29,9 @@ const dsqlRecording = "testdata/dsql/dsql.yaml"
 // cluster instead and records the answers, which is how `make record-dsql`
 // makes the recording. The password is an IAM token, which the stub reads
 // from PGPASSWORD. The cluster has to hold nothing in public when the
-// recording starts.
+// recording starts. TEST_PISTA_DSQL_RECORDING names another file to record
+// to, which `make check-dsql-recording` uses to record through the proxy
+// without touching the committed recording.
 func dsqlClient(t *testing.T) *pistachio.Client {
 	t.Helper()
 	connString := os.Getenv("TEST_PISTA_DSQL_CONN_STR")
@@ -40,8 +42,12 @@ func dsqlClient(t *testing.T) *pistachio.Client {
 	if connString != "" {
 		// The cluster gives each object a new OID and each index build a new
 		// job ID. Numbering them keeps a recording made again the same.
+		recording := dsqlRecording
+		if path := os.Getenv("TEST_PISTA_DSQL_RECORDING"); path != "" {
+			recording = path
+		}
 		opts = []pgstub.Option{
-			pgstub.Record(connString, dsqlRecording),
+			pgstub.Record(connString, recording),
 			pgstub.NormalizeOIDs(),
 			pgstub.NormalizeColumn("job_id", "job-"),
 		}
