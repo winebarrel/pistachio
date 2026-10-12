@@ -54,9 +54,10 @@ refuses with their messages, one DDL statement per transaction, and the
 catalog values below. The `dsql-proxy` CI job runs it. The proxy stands in
 for the cluster between recordings and does not replace it: it knows only
 what this file records, and DSQL changes over time. TestDSQL recorded
-through the proxy gives testdata/dsql/dsql.yaml unchanged, so record it
-through the proxy as well whenever the recording is made again, and bring
-the proxy in line where the two differ.
+through the proxy gives testdata/dsql/dsql.yaml unchanged.
+`make check-dsql-recording` records it through the proxy and fails where the
+two differ, and the `dsql-recording` CI job runs it. When the recording is
+made again, run it as well and bring the proxy in line where the two differ.
 
 The rest of this file is the evidence.
 

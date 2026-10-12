@@ -50,19 +50,10 @@ export PISTA="./pista"
 
 if [ -n "${DSQL_PROXY:-}" ]; then
   echo "Starting the proxy..."
-  backend="postgres://${PGUSER:-postgres}@${PGHOST:-localhost}:${PGPORT:-5432}"
-  psql -X -q -v ON_ERROR_STOP=1 "$backend/postgres" \
-    -c 'DROP DATABASE IF EXISTS pista_dsql' -c 'CREATE DATABASE pista_dsql'
-  go build -o "$DSQL_SAMPLES/proxy" ./test/dsql/proxy
-  "$DSQL_SAMPLES/proxy" -backend "$backend/pista_dsql?sslmode=disable" > "$DSQL_SAMPLES/addr" &
-  proxy_pid=$!
-  # The proxy prints its address once it listens.
-  for _ in $(seq 100); do
-    [ -s "$DSQL_SAMPLES/addr" ] && break
-    kill -0 "$proxy_pid" 2>/dev/null || { echo "The proxy did not start." >&2; exit 1; }
-    sleep 0.1
-  done
-  export PISTA_CONN_STR="postgres://admin@$(head -1 "$DSQL_SAMPLES/addr")/postgres?sslmode=disable"
+  source test/dsql/proxy.sh
+  start_proxy pista_dsql "$DSQL_SAMPLES"
+  proxy_pid=$PROXY_PID
+  export PISTA_CONN_STR="postgres://admin@$PROXY_ADDR/postgres?sslmode=disable"
 else
   # A token lasts 15 minutes by default, which a run can outlast.
   PGPASSWORD=$(aws dsql generate-db-connect-admin-auth-token --hostname "$DSQL_HOST" --region "$region" --expires-in 3600)
