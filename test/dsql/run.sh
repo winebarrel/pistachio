@@ -9,7 +9,8 @@
 # starts from nothing and drops what it creates.
 #
 # The proxy runs on the server PGHOST, PGPORT and PGUSER name, in a database
-# pista_dsql that each run creates again. The role needs CREATEDB.
+# pista_dsql that each run creates again. The role must be a superuser: the
+# proxy marks an index being built invalid by writing to pg_catalog.pg_index.
 #
 # The schemas come from aws-samples/aurora-dsql-samples, downloaded at a pinned
 # commit into a temporary directory. To move to a newer commit, resolve it with
