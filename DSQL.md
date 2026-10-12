@@ -182,9 +182,9 @@ statements this way):
 No alternative path (DSQL cannot do these to an existing table at all;
 the actions are absent from the `ALTER TABLE` grammar):
 - `ALTER COLUMN ... SET NOT NULL` -> `unsupported ALTER TABLE ALTER
-  COLUMN ... SET NOT NULL statement`. `DROP NOT NULL` works, but there is no way to add NOT NULL
-  to an existing column. A CHECK (col IS NOT NULL) can be added, but it
-  does not set `attnotnull`.
+  COLUMN ... SET NOT NULL statement`. `DROP NOT NULL` works, but there is
+  no way to add NOT NULL to an existing column. A CHECK (col IS NOT NULL)
+  can be added, but it does not set `attnotnull`.
 - `ALTER COLUMN ... TYPE` -> `unsupported ALTER TABLE ALTER COLUMN ...
   SET DATA TYPE statement`.
 - Add a NOT NULL column to an existing table. This is possible only at
