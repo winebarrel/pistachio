@@ -788,6 +788,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
+	if err := validatePartitionCycles(tables); err != nil {
+		return nil, err
+	}
+
 	if err := validateColumnRefs(tables); err != nil {
 		return nil, err
 	}

@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` and `apply` now reject a desired table that `PARTITION OF` or `INHERITS` makes its own ancestor, such as `CREATE TABLE a PARTITION OF a ...`. Before, `plan` never finished.
+
 ## [1.83.0] - 2026-10-11
 
 * **BREAKING**: Remove `--dsql-ignore-async` and `PISTA_DSQL_IGNORE_ASYNC`. With `--engine dsql`, `plan` and `apply` now always ignore `ASYNC` in `CREATE INDEX ASYNC` in the desired schema.
