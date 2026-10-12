@@ -319,8 +319,8 @@ jobs:
     # testdata/dsql/dsql.yaml, which a live cluster made, so a proxy that no
     # longer answers the way the cluster did fails here. A pull request that
     # changes a statement pistachio sends fails here as well as in dsql until
-    # the recording is made again; the diff in the log then shows what the
-    # new recording should hold.
+    # the recording is made again with make record-dsql; the diff in the log
+    # then shows how the proxy's answers moved.
     env:
       PGPORT: "5432"
     services:
