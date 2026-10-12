@@ -45,8 +45,18 @@ in the pull request; a maintainer with a cluster records it.
 `make test-dsql-scenario` runs the scenarios in test/dsql/ against a live
 cluster named by `DSQL_HOST`. They take the schemas of
 aws-samples/aurora-dsql-samples at a pinned commit, then build, change and
-drop them step by step, checking for drift after each. CI does not run
-them, and nothing is recorded.
+drop them step by step, checking for drift after each. Nothing is recorded.
+
+`make test-dsql-proxy` runs the same scenarios against internal/dsqlproxy,
+a proxy that makes a local PostgreSQL 16 server answer the way this file
+says DSQL does: ASYNC jobs and `sys.wait_for_job`, the statements DSQL
+refuses with their messages, one DDL statement per transaction, and the
+catalog values below. The `dsql-proxy` CI job runs it. The proxy stands in
+for the cluster between recordings and does not replace it: it knows only
+what this file records, and DSQL changes over time. TestDSQL recorded
+through the proxy gives testdata/dsql/dsql.yaml unchanged, so record it
+through the proxy as well whenever the recording is made again, and bring
+the proxy in line where the two differ.
 
 The rest of this file is the evidence.
 

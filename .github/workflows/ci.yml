@@ -284,6 +284,35 @@ jobs:
           disable_search: true
           flags: dsql
 
+  dsql-proxy:
+    runs-on: ubuntu-latest
+    # The DSQL scenarios in test/dsql/, against internal/dsqlproxy in front of
+    # PostgreSQL 16, the version DSQL speaks. The proxy answers the way the
+    # live recording in testdata/dsql/ says DSQL does, so this checks without
+    # a cluster that what pistachio writes for DSQL applies and plans clean.
+    env:
+      # The service keeps the default port; the Makefile otherwise defaults to
+      # the port compose.yaml publishes locally.
+      PGPORT: "5432"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make test-dsql-proxy
+
   samples:
     runs-on: ubuntu-latest
     # Checks pista against real-world sample schemas: downloads each from its

@@ -85,6 +85,13 @@ func (p *DBPool) Connect(t *testing.T) *pgx.Conn {
 	return conn
 }
 
+// ConnStringFor returns ConnString with its database replaced by db, for a
+// test that needs a database of its own.
+func ConnStringFor(t *testing.T, db string) string {
+	t.Helper()
+	return connStringFor(t, db)
+}
+
 // connStringFor returns ConnString with its database replaced by db. It takes
 // both forms libpq does: a URL, whose path is the database unless a dbname
 // parameter overrides it, and keyword/value pairs, where a later dbname
