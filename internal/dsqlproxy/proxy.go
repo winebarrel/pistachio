@@ -4,7 +4,8 @@
 // client sends and leaves every other message alone:
 //
 //   - CREATE INDEX ASYNC and ALTER TABLE ASYNC ... VALIDATE CONSTRAINT run at
-//     once and return a job ID, which sys.wait_for_job then reports on.
+//     once and return a job ID, which sys.wait_for_job then reports on. The
+//     index stays invalid, and the constraint NOT VALID, until the wait.
 //   - A statement DSQL refuses fails with DSQL's SQLSTATE and message, and so
 //     does a second DDL statement in a transaction.
 //   - The catalog reads return the values DSQL reports: btree_index as the
