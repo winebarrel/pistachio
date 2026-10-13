@@ -40,10 +40,10 @@ The options that decide what is read or what is run are not accepted. The plan f
 ### Execution
 
 `--with-tx`
-:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement. It cannot be used with `--try-tx`. The environment variable is `PISTA_WITH_TX`.
+:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement. It cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
 
 `--try-tx`
-:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. The environment variable is `PISTA_TRY_TX`.
+:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
 
 `--timing`
 :   Write the elapsed time of each statement after it, as a comment. The environment variable is `PISTA_TIMING`. See the [notes on `apply`](apply.md#timing).
@@ -53,6 +53,18 @@ The options that decide what is read or what is run are not accepted. The plan f
 
 `--exclusive-wait=`*duration*
 :   This option is like `--exclusive`, but it waits up to *duration* for the other apply to finish. `0` waits without limit. The environment variable is `PISTA_EXCLUSIVE_WAIT`.
+
+`--lock-timeout=`*duration*
+:   Run `SET lock_timeout` with *duration* before the pre-SQL. `0` turns the timeout off. The environment variable is `PISTA_LOCK_TIMEOUT`. See the [options of `apply`](apply.md#execution).
+
+`--lock-retries=`*n*
+:   Run a schema change again, up to *n* times, when it fails because `lock_timeout` ran out. This option cannot be used with `--with-tx` or `--try-tx`. The environment variable is `PISTA_LOCK_RETRIES`.
+
+`--lock-retry-delay=`*duration*
+:   The time to wait before each retry. The default is `1s`. The environment variable is `PISTA_LOCK_RETRY_DELAY`.
+
+`--statement-timeout=`*duration*
+:   Run `SET statement_timeout` with *duration* before the pre-SQL. `0` turns the timeout off. The environment variable is `PISTA_STATEMENT_TIMEOUT`.
 
 `--dsql-no-wait-job`
 :   Do not wait for an index build or a constraint validation to finish before the next statement runs. This option requires a plan file written with `--engine dsql`. The environment variable is `PISTA_DSQL_NO_WAIT_JOB`. See [Aurora DSQL](../../guides/aurora-dsql.md#jobs).

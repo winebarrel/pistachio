@@ -123,10 +123,10 @@ The [general options](index.md#general-options) apply as well.
 ### Execution
 
 `--with-tx`
-:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement, because such a statement cannot run in a transaction. A `CONCURRENTLY` opt-in on an index that does not change does not block this option. This option cannot be used with `--try-tx`. The environment variable is `PISTA_WITH_TX`.
+:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement, because such a statement cannot run in a transaction. A `CONCURRENTLY` opt-in on an index that does not change does not block this option. This option cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
 
 `--try-tx`
-:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. The environment variable is `PISTA_TRY_TX`.
+:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
 
 `--timing`
 :   Write the elapsed time of each statement after it, as a comment. The time is measured on the client, so it includes the round trip and any wait for a lock. The environment variable is `PISTA_TIMING`.
@@ -136,6 +136,18 @@ The [general options](index.md#general-options) apply as well.
 
 `--exclusive-wait=`*duration*
 :   This option is like `--exclusive`, but it waits up to *duration* for the other apply to finish. `0` waits without limit. The value is a Go duration, for example `30s` or `5m`. The environment variable is `PISTA_EXCLUSIVE_WAIT`.
+
+`--lock-timeout=`*duration*
+:   Run `SET lock_timeout` with *duration* before the pre-SQL. A statement that waits longer than *duration* for a lock then fails. The value is a Go duration, for example `500ms` or `5s`. It is rounded up to whole milliseconds. `0` turns the timeout off. Without this option, no `SET` runs, and the role or database setting applies. A `SET lock_timeout` in the pre-SQL overrides this option. The environment variable is `PISTA_LOCK_TIMEOUT`.
+
+`--lock-retries=`*n*
+:   Run a schema change again, up to *n* times, when it fails because `lock_timeout` ran out (SQLSTATE `55P03`). Only the failed statement runs again. The pre-SQL and `-- pista:execute` statements are not retried. A `CONCURRENTLY` index statement is not retried either, because a failed one can leave an invalid index. This option has no effect unless `lock_timeout` is set, by `--lock-timeout`, the pre-SQL or the role. It cannot be used with `--with-tx` or `--try-tx`. The default is 0. The environment variable is `PISTA_LOCK_RETRIES`.
+
+`--lock-retry-delay=`*duration*
+:   The time to wait before each retry of `--lock-retries`. The default is `1s`. The environment variable is `PISTA_LOCK_RETRY_DELAY`.
+
+`--statement-timeout=`*duration*
+:   Run `SET statement_timeout` with *duration* before the pre-SQL. A statement that runs longer than *duration*, including any wait for a lock, then fails. It is not retried. `0` turns the timeout off. The timeout also applies to a `CONCURRENTLY` index build. To give the build another value, set it in `--concurrently-pre-sql`. The environment variable is `PISTA_STATEMENT_TIMEOUT`.
 
 `--dsql-no-wait-job`
 :   Do not wait for an index build or a constraint validation to finish before the next statement runs. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_NO_WAIT_JOB`. See [Aurora DSQL](../../guides/aurora-dsql.md#jobs).
@@ -190,7 +202,13 @@ pista apply --allow-drop column,table schema.sql
 Apply in one transaction, with a statement timeout:
 
 ```bash
-pista apply --with-tx --pre-sql "SET statement_timeout = '5s';" schema.sql
+pista apply --with-tx --statement-timeout=5s schema.sql
+```
+
+Stop a lock wait after 500 milliseconds, and try the statement again up to five times, 10 seconds apart:
+
+```bash
+pista apply --lock-timeout=500ms --lock-retries=5 --lock-retry-delay=10s schema.sql
 ```
 
 Build indexes concurrently with a lock timeout, and time each statement:

@@ -87,7 +87,7 @@ Each read is skipped when nothing in the plan needs it. So a plan that only crea
 
 The comment is about the statement, not the data. It does not say whether a `SET NOT NULL` will find a NULL, or whether an `ADD CONSTRAINT ... UNIQUE` will find a duplicate. That depends on the rows.
 
-It reports the lock that the statement takes, not the wait to get it. An ACCESS EXCLUSIVE lock queues behind every transaction that is already reading the table. Everything that arrives later queues behind the lock. So even a statement that changes only the catalog can stop the table for as long as one old transaction runs. `--pre-sql "SET lock_timeout = '5s'"` limits that wait.
+It reports the lock that the statement takes, not the wait to get it. An ACCESS EXCLUSIVE lock queues behind every transaction that is already reading the table. Everything that arrives later queues behind the lock. So even a statement that changes only the catalog can stop the table for as long as one old transaction runs. `apply --lock-timeout` limits that wait, and `--lock-retries` tries again. See [Bounding lock waits](transactions.md#bounding-lock-waits).
 
 In two cases the comment is coarser than what PostgreSQL does. A binary-coercible type change that still changes an index's operator class, such as `integer` to `oid`, rebuilds that index but gets no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child, even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse. pistachio writes foreign keys with `ONLY`, so nothing that it emits reaches this case.
 

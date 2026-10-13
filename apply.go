@@ -32,8 +32,8 @@ type ApplyOptions struct {
 // ExecOptions decides how the statements are run rather than what they are, so
 // apply and apply-from, which takes its statements from a plan file, share it.
 type ExecOptions struct {
-	WithTx bool `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
-	TryTx  bool `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
+	WithTx bool `xor:"tx-mode,tx-choice,tx-retry" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	TryTx  bool `xor:"tx-choice,tx-retry" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
 	Timing bool `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
 	// Exclusive and ExclusiveWait guard the database rather than one apply, so
 	// apply-from takes them too: a plan file executed beside another apply
@@ -54,6 +54,14 @@ type ExecOptions struct {
 	// every index and validates every constraint in a background job, and
 	// apply waits for each by default.
 	DSQLNoWaitJob bool `env:"PISTA_DSQL_NO_WAIT_JOB" help:"With --engine dsql, do not wait for an index build or a constraint validation to finish before running the next statement."`
+	// LockTimeout and StatementTimeout are pointers so that a flag left out
+	// sends no SET at all, leaving whatever the role or the database sets.
+	LockTimeout *UnsignedDuration `env:"PISTA_LOCK_TIMEOUT" placeholder:"DURATION" help:"Run SET lock_timeout with the given duration (0 turns it off) before the pre-SQL."`
+	// LockRetries runs again only the statement that timed out, so it
+	// cannot be used with a transaction, which the timeout aborts as a whole.
+	LockRetries      uint              `xor:"tx-retry" env:"PISTA_LOCK_RETRIES" help:"Retry a statement that fails on lock_timeout up to this many times. Cannot be used with --with-tx or --try-tx."`
+	LockRetryDelay   UnsignedDuration  `env:"PISTA_LOCK_RETRY_DELAY" default:"1s" placeholder:"DURATION" help:"How long to wait before each retry of --lock-retries."`
+	StatementTimeout *UnsignedDuration `env:"PISTA_STATEMENT_TIMEOUT" placeholder:"DURATION" help:"Run SET statement_timeout with the given duration (0 turns it off) before the pre-SQL."`
 }
 
 // applyInput is the statement set an apply runs, whichever it came from: the
@@ -242,6 +250,24 @@ func (client *Client) applyStmts(
 		return nil
 	}
 
+	// execRetried runs a schema change, and runs it again when it fails on
+	// lock_timeout, up to --lock-retries times. --lock-retries cannot be used
+	// with a transaction, so a statement here that times out has changed
+	// nothing. A -- pista:execute statement is not retried: it is SQL the
+	// user wrote, and pistachio cannot tell whether running it again is safe.
+	execRetried := func(ctx context.Context, stmt string) error {
+		for retry := uint(1); ; retry++ {
+			err := execTimed(ctx, stmt)
+			if err == nil || retry > options.LockRetries || !isLockTimeout(err) || !retryable(stmt) {
+				return err
+			}
+			if err := waitLockRetry(ctx, w, options, retry); err != nil {
+				return err
+			}
+			fmt.Fprintln(w, stmt) //nolint:errcheck
+		}
+	}
+
 	if withTx {
 		txStart := time.Now()
 		tx, err := conn.Begin(ctx)
@@ -273,6 +299,15 @@ func (client *Client) applyStmts(
 		// Record why the requested transaction was not opened, in the same
 		// sentence form as the comments above.
 		fmt.Fprintln(w, "-- Transaction skipped: plan contains CONCURRENTLY index DDL") //nolint:errcheck
+	}
+
+	// --lock-timeout and --statement-timeout come before the pre-SQL, so a
+	// SET there overrides them.
+	for _, stmt := range options.timeoutStmts() {
+		fmt.Fprintln(w, stmt) //nolint:errcheck
+		if err := execTimed(ctx, stmt); err != nil {
+			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+		}
 	}
 
 	// Pre-SQL and concurrently-pre-SQL are setup steps (e.g. SET lock_timeout),
@@ -341,7 +376,7 @@ func (client *Client) applyStmts(
 
 	for _, stmt := range input.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
-		if err := execTimed(ctx, stmt); err != nil {
+		if err := execRetried(ctx, stmt); err != nil {
 			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 		applied = true

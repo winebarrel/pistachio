@@ -37,7 +37,7 @@ The plan file records the options that decide what the plan read: `--schemas`, `
 
 `apply-from` does not accept them on the command line. A filter given there would narrow the schema that is hashed, and report drift that does not exist.
 
-It does accept the connection options, and the flags that decide how the statements run: `--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait`.
+It does accept the connection options, and the flags that decide how the statements run: `--with-tx`, `--try-tx`, `--timing`, `--exclusive`, `--exclusive-wait`, `--lock-timeout`, `--lock-retries`, `--lock-retry-delay` and `--statement-timeout`.
 
 `--pre-sql` and `--concurrently-pre-sql` belong to the plan. `plan --out` writes them into the file, and `apply-from` runs them. The file also records whether the plan contains `CONCURRENTLY` index DDL. That is what makes `--with-tx` refuse the plan.
 

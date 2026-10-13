@@ -47,19 +47,29 @@ Such a run is not all-or-nothing. A `CREATE INDEX CONCURRENTLY` that fails leave
 
 ## Bounding lock waits
 
-A DDL statement waits for every transaction that holds a conflicting lock. Every later statement that needs a conflicting lock waits behind it. `lock_timeout` limits that wait, and `--pre-sql` sets it for the run:
+A DDL statement waits for every transaction that holds a conflicting lock. Every later statement that needs a conflicting lock waits behind it. `lock_timeout` limits that wait, and `--lock-timeout` sets it for the run:
 
 ```bash
-pista apply --pre-sql "SET lock_timeout = '5s';" schema.sql
+pista apply --lock-timeout=5s schema.sql
 ```
 
-`--concurrently-pre-sql` runs its SQL only when the plan contains a `CONCURRENTLY` statement. Use it for a setting that matters only to a long index build:
+When the wait runs out, the statement fails and the apply stops. With `--lock-retries`, the statement runs again after `--lock-retry-delay`. The default delay is 1 second:
 
 ```bash
-pista apply --try-tx --concurrently-pre-sql "SET lock_timeout = '5s';" schema.sql
+pista apply --lock-timeout=500ms --lock-retries=5 --lock-retry-delay=10s schema.sql
 ```
 
-Both are session-scoped `SET`s, so they remain in effect for the rest of the run. `--pre-sql-file` and `--concurrently-pre-sql-file` read the SQL from a file instead. A `SET statement_timeout` limits the statement itself in the same way.
+With a short timeout, the queries queued behind the DDL wait only briefly. The retries give a long transaction time to finish.
+
+Only the failed schema change runs again. The pre-SQL and `-- pista:execute` statements are not retried. In a transaction, the failure aborts the whole transaction, so `--lock-retries` cannot be used with `--with-tx` or `--try-tx`. A `CONCURRENTLY` index statement does not run again, because a failed one can leave an invalid index.
+
+`--statement-timeout` sets `statement_timeout`. It limits each statement, including its wait for a lock. A statement that fails on it does not run again.
+
+Both options run a `SET` before the pre-SQL. The setting lasts for the rest of the run. A `SET` in the pre-SQL overrides it. `--concurrently-pre-sql` runs only when the plan contains a `CONCURRENTLY` statement, so it can give a long index build its own value:
+
+```bash
+pista apply --statement-timeout=1m --concurrently-pre-sql "SET statement_timeout = 0;" schema.sql
+```
 
 ## What a plan locks
 
