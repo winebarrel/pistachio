@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.84.0] - 2026-10-14
 
 * `apply` and `apply-from` take `--lock-timeout` and `--statement-timeout`. They set `lock_timeout` and `statement_timeout` before the pre-SQL.
 
