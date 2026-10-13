@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,6 +39,18 @@ func TestValidateApplyEngine(t *testing.T) {
 	require.EqualError(t, ValidateApplyEngine(EngineDSQL, opts), "--bulk-alter cannot be used with --engine dsql")
 	require.EqualError(t, ValidateApplyEngine(EngineDSQL, &ApplyOptions{WithTx: true}), "--with-tx cannot be used with --engine dsql")
 
+	// DSQL refuses SET lock_timeout and SET statement_timeout, and has no
+	// lock to time out on.
+	second := UnsignedDuration(time.Second)
+	for flag, opts := range map[string]*ApplyOptions{
+		"lock-timeout":      {ExecOptions: ExecOptions{LockTimeout: &second}},
+		"lock-retries":      {ExecOptions: ExecOptions{LockRetries: 1}},
+		"statement-timeout": {ExecOptions: ExecOptions{StatementTimeout: &second}},
+	} {
+		require.NoError(t, ValidateApplyEngine(EnginePostgres, opts))
+		require.EqualError(t, ValidateApplyEngine(EngineDSQL, opts), "--"+flag+" cannot be used with --engine dsql")
+	}
+
 	noWait := &ApplyOptions{DSQLNoWaitJob: true}
 	require.NoError(t, ValidateApplyEngine(EngineDSQL, noWait))
 	require.EqualError(t, ValidateApplyEngine(EnginePostgres, noWait), "--dsql-no-wait-job requires --engine dsql")
@@ -55,6 +68,8 @@ func TestValidateApplyFromEngine(t *testing.T) {
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan}))
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, DSQLNoWaitJob: true}))
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, TryTx: true}), "--try-tx cannot be used with --engine dsql")
+	second := UnsignedDuration(time.Second)
+	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, LockTimeout: &second}), "--lock-timeout cannot be used with --engine dsql")
 
 	// A plan file written before the engine was recorded is postgres.
 	oldPlan := write(t, `{"version":5,"scope":{}}`)

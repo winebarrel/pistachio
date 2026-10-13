@@ -72,13 +72,19 @@ func planRefused(o *PlanOptions) []dsqlRefused {
 }
 
 // execRefused lists the ExecOptions DSQL cannot run. DSQL takes one DDL
-// statement per transaction and has no advisory lock.
+// statement per transaction and has no advisory lock. It refuses SET
+// lock_timeout and SET statement_timeout, and with no locks there is no lock
+// timeout to retry. --lock-retry-delay has a default, so it is always set and
+// cannot be told apart from one given; without --lock-retries it does nothing.
 func execRefused(o *ExecOptions) []dsqlRefused {
 	return []dsqlRefused{
 		{"with-tx", o.WithTx},
 		{"try-tx", o.TryTx},
 		{"exclusive", o.Exclusive},
 		{"exclusive-wait", o.ExclusiveWait != nil},
+		{"lock-timeout", o.LockTimeout != nil},
+		{"lock-retries", o.LockRetries > 0},
+		{"statement-timeout", o.StatementTimeout != nil},
 	}
 }
 

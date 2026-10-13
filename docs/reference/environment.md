@@ -51,6 +51,10 @@ These options have no variable:
 | `PISTA_EXCLUSIVE` | `--exclusive` | apply, apply-from |
 | `PISTA_EXCLUSIVE_WAIT` | `--exclusive-wait` | apply, apply-from |
 | `PISTA_DSQL_NO_WAIT_JOB` | `--dsql-no-wait-job` | apply, apply-from |
+| `PISTA_LOCK_TIMEOUT` | `--lock-timeout` | apply, apply-from |
+| `PISTA_LOCK_RETRIES` | `--lock-retries` | apply, apply-from |
+| `PISTA_LOCK_RETRY_DELAY` | `--lock-retry-delay` | apply, apply-from |
+| `PISTA_STATEMENT_TIMEOUT` | `--statement-timeout` | apply, apply-from |
 | `PISTA_NO_FORMAT` | `--no-format` | dump |
 | `PISTA_DUMP_JSON` | `--json` | dump |
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |

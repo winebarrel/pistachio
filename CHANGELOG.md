@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `apply` and `apply-from` take `--lock-timeout` and `--statement-timeout`. They set `lock_timeout` and `statement_timeout` before the pre-SQL.
+
+* `apply` and `apply-from` take `--lock-retries`. It runs a statement again when the statement fails because `lock_timeout` ran out. Only the failed statement runs again. A `CONCURRENTLY` index statement does not run again. `--lock-retry-delay` sets the wait before each retry. The default is 1 second. `--lock-retries` cannot be used with `--with-tx` or `--try-tx`.
+
 ## [1.83.1] - 2026-10-12
 
 * `plan` and `apply` now reject a desired table that `PARTITION OF` or `INHERITS` makes its own ancestor, such as `CREATE TABLE a PARTITION OF a ...`. Before, `plan` never finished.

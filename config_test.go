@@ -366,6 +366,90 @@ func TestYAMLConfig_ExclusiveWait(t *testing.T) {
 	})
 }
 
+// The timeouts take a duration from the command line, an environment variable
+// and the config file. 0 is a value of its own, which turns the setting off.
+func TestYAMLConfig_Timeouts(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "apply", "schema.sql")
+		require.NoError(t, err)
+		assert.Nil(t, cli.Apply.LockTimeout)
+		assert.Nil(t, cli.Apply.StatementTimeout)
+		assert.Zero(t, cli.Apply.LockRetries)
+		assert.Equal(t, pistachio.UnsignedDuration(time.Second), cli.Apply.LockRetryDelay)
+	})
+
+	t.Run("flags", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "apply", "--lock-timeout=500ms", "--lock-retries=3", "--lock-retry-delay=5s", "--statement-timeout=1m", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.LockTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(500*time.Millisecond), *cli.Apply.LockTimeout)
+		assert.Equal(t, uint(3), cli.Apply.LockRetries)
+		assert.Equal(t, pistachio.UnsignedDuration(5*time.Second), cli.Apply.LockRetryDelay)
+		require.NotNil(t, cli.Apply.StatementTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(time.Minute), *cli.Apply.StatementTimeout)
+	})
+
+	t.Run("environment variables", func(t *testing.T) {
+		t.Setenv("PISTA_LOCK_TIMEOUT", "2s")
+		t.Setenv("PISTA_STATEMENT_TIMEOUT", "30s")
+		cli, err := parseCommandCLI(t, "apply-from", "plan.json")
+		require.NoError(t, err)
+		require.NotNil(t, cli.ApplyFrom.LockTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(2*time.Second), *cli.ApplyFrom.LockTimeout)
+		require.NotNil(t, cli.ApplyFrom.StatementTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(30*time.Second), *cli.ApplyFrom.StatementTimeout)
+	})
+
+	t.Run("config file", func(t *testing.T) {
+		path := writeConfig(t, "lock-timeout: 1s\nlock-retries: 2\n")
+		cli, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.LockTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(time.Second), *cli.Apply.LockTimeout)
+		assert.Equal(t, uint(2), cli.Apply.LockRetries)
+	})
+
+	t.Run("zero", func(t *testing.T) {
+		path := writeConfig(t, "lock-timeout: 0\n")
+		cli, err := parseCommandCLI(t, "--config", path, "apply", "--statement-timeout=0s", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.LockTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(0), *cli.Apply.LockTimeout)
+		require.NotNil(t, cli.Apply.StatementTimeout)
+		assert.Equal(t, pistachio.UnsignedDuration(0), *cli.Apply.StatementTimeout)
+	})
+
+	t.Run("negative", func(t *testing.T) {
+		_, err := parseCommandCLI(t, "apply", "--lock-timeout=-1s", "schema.sql")
+		require.ErrorContains(t, err, "must not be negative")
+	})
+
+	t.Run("retries without a timeout", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "apply", "--lock-retries=3", "schema.sql")
+		require.NoError(t, err)
+		assert.Equal(t, uint(3), cli.Apply.LockRetries)
+		assert.Nil(t, cli.Apply.LockTimeout)
+	})
+
+	// A lock timeout aborts a transaction, so a retry would have to run it
+	// again from the start; retries are refused with one instead.
+	t.Run("retries with a transaction", func(t *testing.T) {
+		for _, tx := range []string{"--with-tx", "--try-tx"} {
+			_, err := parseCommandCLI(t, "apply", tx, "--lock-timeout=1s", "--lock-retries=1", "schema.sql")
+			require.ErrorContains(t, err, "can't be used together", tx)
+			_, err = parseCommandCLI(t, "apply-from", tx, "--lock-timeout=1s", "--lock-retries=1", "plan.json")
+			require.ErrorContains(t, err, "can't be used together", tx)
+		}
+		_, err := parseCommandCLI(t, "apply", "--with-tx", "--lock-timeout=1s", "--statement-timeout=1s", "schema.sql")
+		require.NoError(t, err)
+	})
+
+	t.Run("negative retries", func(t *testing.T) {
+		_, err := parseCommandCLI(t, "apply", "--lock-retries=-1", "schema.sql")
+		require.Error(t, err)
+	})
+}
+
 // Built-in meta flags (help, version, and config itself) are not configurable;
 // naming one is an unknown key. The values below are valid for each flag's
 // type, so the only possible error is the unknown-key rejection.

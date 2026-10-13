@@ -41,6 +41,9 @@ The second line begins with `Apply to` under `apply` and with `Dump of` under `d
 `-- Waiting for another exclusive apply to finish`
 :   `--exclusive-wait` is waiting. This line is written immediately, before the rest of the output.
 
+`-- Lock timeout: retrying in <duration> (<n>/<retries>)`
+:   The statement above it failed because `lock_timeout` ran out. `--lock-retries` runs it again after the delay and writes it again.
+
 `-- Time: <n> ms`
 :   The elapsed time of the statement above it, under `--timing`.
 
