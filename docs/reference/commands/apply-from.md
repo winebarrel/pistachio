@@ -58,7 +58,7 @@ The options that decide what is read or what is run are not accepted. The plan f
 :   Run `SET lock_timeout` with *duration* before the pre-SQL. `0` turns the timeout off. The environment variable is `PISTA_LOCK_TIMEOUT`. See the [options of `apply`](apply.md#execution).
 
 `--lock-retries=`*n*
-:   Run a statement again, up to *n* times, when it fails because `lock_timeout` ran out. This option cannot be used with `--with-tx` or `--try-tx`. The environment variable is `PISTA_LOCK_RETRIES`.
+:   Run a schema change again, up to *n* times, when it fails because `lock_timeout` ran out. This option cannot be used with `--with-tx` or `--try-tx`. The environment variable is `PISTA_LOCK_RETRIES`.
 
 `--lock-retry-delay=`*duration*
 :   The time to wait before each retry. The default is `1s`. The environment variable is `PISTA_LOCK_RETRY_DELAY`.

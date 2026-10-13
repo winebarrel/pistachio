@@ -44,7 +44,6 @@ func TestIsLockTimeout(t *testing.T) {
 func TestRetryable(t *testing.T) {
 	assert.True(t, retryable("ALTER TABLE t ADD COLUMN c integer;"))
 	assert.True(t, retryable("CREATE INDEX i ON t (c);"))
-	assert.True(t, retryable("UPDATE t SET c = 1; UPDATE t SET c = 2;"))
 	assert.False(t, retryable("CREATE INDEX CONCURRENTLY i ON t (c);"))
 	assert.False(t, retryable("DROP INDEX CONCURRENTLY public.i;"))
 	// Text the parser cannot read is not known to be safe to run again.

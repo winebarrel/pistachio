@@ -220,29 +220,24 @@ CREATE INDEX users_id_idx ON public.users (id);`)},
 	assert.Equal(t, 1, strings.Count(buf.String(), "CREATE INDEX CONCURRENTLY"))
 }
 
-// A -- pista:execute statement is retried like the schema changes.
-func TestApply_LockRetry_ExecuteStatement(t *testing.T) {
+// A -- pista:execute statement is SQL the user wrote, so it is not retried.
+func TestApply_LockRetry_SkipsExecuteStatement(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx) //nolint:errcheck
 	testutil.SetupDB(t, ctx, conn, lockRetryInit)
+	holdTableLock(t, ctx, "ACCESS SHARE")
 
-	release := holdTableLock(t, ctx, "ACCESS SHARE")
 	var buf bytes.Buffer
-	w := newLockRetryWriter(&buf)
-	releaseOnRetry(w, release)
-
 	_, err := lockRetryClient(conn).Apply(ctx, &ApplyOptions{
 		Files: []string{writeDesiredFile(t, lockRetryInit+`
 -- pista:execute
 TRUNCATE public.users;`)},
-		ExecOptions: lockTimeoutOptions(3, 500*time.Millisecond),
-	}, w)
-	require.NoError(t, err)
+		ExecOptions: lockTimeoutOptions(3, 10*time.Millisecond),
+	}, &buf)
+	require.Error(t, err)
+	assert.True(t, isLockTimeout(err))
 	assert.Equal(t, `SET lock_timeout = '100ms';
--- pista:execute
-TRUNCATE public.users;
--- Lock timeout: retrying in 500ms (1/3)
 -- pista:execute
 TRUNCATE public.users;`, strings.TrimSpace(buf.String()))
 }

@@ -250,12 +250,12 @@ func (client *Client) applyStmts(
 		return nil
 	}
 
-	// execRetried runs a schema change or a -- pista:execute statement, and
-	// runs it again when it fails on lock_timeout, up to --lock-retries
-	// times. shown is what w gets for each attempt. --lock-retries cannot be
-	// used with a transaction, so a statement here that times out has
-	// changed nothing.
-	execRetried := func(ctx context.Context, shown, stmt string) error {
+	// execRetried runs a schema change, and runs it again when it fails on
+	// lock_timeout, up to --lock-retries times. --lock-retries cannot be used
+	// with a transaction, so a statement here that times out has changed
+	// nothing. A -- pista:execute statement is not retried: it is SQL the
+	// user wrote, and pistachio cannot tell whether running it again is safe.
+	execRetried := func(ctx context.Context, stmt string) error {
 		for retry := uint(1); ; retry++ {
 			err := execTimed(ctx, stmt)
 			if err == nil || retry > options.LockRetries || !isLockTimeout(err) || !retryable(stmt) {
@@ -264,7 +264,7 @@ func (client *Client) applyStmts(
 			if err := waitLockRetry(ctx, w, options, retry); err != nil {
 				return err
 			}
-			fmt.Fprintln(w, shown) //nolint:errcheck
+			fmt.Fprintln(w, stmt) //nolint:errcheck
 		}
 	}
 
@@ -359,9 +359,8 @@ func (client *Client) applyStmts(
 			}
 
 			if shouldExecute {
-				shown := parser.FormatExecuteStmt(es)
-				fmt.Fprintln(w, shown) //nolint:errcheck
-				if err := execRetried(ctx, shown, es.SQL); err != nil {
+				fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
+				if err := execTimed(ctx, es.SQL); err != nil {
 					return fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
 				}
 				applied = true
@@ -377,7 +376,7 @@ func (client *Client) applyStmts(
 
 	for _, stmt := range input.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
-		if err := execRetried(ctx, stmt, stmt); err != nil {
+		if err := execRetried(ctx, stmt); err != nil {
 			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 		applied = true

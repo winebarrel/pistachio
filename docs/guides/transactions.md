@@ -61,7 +61,7 @@ pista apply --lock-timeout=500ms --lock-retries=5 --lock-retry-delay=10s schema.
 
 With a short timeout, the queries queued behind the DDL wait only briefly. The retries give a long transaction time to finish.
 
-Only the failed statement runs again. In a transaction, the failure aborts the whole transaction, so `--lock-retries` cannot be used with `--with-tx` or `--try-tx`. A `CONCURRENTLY` index statement does not run again, because a failed one can leave an invalid index.
+Only the failed schema change runs again. The pre-SQL and `-- pista:execute` statements are not retried. In a transaction, the failure aborts the whole transaction, so `--lock-retries` cannot be used with `--with-tx` or `--try-tx`. A `CONCURRENTLY` index statement does not run again, because a failed one can leave an invalid index.
 
 `--statement-timeout` sets `statement_timeout`. It limits each statement, including its wait for a lock. A statement that fails on it does not run again.
 

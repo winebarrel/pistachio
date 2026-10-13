@@ -6,7 +6,7 @@
 
 * `apply` and `apply-from` take `--lock-timeout` and `--statement-timeout`. They set `lock_timeout` and `statement_timeout` before the pre-SQL.
 
-* `apply` and `apply-from` take `--lock-retries`. It runs a statement again when the statement fails because `lock_timeout` ran out. Only the failed statement runs again. A `CONCURRENTLY` index statement does not run again. `--lock-retry-delay` sets the wait before each retry. The default is 1 second. `--lock-retries` cannot be used with `--with-tx` or `--try-tx`.
+* `apply` and `apply-from` take `--lock-retries`. It runs a schema change again when the change fails because `lock_timeout` ran out. Only the failed statement runs again. The pre-SQL, `-- pista:execute` statements and `CONCURRENTLY` index statements do not run again. `--lock-retry-delay` sets the wait before each retry. The default is 1 second. `--lock-retries` cannot be used with `--with-tx` or `--try-tx`.
 
 ## [1.83.1] - 2026-10-12
 
