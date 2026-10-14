@@ -289,7 +289,10 @@ func routineConts(toks []*token, stmts []stmt) []string {
 				end = i
 			}
 		}
-		for i := atomic + 1; atomic >= 0 && i < end; i++ {
+		if atomic < 0 {
+			continue
+		}
+		for i := atomic + 1; i < end; i++ {
 			cont[i] = indentUnit + indentUnit
 		}
 	}

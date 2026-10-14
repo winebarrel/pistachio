@@ -1,0 +1,13 @@
+# A parameter or RETURNS TABLE column named after a col_name keyword such as
+# time or values is quoted: the grammar does not take one bare there.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.since("time" timestamptz) RETURNS TABLE("values" integer, "position" text)
+      LANGUAGE sql AS $$ SELECT 1, 'x' $$;
+applied: |
+  -- public.since(timestamp with time zone)
+  CREATE OR REPLACE FUNCTION public.since("time" timestamp with time zone)
+      RETURNS TABLE("values" integer, "position" text)
+      LANGUAGE sql
+      AS $$ SELECT 1, 'x' $$;

@@ -54,9 +54,12 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 	var violations []Violation
 	for _, t := range targets {
 		ignored := r.LintIgnores[t.key]
+		if slices.Contains(ignored, parser.LintIgnoreAll) {
+			continue
+		}
 		pos := position(r, t.key)
 		for _, rule := range l.Rules {
-			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) || slices.Contains(ignored, parser.LintIgnoreAll) {
+			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) {
 				continue
 			}
 
@@ -183,12 +186,13 @@ func collectTargets(r *parser.ParseResult, schemas []string) []target {
 }
 
 func addIndexes(add func(parser.LintTarget, string, map[string]any), fqtn string, table map[string]any, indexes *orderedmap.Map[string, *document.Index]) {
-	if indexes != nil {
-		jsonIndexes, _ := table["indexes"].(map[string]any)
-		for name, idx := range indexes.All() {
-			add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
-				"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
-		}
+	if indexes == nil {
+		return
+	}
+	jsonIndexes, _ := table["indexes"].(map[string]any)
+	for name, idx := range indexes.All() {
+		add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
+			"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
 	}
 }
 

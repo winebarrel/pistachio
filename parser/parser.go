@@ -626,8 +626,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				idx.Concurrently = true
 			}
 			fqtn := idx.FQTN()
-			addLintIgnores([]LintTarget{{Kind: LintIndex, Table: fqtn, Name: idx.Name}}, lintIgnore)
-			addPosition(LintTarget{Kind: LintIndex, Table: fqtn, Name: idx.Name}, stmtOffset)
+			target := LintTarget{Kind: LintIndex, Table: fqtn, Name: idx.Name}
+			addLintIgnores([]LintTarget{target}, lintIgnore)
+			addPosition(target, stmtOffset)
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
@@ -706,8 +707,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
-				fkTargets = append(fkTargets, LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name})
-				addPosition(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name}, stmtOffset)
+				target := LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name}
+				fkTargets = append(fkTargets, target)
+				addPosition(target, stmtOffset)
 			}
 			addLintIgnores(fkTargets, lintIgnore)
 			for _, con := range cons {

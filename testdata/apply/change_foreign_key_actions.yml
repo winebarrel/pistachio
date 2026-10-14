@@ -1,0 +1,51 @@
+# A foreign key whose referential actions change is dropped and added again,
+# since ALTER CONSTRAINT cannot change them. SET NULL with a column list is
+# kept as written.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE RESTRICT;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) ON UPDATE CASCADE ON DELETE SET NULL (editor_id);
+applied_sql: |
+  ALTER TABLE public.posts DROP CONSTRAINT posts_editor_id_fkey;
+  ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE RESTRICT;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) ON UPDATE CASCADE ON DELETE SET NULL (editor_id);
+applied: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL (editor_id);
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

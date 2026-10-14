@@ -78,10 +78,8 @@ func OrderFromSchema(
 		}
 
 		// Partition parent dependency
-		if t.PartitionOf != nil {
-			if defined[*t.PartitionOf] {
-				g.AddEdge(k, *t.PartitionOf)
-			}
+		if t.PartitionOf != nil && defined[*t.PartitionOf] {
+			g.AddEdge(k, *t.PartitionOf)
 		}
 	}
 

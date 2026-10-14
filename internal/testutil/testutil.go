@@ -73,7 +73,7 @@ func NewDBPool(t *testing.T) *DBPool {
 func (p *DBPool) Connect(t *testing.T) *pgx.Conn {
 	t.Helper()
 	name := <-p.names
-	conn, err := pgx.Connect(context.Background(), connStringFor(t, name))
+	conn, err := pgx.Connect(context.Background(), ConnStringFor(t, name))
 	if err != nil {
 		p.names <- name
 	}
@@ -86,17 +86,10 @@ func (p *DBPool) Connect(t *testing.T) *pgx.Conn {
 }
 
 // ConnStringFor returns ConnString with its database replaced by db, for a
-// test that needs a database of its own.
+// test that needs a database of its own. It takes both forms libpq does: a
+// URL, whose path is the database unless a dbname parameter overrides it, and
+// keyword/value pairs, where a later dbname overrides an earlier one.
 func ConnStringFor(t *testing.T, db string) string {
-	t.Helper()
-	return connStringFor(t, db)
-}
-
-// connStringFor returns ConnString with its database replaced by db. It takes
-// both forms libpq does: a URL, whose path is the database unless a dbname
-// parameter overrides it, and keyword/value pairs, where a later dbname
-// overrides an earlier one.
-func connStringFor(t *testing.T, db string) string {
 	t.Helper()
 	s := ConnString()
 	if strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://") {

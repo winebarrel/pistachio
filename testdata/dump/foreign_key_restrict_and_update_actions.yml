@@ -1,0 +1,36 @@
+# The referential actions foreign_key_actions does not cover. NO ACTION is the
+# default and pg_get_constraintdef leaves it out.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      reviewer_id integer DEFAULT 0,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ADD CONSTRAINT posts_user_fk FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE RESTRICT ON UPDATE NO ACTION;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_editor_fk FOREIGN KEY (editor_id) REFERENCES public.users (id) ON UPDATE SET NULL ON DELETE CASCADE DEFERRABLE;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_reviewer_fk FOREIGN KEY (reviewer_id) REFERENCES public.users (id) ON UPDATE RESTRICT ON DELETE SET DEFAULT DEFERRABLE INITIALLY DEFERRED;
+dump: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      reviewer_id integer DEFAULT 0,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_fk FOREIGN KEY (editor_id) REFERENCES users(id) ON UPDATE SET NULL ON DELETE CASCADE DEFERRABLE;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_reviewer_fk FOREIGN KEY (reviewer_id) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE SET DEFAULT DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

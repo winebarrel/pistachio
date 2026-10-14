@@ -1,0 +1,43 @@
+# A change to an index's access method, its predicate or the order of a key
+# column has no ALTER INDEX form, so each index is dropped and created again.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      deleted_at timestamp with time zone,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_tags_idx ON public.docs USING btree (tags);
+  CREATE INDEX docs_body_idx ON public.docs (body) WHERE deleted_at IS NULL;
+  CREATE INDEX docs_id_body_idx ON public.docs (id, body);
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      deleted_at timestamp with time zone,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_tags_idx ON public.docs USING gin (tags);
+  CREATE INDEX docs_body_idx ON public.docs (body) WHERE deleted_at IS NULL AND body <> '';
+  CREATE INDEX docs_id_body_idx ON public.docs (id DESC, body);
+applied_sql: |
+  DROP INDEX public.docs_body_idx;
+  DROP INDEX public.docs_id_body_idx;
+  DROP INDEX public.docs_tags_idx;
+  CREATE INDEX docs_tags_idx ON public.docs USING gin (tags);
+  CREATE INDEX docs_body_idx ON public.docs USING btree (body) WHERE deleted_at IS NULL AND body <> '';
+  CREATE INDEX docs_id_body_idx ON public.docs USING btree (id DESC, body);
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      deleted_at timestamp with time zone,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_body_idx ON public.docs USING btree (body) WHERE ((deleted_at IS NULL) AND (body <> ''::text));
+  CREATE INDEX docs_id_body_idx ON public.docs USING btree (id DESC, body);
+  CREATE INDEX docs_tags_idx ON public.docs USING gin (tags);

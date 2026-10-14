@@ -1,0 +1,45 @@
+# The default, NOT NULL and CHECK of a domain are each changed with ALTER
+# DOMAIN, so a column of the domain is not touched. A changed CHECK is
+# dropped and added again under the same name.
+init: |
+  CREATE DOMAIN public.qty AS integer DEFAULT 0 NOT NULL CONSTRAINT qty_check CHECK (VALUE >= 0);
+  CREATE DOMAIN public.label AS text;
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.qty,
+      label public.label,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE DOMAIN public.qty AS integer CONSTRAINT qty_check CHECK (VALUE >= 1);
+  CREATE DOMAIN public.label AS text DEFAULT 'none' NOT NULL CONSTRAINT label_len CHECK (length(VALUE) <= 100);
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.qty,
+      label public.label,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER DOMAIN public.label SET DEFAULT 'none';
+  ALTER DOMAIN public.label SET NOT NULL;
+  ALTER DOMAIN public.label ADD CONSTRAINT label_len CHECK (length(value) <= 100);
+  ALTER DOMAIN public.qty DROP DEFAULT;
+  ALTER DOMAIN public.qty DROP NOT NULL;
+  ALTER DOMAIN public.qty DROP CONSTRAINT qty_check;
+  ALTER DOMAIN public.qty ADD CONSTRAINT qty_check CHECK (value >= 1);
+applied: |
+  -- public.label
+  CREATE DOMAIN public.label AS text DEFAULT 'none'::text NOT NULL
+      CONSTRAINT label_len CHECK ((length(VALUE) <= 100));
+
+  -- public.qty
+  CREATE DOMAIN public.qty AS integer
+      CONSTRAINT qty_check CHECK ((VALUE >= 1));
+
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty qty,
+      label label,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

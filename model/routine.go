@@ -157,7 +157,7 @@ func (a RoutineArg) String() string {
 		b.WriteByte(' ')
 	}
 	if a.Name != "" {
-		b.WriteString(quoteIdent(a.Name))
+		b.WriteString(quoteParamName(a.Name))
 		b.WriteByte(' ')
 	}
 	b.WriteString(a.Type)
@@ -209,7 +209,7 @@ func (r Routine) returnsClause() string {
 	if tableArgs := r.TableArgs(); len(tableArgs) > 0 {
 		cols := make([]string, len(tableArgs))
 		for i, a := range tableArgs {
-			cols[i] = quoteIdent(a.Name) + " " + a.Type
+			cols[i] = quoteParamName(a.Name) + " " + a.Type
 		}
 		return "RETURNS TABLE(" + strings.Join(cols, ", ") + ")"
 	}

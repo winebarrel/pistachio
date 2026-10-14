@@ -1,0 +1,38 @@
+# Indexes of each access method other than btree, with an operator class, a
+# storage parameter, an ordering, and a partial expression index. Each is
+# written as pg_get_indexdef prints it and plans clean when fed back.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      tsv tsvector,
+      created_at timestamp(3) with time zone,
+      pos point,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_tags_idx ON public.docs USING gin (tags);
+  CREATE INDEX docs_tsv_idx ON public.docs USING gin (tsv) WITH (fastupdate = off);
+  CREATE INDEX docs_created_brin ON public.docs USING brin (created_at) WITH (pages_per_range = 32);
+  CREATE INDEX docs_body_pattern ON public.docs USING btree (body text_pattern_ops);
+  CREATE INDEX docs_pos_spgist ON public.docs USING spgist (pos);
+  CREATE INDEX docs_created_desc ON public.docs (created_at DESC NULLS LAST, id NULLS FIRST);
+  CREATE INDEX docs_lower_body ON public.docs (lower(body)) WHERE body IS NOT NULL;
+dump: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      tsv tsvector,
+      created_at timestamp(3) with time zone,
+      pos point,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_body_pattern ON public.docs USING btree (body text_pattern_ops);
+  CREATE INDEX docs_created_brin ON public.docs USING brin (created_at) WITH (pages_per_range='32');
+  CREATE INDEX docs_created_desc ON public.docs USING btree (created_at DESC NULLS LAST, id NULLS FIRST);
+  CREATE INDEX docs_lower_body ON public.docs USING btree (lower(body)) WHERE (body IS NOT NULL);
+  CREATE INDEX docs_pos_spgist ON public.docs USING spgist (pos);
+  CREATE INDEX docs_tags_idx ON public.docs USING gin (tags);
+  CREATE INDEX docs_tsv_idx ON public.docs USING gin (tsv) WITH (fastupdate=off);

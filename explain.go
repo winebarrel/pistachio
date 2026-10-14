@@ -342,12 +342,7 @@ func (ex *explainer) referencedTable(rv *pg_query.RangeVar) (string, *model.Tabl
 // currentColumn resolves a column of the table the plan names, through a
 // column rename directive when the plan renamed it first.
 func (ex *explainer) currentColumn(key string, t *model.Table, name string) *model.Column {
-	if aliases, ok := ex.columnAlias[key]; ok {
-		if old, ok := aliases[name]; ok {
-			name = old
-		}
-	}
-	col, _ := t.Columns.GetOk(name)
+	col, _ := t.Columns.GetOk(renamedFrom(ex.columnAlias[key], name))
 	return col
 }
 
