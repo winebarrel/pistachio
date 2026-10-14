@@ -796,7 +796,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		// Table.SQL / addColumnSQL, which intentionally do not render
 		// "CONSTRAINT <name> NOT NULL" on identity columns; emitting a rename
 		// here would surface a name the dumper hides.
-		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(*current.NotNullName)+" TO "+model.Ident(*desired.NotNullName)+";")
+		stmts = append(stmts, renameConstraintSQL(fqtn, *current.NotNullName, *desired.NotNullName))
 	}
 
 	// TOAST storage and compression last, since SET DATA TYPE resets both.
