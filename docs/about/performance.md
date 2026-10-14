@@ -69,7 +69,7 @@ difference smaller than that between two cells is not significant.
 ## Analysis
 
 Runtime grows almost linearly with the number of tables. Going from 100 to
-1,000 tables takes 6 to 7 times as long.
+1,000 tables takes about 6 times as long.
 
 Every command that reads the database spends about 85 ms on starting the
 process and connecting to PostgreSQL. This is why the smallest schemas are not
