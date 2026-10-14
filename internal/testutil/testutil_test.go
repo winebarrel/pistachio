@@ -1,4 +1,4 @@
-package testutil
+package testutil_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
 func TestConnStringFor(t *testing.T) {
@@ -18,7 +19,7 @@ func TestConnStringFor(t *testing.T) {
 	for name, connString := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_PISTA_CONN_STR", connString)
-			cfg, err := pgx.ParseConfig(connStringFor(t, "pista_test_1"))
+			cfg, err := pgx.ParseConfig(testutil.ConnStringFor(t, "pista_test_1"))
 			require.NoError(t, err)
 			assert.Equal(t, "pista_test_1", cfg.Database)
 			assert.Equal(t, uint16(5415), cfg.Port)
