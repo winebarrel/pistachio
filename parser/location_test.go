@@ -262,22 +262,6 @@ CREATE TABLE public.users (id integer);
   | ^`, err.Error())
 }
 
-// pg_query leaves StmtLen at 0 for a final statement with no semicolon, so
-// the statement region runs to the end of the input.
-func TestParseSQLFiles_DuplicateTableLocationWithoutTrailingSemicolon(t *testing.T) {
-	paths := writeSQLFiles(t, map[string]string{
-		"users.sql": "CREATE TABLE public.users (id integer);\n\n-- again\nCREATE TABLE public.users (id integer)",
-	})
-
-	_, err := ParseSQLFilesWithSchema(paths, "public")
-	require.Error(t, err)
-	assert.Equal(t, `duplicate table: public.users
- --> `+paths[0]+`:4:1
-  |
-4 | CREATE TABLE public.users (id integer)
-  | ^`, err.Error())
-}
-
 func TestParseSQLFiles_DuplicateTableInSecondFile(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "a.sql")
@@ -638,4 +622,44 @@ CREATE INDEX a_name_idx ON public.a (name);
 
 	require.Len(t, r.ExecuteStmts, 1)
 	assert.Equal(t, "SELECT to_regprocedure('public.f()') IS NULL", r.ExecuteStmts[0].CheckSQL)
+}
+
+// A file whose last statement has no semicolon is refused. The files are
+// joined into one input, so that statement would run into the next file.
+func TestParseSQLSources_StatementWithoutSemicolon(t *testing.T) {
+	t.Run("followed by another file", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer)\n"},
+			{Name: "b.sql", SQL: "CREATE TABLE public.b (id integer);\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `statement must end with a semicolon
+ --> a.sql:1:35
+  |
+1 | CREATE TABLE public.a (id integer)
+  |                                   ^`, err.Error())
+	})
+
+	t.Run("the last file, comments after the statement", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n"},
+			{Name: "b.sql", SQL: "CREATE TABLE public.b (id integer)\n-- note\n/* more */\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `statement must end with a semicolon
+ --> b.sql:1:35
+  |
+1 | CREATE TABLE public.b (id integer)
+  |                                   ^`, err.Error())
+	})
+
+	t.Run("comments after the semicolon and a file with no statement", func(t *testing.T) {
+		r, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer); -- note\n/* more */"},
+			{Name: "b.sql", SQL: "-- nothing here\n"},
+			{Name: "c.sql", SQL: ""},
+		}, "public")
+		require.NoError(t, err)
+		assert.NotNil(t, r.Tables.Get("public.a"))
+	})
 }

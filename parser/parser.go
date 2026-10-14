@@ -338,18 +338,53 @@ func ParseSQLSourcesWithSchema(sources []Source, defaultSchema string) (*ParseRe
 	sqls := make([]string, 0, len(sources))
 	spans := make([]fileSpan, 0, len(sources))
 	offset := 0
+	missing := -1
 	for _, source := range sources {
 		spans = append(spans, fileSpan{path: source.Name, start: offset})
 		sqls = append(sqls, source.SQL)
+		if end := unterminatedEnd(source.SQL); missing < 0 && end >= 0 {
+			missing = offset + end
+		}
 		offset += len(source.SQL) + 1 // the "\n" the join puts between sources
 	}
 
 	joined := strings.Join(sqls, "\n")
+	if missing >= 0 {
+		return nil, annotateError(&locatedError{msg: "statement must end with a semicolon", offset: missing}, joined, spans)
+	}
 	result, err := parseSQLWithSchema(joined, defaultSchema, spans)
 	if err != nil {
 		return nil, annotateError(err, joined, spans)
 	}
 	return result, nil
+}
+
+// unterminatedEnd returns the byte offset just past the last token of a file
+// whose last statement has no semicolon, or -1. The files are joined into one
+// input, so such a statement would run into the first one of the next file.
+// SQL that does not parse on its own is left to the parser to report, so a
+// statement cut short reads as the syntax error it is.
+func unterminatedEnd(sql string) int {
+	result, err := pg_query.Scan(sql)
+	if err != nil {
+		return -1
+	}
+
+	for _, tok := range slices.Backward(result.Tokens) {
+		switch tok.Token {
+		case pg_query.Token_SQL_COMMENT, pg_query.Token_C_COMMENT:
+			continue
+		case pg_query.Token_ASCII_59:
+			return -1
+		default:
+			if _, err := pg_query.Parse(sql); err != nil {
+				return -1
+			}
+			return int(tok.End)
+		}
+	}
+
+	return -1
 }
 
 // parseSQLWithSchema parses the SQL every desired-schema file was joined

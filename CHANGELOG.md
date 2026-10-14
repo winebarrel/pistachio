@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: `plan`, `apply`, `diff` and the other commands that read desired schema files now reject a file whose last statement has no semicolon. Before, such a file was read when it was the last file, and when another file followed it, the statement ran into the first statement of that file and the error pointed at the next file.
+
 ## [1.84.0] - 2026-10-14
 
 * `apply` and `apply-from` take `--lock-timeout` and `--statement-timeout`. They set `lock_timeout` and `statement_timeout` before the pre-SQL.
