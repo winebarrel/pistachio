@@ -973,13 +973,6 @@ func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Tabl
 	return nil
 }
 
-// serialTypes lists the pseudo-types that expand to a column plus a sequence.
-var serialTypes = map[string]bool{
-	"serial":      true,
-	"bigserial":   true,
-	"smallserial": true,
-}
-
 func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	col := &model.Column{
 		Name: cd.Colname,
@@ -997,7 +990,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	// declaration that leaves the words off still describes a NOT NULL column.
 	// The catalog reports it that way, so reading it as nullable planned a
 	// DROP NOT NULL right after the table was created.
-	if serialTypes[col.TypeName] {
+	if model.IsSerialType(col.TypeName) {
 		col.NotNull = true
 	}
 
