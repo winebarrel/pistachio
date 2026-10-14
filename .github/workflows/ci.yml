@@ -171,7 +171,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: windows
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-windows-${{ matrix.shard }}
@@ -236,7 +236,7 @@ jobs:
           # Each matrix job uploads its own coverage; Codecov merges them so
           # PG-version-specific paths (e.g. PG18-only catalog reads) are
           # counted as covered when any matrix entry exercises them.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-pg${{ matrix.postgres }}
@@ -268,7 +268,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: dsql
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-dsql
