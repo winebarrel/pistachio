@@ -404,12 +404,13 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				if oldKey, renamed := renamedFrom[k]; renamed {
 					dropName = oldKey
 				}
+				drop := "DROP " + currentView.ObjType() + " " + dropName + ";"
 				// Materialized views or type changes (VIEW <-> MATERIALIZED VIEW)
 				// require DROP and recreate. Only proceed if drops are allowed;
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if viewAllowed {
-					result.DropStmts = append(result.DropStmts, "DROP "+currentView.ObjType()+" "+dropName+";")
+					result.DropStmts = append(result.DropStmts, drop)
 					result.DroppedViews = append(result.DroppedViews, dropName)
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					// DROP VIEW takes the view's triggers with it, so the
@@ -420,7 +421,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					}
 					recreated[k] = true
 				} else {
-					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP "+currentView.ObjType()+" "+dropName+";")
+					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+drop)
 					recreateDenied[k] = true
 				}
 			} else {
