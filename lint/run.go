@@ -186,12 +186,13 @@ func collectTargets(r *parser.ParseResult, schemas []string) []target {
 }
 
 func addIndexes(add func(parser.LintTarget, string, map[string]any), fqtn string, table map[string]any, indexes *orderedmap.Map[string, *document.Index]) {
-	if indexes != nil {
-		jsonIndexes, _ := table["indexes"].(map[string]any)
-		for name, idx := range indexes.All() {
-			add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
-				"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
-		}
+	if indexes == nil {
+		return
+	}
+	jsonIndexes, _ := table["indexes"].(map[string]any)
+	for name, idx := range indexes.All() {
+		add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
+			"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
 	}
 }
 
