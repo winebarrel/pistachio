@@ -142,7 +142,7 @@ func txHint(rawStmt *pg_query.RawStmt) string {
 // from files:
 //
 //	pista: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items
-func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
+func warnIgnoredStmt(sql string, loc *locator, rawStmt *pg_query.RawStmt) {
 	snippet := strings.Join(strings.Fields(ignoredStmtSnippet(sql, rawStmt)), " ")
 	if snippet == "" {
 		return
@@ -154,7 +154,7 @@ func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 	}
 
 	at := ""
-	if pos, ok := locate(sql, spans, int(stmtStart(sql, rawStmt))); ok {
+	if pos, ok := loc.locate(int(stmtStart(sql, rawStmt))); ok {
 		at = pos.String() + ": "
 	}
 
@@ -225,7 +225,7 @@ var commentTargetSupported = map[pg_query.ObjectType]bool{
 // one that mixes a supported action with an unsupported one reports only the
 // latter. The rebuilt statement keeps the original location, which is what
 // the snippet falls back to when deparse fails.
-func warnIgnoredAlterTableCmds(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, as *pg_query.AlterTableStmt) {
+func warnIgnoredAlterTableCmds(sql string, loc *locator, rawStmt *pg_query.RawStmt, as *pg_query.AlterTableStmt) {
 	var ignored []*pg_query.Node
 
 	for _, cmdNode := range as.Cmds {
@@ -240,7 +240,7 @@ func warnIgnoredAlterTableCmds(sql string, spans []fileSpan, rawStmt *pg_query.R
 		return
 	}
 
-	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
+	warnIgnoredStmt(sql, loc, &pg_query.RawStmt{
 		Stmt: &pg_query.Node{
 			Node: &pg_query.Node_AlterTableStmt{
 				AlterTableStmt: &pg_query.AlterTableStmt{
@@ -365,6 +365,15 @@ func ParseSQLSourcesWithSchema(sources []Source, defaultSchema string) (*ParseRe
 // SQL that does not parse on its own is left to the parser to report, so a
 // statement cut short reads as the syntax error it is.
 func unterminatedEnd(sql string) int {
+	// The semicolon ending the last line is the last token unless a quote
+	// left open holds it, and the parser reports that. A comment could hide
+	// one, so a line with a comment marker is scanned.
+	trimmed := strings.TrimRight(sql, " \t\r\n")
+	lastLine := trimmed[strings.LastIndexByte(trimmed, '\n')+1:]
+	if strings.HasSuffix(lastLine, ";") && !strings.Contains(lastLine, "--") && !strings.Contains(lastLine, "/*") && !strings.Contains(lastLine, "*/") {
+		return -1
+	}
+
 	result, err := pg_query.Scan(sql)
 	if err != nil {
 		return -1
@@ -431,8 +440,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 	}
 	positions := map[LintTarget]Position{}
 	autoNamed := map[AutoNamedObject]bool{}
+	loc := newLocator(sql, spans)
 	addPosition := func(target LintTarget, offset int32) {
-		if pos, ok := locate(sql, spans, int(offset)); ok {
+		if pos, ok := loc.locate(int(offset)); ok {
 			positions[target] = Position{File: pos.path, Line: pos.line, Column: pos.col}
 		}
 	}
@@ -593,7 +603,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			as := node.GetCreateTableAsStmt()
 			// CREATE TABLE AS shares this statement type and is not read.
 			if as.Objtype != pg_query.ObjectType_OBJECT_MATVIEW {
-				warnIgnoredStmt(sql, spans, rawStmt)
+				warnIgnoredStmt(sql, loc, rawStmt)
 				break
 			}
 			view, err := parseCreateMatViewStmt(as, defaultSchema)
@@ -663,7 +673,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				_, isView := views.GetOk(fqtn)
 				_, isSeq := sequences.GetOk(fqtn)
 				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE || isView || isSeq {
-					warnIgnoredStmt(sql, spans, rawStmt)
+					warnIgnoredStmt(sql, loc, rawStmt)
 					continue
 				}
 				return nil, undeclared("ALTER TABLE "+fqtn, "table", fqtn, stmtOffset)
@@ -676,7 +686,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := checkAlterTableTargets(as, t, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
-				warnIgnoredAlterTableCmds(sql, spans, rawStmt, as)
+				warnIgnoredAlterTableCmds(sql, loc, rawStmt, as)
 			}
 
 			// RLS toggles, trigger states, column storage and constraint
@@ -768,7 +778,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			// A sequence marked -- pista:ignore is out of the diff, so an
 			// option dropped from it cannot mislead the plan.
 			if seq != nil && !seq.Ignore {
-				warnIgnoredAlterSeqOptions(sql, spans, rawStmt, node.GetAlterSeqStmt())
+				warnIgnoredAlterSeqOptions(sql, loc, rawStmt, node.GetAlterSeqStmt())
 			}
 
 		case node.GetCreateFunctionStmt() != nil:
@@ -777,7 +787,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				// A routine pistachio reads but does not manage. The catalog
 				// skips the same ones, so warning and dropping it here keeps
 				// both sides of the diff in step.
-				warnIgnoredStmt(sql, spans, rawStmt)
+				warnIgnoredStmt(sql, loc, rawStmt)
 				continue
 			}
 			if err != nil {
@@ -799,13 +809,13 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				return nil, err
 			}
 			if !ok {
-				warnIgnoredStmt(sql, spans, rawStmt)
+				warnIgnoredStmt(sql, loc, rawStmt)
 			}
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			if !commentTargetSupported[cs.Objtype] {
-				warnIgnoredStmt(sql, spans, rawStmt)
+				warnIgnoredStmt(sql, loc, rawStmt)
 				break
 			}
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences, routines)
@@ -813,7 +823,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		default:
 			// A statement type no case above handles. It is dropped from the
 			// desired schema, so warn instead of failing silently.
-			warnIgnoredStmt(sql, spans, rawStmt)
+			warnIgnoredStmt(sql, loc, rawStmt)
 		}
 	}
 
@@ -2390,7 +2400,7 @@ func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, seque
 // than OWNED BY, which the parser does not read, the way
 // warnIgnoredAlterTableCmds does for an ALTER TABLE action: the warning
 // carries a statement rebuilt from the dropped options alone.
-func warnIgnoredAlterSeqOptions(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, as *pg_query.AlterSeqStmt) {
+func warnIgnoredAlterSeqOptions(sql string, loc *locator, rawStmt *pg_query.RawStmt, as *pg_query.AlterSeqStmt) {
 	var ignored []*pg_query.Node
 
 	for _, opt := range as.Options {
@@ -2404,7 +2414,7 @@ func warnIgnoredAlterSeqOptions(sql string, spans []fileSpan, rawStmt *pg_query.
 		return
 	}
 
-	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
+	warnIgnoredStmt(sql, loc, &pg_query.RawStmt{
 		Stmt: &pg_query.Node{
 			Node: &pg_query.Node_AlterSeqStmt{
 				AlterSeqStmt: &pg_query.AlterSeqStmt{

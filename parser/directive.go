@@ -517,6 +517,11 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		RetypeUsing: make(map[string]string),
 	}
 
+	// Every directive needs this text, and most statements hold none.
+	if !strings.Contains(rawCreateTableSQL, "pista:") {
+		return result
+	}
+
 	// Only scan lines inside the column/constraint list (after the opening parenthesis)
 	parenIdx := strings.Index(rawCreateTableSQL, "(")
 	if parenIdx < 0 {
@@ -579,6 +584,9 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 // the offset of rawCreateTableSQL in the parsed input.
 func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]string {
 	result := make(map[int32][]string)
+	if !strings.Contains(rawCreateTableSQL, "pista:") {
+		return result
+	}
 
 	parenIdx := strings.Index(rawCreateTableSQL, "(")
 	if parenIdx < 0 {

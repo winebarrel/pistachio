@@ -32,7 +32,7 @@ Five cases are measured:
 
 - Linux x86_64, Intel Xeon @ 2.80GHz (4 vCPUs), 15 GB RAM
 - PostgreSQL 16.15 (connected over `localhost`)
-- pistachio v1.84.0 with the changes from #1015 and #1019
+- pistachio built from `main` after v1.84.0
 
 The database runs on the same host, so client/server latency is negligible.
 Times over a network connection will be higher because reading the catalog adds
@@ -48,16 +48,16 @@ primary keys, 2N secondary indexes, and N-1 foreign keys.
 
 ## Results
 
-Each value is the median of five runs, in seconds.
+Each value is the median of eleven runs, in seconds.
 
 | Tables | create plan | noop plan | modify plan | dump  |   fmt |
 |-------:|------------:|----------:|------------:|------:|------:|
-|     10 |       0.079 |     0.104 |       0.110 | 0.092 | 0.032 |
-|     50 |       0.139 |     0.182 |       0.207 | 0.151 | 0.048 |
-|    100 |       0.185 |     0.263 |       0.272 | 0.196 | 0.082 |
-|    250 |       0.377 |     0.515 |       0.563 | 0.413 | 0.148 |
-|    500 |       0.644 |     0.921 |       0.975 | 0.673 | 0.245 |
-|  1,000 |       1.350 |     1.799 |       2.039 | 1.545 | 0.508 |
+|     10 |       0.087 |     0.116 |       0.122 | 0.105 | 0.034 |
+|     50 |       0.144 |     0.170 |       0.191 | 0.164 | 0.058 |
+|    100 |       0.183 |     0.241 |       0.242 | 0.212 | 0.080 |
+|    250 |       0.305 |     0.495 |       0.522 | 0.379 | 0.147 |
+|    500 |       0.592 |     0.893 |       0.918 | 0.720 | 0.247 |
+|  1,000 |       1.077 |     1.547 |       1.607 | 1.290 | 0.462 |
 
 The modify plan emits three DDL statements per table, so its output grows from
 30 lines at 10 tables to 3,000 lines at 1,000 tables. The create plan output
@@ -68,45 +68,33 @@ difference smaller than that between two cells is not significant.
 
 ## Analysis
 
-Runtime scales close to linearly with the table count. For the commands that
-read the database, a fixed overhead of about 80 ms (process startup and
-connecting to PostgreSQL) sets the floor, which is why the smallest schemas do
-not get proportionally faster. `fmt` connects to nothing, and its floor is
-about 30 ms of process startup. Going from 100 to 1,000 tables costs 7 to 8
-times the time.
+Runtime grows almost linearly with the number of tables. Going from 100 to
+1,000 tables takes about 6 times as long.
 
-No single stage dominates. The create plan parses the SQL file and diffs it
-without reading the catalog; dump reads the catalog and serializes it without
-parsing. At 1,000 tables the two cost similar amounts, 1.35s and 1.55s. The noop
-plan, which does both, costs 1.80s, less than their sum because it emits no
-DDL: the create plan spends part of its time generating 16,000 lines of DDL,
-and dump spends part of its time formatting. The catalog read used to
-cost a round trip per object and outweighed the rest; 1.39.0, which this build
-includes, made it a fixed number of queries.
+Every command that reads the database spends about 85 ms on starting the
+process and connecting to PostgreSQL. This is why the smallest schemas are not
+much faster than medium ones. `fmt` does not connect, and its fixed cost is
+about 35 ms.
 
-The modify plan is 240 ms slower than the noop plan at 1,000 tables. Reading
-the catalog and parsing the desired schema are the bulk of the work, so emitting
-3,000 DDL statements on top costs little. Every case stays under 2.1s at that
-size, and a schema of 2,000 tables takes 3.1s, 4.0s and 4.4s for the create,
-noop and modify plans, so pistachio is not a bottleneck for schemas of typical
-size. Larger schemas were not measured.
+At 1,000 tables, the create plan (parse and diff, no catalog read) takes 1.08s
+and `dump` (catalog read, no parse) takes 1.29s. The noop plan does both and
+takes 1.55s. That is less than the sum, because the noop plan writes no DDL and
+does not format its output.
 
-On the same machine, v1.69.0 took 1.49s, 1.88s and 2.12s for the create, noop
-and modify plans at 1,000 tables, and 1.23s for `dump`. The create plan is
-about 13% faster in the build measured here. The noop and modify plans and
-`dump` differ by less than the run-to-run variation. This machine is slower
-than the one the previous measurements were taken on, so the numbers above are
-not comparable with those in earlier versions of this page.
+The modify plan is only 60 ms slower than the noop plan at 1,000 tables.
+Reading the catalog and parsing the schema take most of the time, and writing
+3,000 DDL statements adds little.
 
-`fmt` is the cheapest of the five, since it neither connects to the database nor
-builds a model: it parses the file, lays the tokens out again, and checks the
-result carries the same tokens. At 1,000 tables it takes 0.51s, and process
-startup is about 30 ms of that.
+Every case takes less than 1.7s at 1,000 tables. At 2,000 tables, the create,
+noop and modify plans take 1.9s, 3.2s and 3.6s. Larger schemas were not
+measured.
 
-The layout pass costs `dump` 0.79s at 1,000 tables, about half of its 1.55s:
-`dump --no-format`, which skips it, takes 0.75s. At 500 tables the difference
-is 0.24s. `fmt` against files of 100 to 2,000 tables runs in 0.08s to 0.88s,
-which is close to linear in the size of the input.
+`fmt` is the fastest command. It parses the file and writes it out again, and
+does not connect to the database. At 1,000 tables it takes 0.46s. For files of
+100 to 2,000 tables it takes 0.08s to 0.96s.
+
+Formatting takes 0.55s of the 1.29s that `dump` takes at 1,000 tables.
+`dump --no-format` skips it and takes 0.74s.
 
 ## Reproducing
 

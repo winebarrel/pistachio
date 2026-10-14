@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -120,6 +121,43 @@ func (p sourcePos) String() string {
 // files it was joined from. It reports false when there is no position, or no
 // file to name, as when a string was parsed rather than files.
 func locate(sql string, spans []fileSpan, offset int) (sourcePos, bool) {
+	return newLocator(sql, spans).locate(offset)
+}
+
+// locator resolves offsets the way locate does, for a caller resolving many
+// of them in the same SQL. It finds the newlines once, so a line number is a
+// binary search rather than a count from the start of the file.
+type locator struct {
+	sql      string
+	spans    []fileSpan
+	newlines []int
+}
+
+func newLocator(sql string, spans []fileSpan) *locator {
+	l := &locator{sql: sql, spans: spans}
+	if len(spans) == 0 {
+		return l
+	}
+	for i := 0; ; {
+		j := strings.IndexByte(sql[i:], '\n')
+		if j < 0 {
+			break
+		}
+		i += j
+		l.newlines = append(l.newlines, i)
+		i++
+	}
+	return l
+}
+
+// newlinesBefore returns the number of newlines before offset.
+func (l *locator) newlinesBefore(offset int) int {
+	n, _ := slices.BinarySearch(l.newlines, offset)
+	return n
+}
+
+func (l *locator) locate(offset int) (sourcePos, bool) {
+	sql, spans := l.sql, l.spans
 	if offset < 0 || len(spans) == 0 {
 		return sourcePos{}, false
 	}
@@ -141,7 +179,7 @@ func locate(sql string, spans []fileSpan, offset int) (sourcePos, bool) {
 
 	return sourcePos{
 		path:      span.path,
-		line:      1 + strings.Count(sql[span.start:offset], "\n"),
+		line:      1 + l.newlinesBefore(offset) - l.newlinesBefore(span.start),
 		col:       1 + utf8.RuneCountInString(sql[lineStart:offset]),
 		offset:    offset,
 		lineStart: lineStart,
