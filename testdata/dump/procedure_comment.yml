@@ -1,0 +1,12 @@
+# A procedure with an INOUT parameter and a comment. The comment is written as
+# COMMENT ON PROCEDURE, with the argument types only.
+manage_routine: true
+init: |
+  CREATE PROCEDURE public.touch(INOUT n integer) LANGUAGE plpgsql AS $$ BEGIN n := n + 1; END $$;
+  COMMENT ON PROCEDURE public.touch(integer) IS 'increments';
+dump: |
+  -- public.touch(integer)
+  CREATE OR REPLACE PROCEDURE public.touch(INOUT n integer)
+      LANGUAGE plpgsql
+      AS $$ BEGIN n := n + 1; END $$;
+  COMMENT ON PROCEDURE public.touch(integer) IS 'increments';

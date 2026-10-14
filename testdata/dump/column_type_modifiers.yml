@@ -1,0 +1,65 @@
+# Column types whose name format_type spells with a modifier or with several
+# words: lengths, precisions, interval fields, time zones and arrays. A type
+# written integer[][] comes back as integer[], since PostgreSQL does not keep
+# the number of dimensions.
+init: |
+  CREATE TABLE public.samples (
+      id bigint NOT NULL,
+      c1 char(3),
+      c2 varchar(20),
+      c3 bit(8),
+      c4 varbit(16),
+      c5 interval,
+      c6 interval year to month,
+      c7 interval day to second(2),
+      c8 time(0),
+      c9 timetz(6),
+      c10 timestamp(0),
+      c11 decimal(12,4),
+      c12 numeric,
+      c13 float8,
+      c14 float4,
+      c15 int4[][],
+      c16 varchar(10)[],
+      c17 inet,
+      c18 cidr,
+      c19 macaddr,
+      c20 money,
+      c21 bytea,
+      c22 int4range,
+      c23 tstzrange,
+      c24 xml,
+      c25 "char",
+      CONSTRAINT samples_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.samples
+  CREATE TABLE public.samples (
+      id bigint NOT NULL,
+      c1 character(3),
+      c2 character varying(20),
+      c3 bit(8),
+      c4 bit varying(16),
+      c5 interval,
+      c6 interval year to month,
+      c7 interval day to second(2),
+      c8 time(0) without time zone,
+      c9 time(6) with time zone,
+      c10 timestamp(0) without time zone,
+      c11 numeric(12,4),
+      c12 numeric,
+      c13 double precision,
+      c14 real,
+      c15 integer[],
+      c16 character varying(10)[],
+      c17 inet,
+      c18 cidr,
+      c19 macaddr,
+      c20 money,
+      c21 bytea,
+      c22 int4range,
+      c23 tstzrange,
+      c24 xml,
+      c25 "char",
+      CONSTRAINT samples_pkey PRIMARY KEY (id)
+  );

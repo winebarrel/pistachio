@@ -1,0 +1,37 @@
+# New enum values are added in place: before the first existing value, after
+# a value in the middle, and at the end. The column that uses the enum is left
+# alone.
+init: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published');
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status public.status DEFAULT 'draft' NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TYPE public.status AS ENUM ('new', 'draft', 'review', 'published', 'archived');
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status public.status DEFAULT 'draft' NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TYPE public.status ADD VALUE 'new' BEFORE 'draft';
+  ALTER TYPE public.status ADD VALUE 'review' AFTER 'draft';
+  ALTER TYPE public.status ADD VALUE 'archived' AFTER 'published';
+applied: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'new',
+      'draft',
+      'review',
+      'published',
+      'archived'
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status status DEFAULT 'draft'::status NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
