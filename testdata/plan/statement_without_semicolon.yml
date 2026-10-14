@@ -1,0 +1,11 @@
+# A desired schema file whose last statement has no semicolon is an error.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+desired: |
+  -- pista:renamed-from public.users
+  CREATE TABLE public.accounts (
+      id integer NOT NULL
+  )
+error: "statement must end with a semicolon"
