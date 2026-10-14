@@ -365,6 +365,15 @@ func ParseSQLSourcesWithSchema(sources []Source, defaultSchema string) (*ParseRe
 // SQL that does not parse on its own is left to the parser to report, so a
 // statement cut short reads as the syntax error it is.
 func unterminatedEnd(sql string) int {
+	// The semicolon ending the last line is the last token unless a quote
+	// left open holds it, and the parser reports that. A comment could hide
+	// one, so a line with a comment marker is scanned.
+	trimmed := strings.TrimRight(sql, " \t\r\n")
+	lastLine := trimmed[strings.LastIndexByte(trimmed, '\n')+1:]
+	if strings.HasSuffix(lastLine, ";") && !strings.Contains(lastLine, "--") && !strings.Contains(lastLine, "/*") && !strings.Contains(lastLine, "*/") {
+		return -1
+	}
+
 	result, err := pg_query.Scan(sql)
 	if err != nil {
 		return -1
@@ -431,8 +440,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 	}
 	positions := map[LintTarget]Position{}
 	autoNamed := map[AutoNamedObject]bool{}
+	loc := newLocator(sql, spans)
 	addPosition := func(target LintTarget, offset int32) {
-		if pos, ok := locate(sql, spans, int(offset)); ok {
+		if pos, ok := loc.locate(int(offset)); ok {
 			positions[target] = Position{File: pos.path, Line: pos.line, Column: pos.col}
 		}
 	}

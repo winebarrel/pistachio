@@ -653,6 +653,18 @@ func TestParseSQLSources_StatementWithoutSemicolon(t *testing.T) {
   |                                   ^`, err.Error())
 	})
 
+	t.Run("a semicolon in a comment on the last line", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer) -- done;\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `statement must end with a semicolon
+ --> a.sql:1:35
+  |
+1 | CREATE TABLE public.a (id integer) -- done;
+  |                                   ^`, err.Error())
+	})
+
 	t.Run("comments after the semicolon and a file with no statement", func(t *testing.T) {
 		r, err := ParseSQLSourcesWithSchema([]Source{
 			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer); -- note\n/* more */"},
