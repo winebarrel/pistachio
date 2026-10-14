@@ -296,7 +296,7 @@ jobs:
       PGPORT: "5432"
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
@@ -325,7 +325,7 @@ jobs:
       PGPORT: "5432"
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
