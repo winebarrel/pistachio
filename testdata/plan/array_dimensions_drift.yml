@@ -1,0 +1,17 @@
+# LIMITATIONS.md: an array type written with dimensions reads back from the
+# catalog as one-dimensional, so the column is altered on every plan. dump
+# writes integer[], which plans clean.
+init: |
+  CREATE TABLE public.grids (
+      id integer NOT NULL,
+      cells integer[][],
+      CONSTRAINT grids_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.grids (
+      id integer NOT NULL,
+      cells integer[][],
+      CONSTRAINT grids_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.grids ALTER COLUMN cells SET DATA TYPE integer[][];

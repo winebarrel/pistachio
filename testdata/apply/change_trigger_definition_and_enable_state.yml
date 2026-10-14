@@ -1,0 +1,42 @@
+# A changed trigger is replaced with CREATE OR REPLACE TRIGGER, and a changed
+# enable state is set with ALTER TABLE alone. A trigger whose definition is
+# unchanged is not replaced.
+init: |
+  CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      price numeric,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER items_upd BEFORE UPDATE ON public.items FOR EACH ROW EXECUTE FUNCTION public.trg();
+  CREATE TRIGGER items_stmt AFTER INSERT ON public.items FOR EACH STATEMENT EXECUTE FUNCTION public.trg();
+  CREATE TRIGGER items_trunc BEFORE TRUNCATE ON public.items FOR EACH STATEMENT EXECUTE FUNCTION public.trg();
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      price numeric,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER items_upd BEFORE UPDATE OF price ON public.items FOR EACH ROW WHEN (OLD.price IS DISTINCT FROM NEW.price) EXECUTE FUNCTION public.trg();
+  CREATE TRIGGER items_stmt AFTER INSERT OR DELETE ON public.items FOR EACH STATEMENT EXECUTE FUNCTION public.trg();
+  ALTER TABLE public.items ENABLE ALWAYS TRIGGER items_stmt;
+  CREATE TRIGGER items_trunc BEFORE TRUNCATE ON public.items FOR EACH STATEMENT EXECUTE FUNCTION public.trg();
+  ALTER TABLE public.items DISABLE TRIGGER items_trunc;
+applied_sql: |
+  CREATE OR REPLACE TRIGGER items_upd BEFORE UPDATE OF price ON public.items FOR EACH ROW WHEN (old.price IS DISTINCT FROM new.price) EXECUTE FUNCTION public.trg();
+  CREATE OR REPLACE TRIGGER items_stmt AFTER INSERT OR DELETE ON public.items EXECUTE FUNCTION public.trg();
+  ALTER TABLE public.items ENABLE ALWAYS TRIGGER items_stmt;
+  ALTER TABLE public.items DISABLE TRIGGER items_trunc;
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      price numeric,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER items_stmt AFTER INSERT OR DELETE ON items FOR EACH STATEMENT EXECUTE FUNCTION trg();
+  ALTER TABLE public.items ENABLE ALWAYS TRIGGER items_stmt;
+  CREATE TRIGGER items_trunc BEFORE TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION trg();
+  ALTER TABLE public.items DISABLE TRIGGER items_trunc;
+  CREATE TRIGGER items_upd BEFORE UPDATE OF price ON items FOR EACH ROW WHEN (old.price IS DISTINCT FROM new.price) EXECUTE FUNCTION trg();

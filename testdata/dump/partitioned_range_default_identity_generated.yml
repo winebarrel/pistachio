@@ -1,0 +1,26 @@
+# A range-partitioned table with an identity column, a stored generated
+# column, a bounded partition and a default partition.
+init: |
+  CREATE TABLE public.events (
+      id bigint GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 10 CACHE 5),
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
+      day date GENERATED ALWAYS AS ((created_at AT TIME ZONE 'UTC')::date) STORED,
+      CONSTRAINT events_pkey PRIMARY KEY (id, created_at)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
+  CREATE TABLE public.events_default PARTITION OF public.events DEFAULT;
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id bigint GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 10 CACHE 5),
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
+      day date GENERATED ALWAYS AS (((created_at AT TIME ZONE 'UTC'::text))::date) STORED,
+      CONSTRAINT events_pkey PRIMARY KEY (id, created_at)
+  )
+  PARTITION BY RANGE (created_at);
+
+  -- public.events_2024
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
+
+  -- public.events_default
+  CREATE TABLE public.events_default PARTITION OF public.events DEFAULT;

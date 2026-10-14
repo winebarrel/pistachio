@@ -1,0 +1,22 @@
+# Statement-level triggers, including one on TRUNCATE, and the ENABLE ALWAYS
+# state. pg_get_triggerdef writes FOR EACH STATEMENT although it is the
+# default.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER items_changed AFTER INSERT OR DELETE ON public.items EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER items_truncated BEFORE TRUNCATE ON public.items FOR EACH STATEMENT EXECUTE FUNCTION public.stamp();
+  ALTER TABLE public.items ENABLE ALWAYS TRIGGER items_changed;
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER items_changed AFTER INSERT OR DELETE ON items FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+  ALTER TABLE public.items ENABLE ALWAYS TRIGGER items_changed;
+  CREATE TRIGGER items_truncated BEFORE TRUNCATE ON items FOR EACH STATEMENT EXECUTE FUNCTION stamp();
