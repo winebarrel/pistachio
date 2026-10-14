@@ -258,10 +258,10 @@ func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTri
 // pg_get_triggerdef adds casts there the way pg_get_constraintdef does.
 //
 // It returns the whole result so the caller can deparse it back.
-func parseTriggerDef(def, schema string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
+func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
 	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if ct.Relation != nil && ct.Relation.Schemaname == "" {
 		ct.Relation.Schemaname = schema
@@ -271,7 +271,7 @@ func parseTriggerDef(def, schema string) (*pg_query.ParseResult, *pg_query.Creat
 	if ct.WhenClause != nil {
 		ct.WhenClause = normalizeCheckExpr(ct.WhenClause)
 	}
-	return result, ct, nil
+	return result, nil
 }
 
 // equalTriggerDef compares two CREATE TRIGGER definitions by deparsing their
@@ -285,11 +285,11 @@ func equalTriggerDef(current, desired, schema string) (bool, error) {
 	if current == desired {
 		return true, nil
 	}
-	curResult, _, err := parseTriggerDef(current, schema)
+	curResult, err := parseTriggerDef(current, schema)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the current trigger definition: %w", err)
 	}
-	desResult, _, err := parseTriggerDef(desired, schema)
+	desResult, err := parseTriggerDef(desired, schema)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the desired trigger definition: %w", err)
 	}
