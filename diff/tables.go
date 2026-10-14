@@ -226,24 +226,25 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	// rejects dropping it on its own, and it goes with the partition anyway.
 	tableAllowed := dc.IsDropAllowed("table")
 	for k, tbl := range current.All() {
-		if _, ok := desired.GetOk(k); !ok {
-			if tableAllowed {
-				for name, fk := range tbl.ForeignKeys.All() {
-					if fk.Inherited {
-						continue
-					}
-					result.FKDropStmts = append(result.FKDropStmts, "ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
-				}
-				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
-			} else {
-				for name, fk := range tbl.ForeignKeys.All() {
-					if fk.Inherited {
-						continue
-					}
-					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
-				}
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TABLE "+k+";")
+		if _, ok := desired.GetOk(k); ok {
+			continue
+		}
+		for name, fk := range tbl.ForeignKeys.All() {
+			if fk.Inherited {
+				continue
 			}
+			drop := "ALTER TABLE " + k + " DROP CONSTRAINT " + model.Ident(name) + ";"
+			if tableAllowed {
+				result.FKDropStmts = append(result.FKDropStmts, drop)
+			} else {
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+drop)
+			}
+		}
+		drop := "DROP TABLE " + k + ";"
+		if tableAllowed {
+			result.DropStmts = append(result.DropStmts, drop)
+		} else {
+			result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+drop)
 		}
 	}
 
@@ -635,10 +636,11 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 			if col.Generated.IsStoredGeneratedColumn() != pass {
 				continue
 			}
+			drop := "ALTER TABLE " + fqtn + " DROP COLUMN " + model.Ident(name) + ";"
 			if colAllowed {
-				dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+				dropStmts = append(dropStmts, drop)
 			} else {
-				disallowed = append(disallowed, "-- skipped: ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+				disallowed = append(disallowed, "-- skipped: "+drop)
 			}
 		}
 	}
