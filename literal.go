@@ -331,10 +331,10 @@ func (a *literalAligner) alignDomains(domains, desired *orderedmap.Map[string, *
 }
 
 // evaluateLiterals runs the aligner's two passes: it collects the literals
-// that differ, has print evaluate them in one call, and returns the current
+// that differ, has printer evaluate them in one call, and returns the current
 // tables and domains rewritten with the matches.
 func evaluateLiterals(
-	print literalPrinter,
+	printer literalPrinter,
 	tables, desiredTables *orderedmap.Map[string, *model.Table],
 	domains, desiredDomains *orderedmap.Map[string, *model.Domain],
 ) (*orderedmap.Map[string, *model.Table], *orderedmap.Map[string, *model.Domain]) {
@@ -344,6 +344,6 @@ func evaluateLiterals(
 	if len(a.exprs) == 0 {
 		return tables, domains
 	}
-	a.printed = print(a.exprs)
+	a.printed = printer(a.exprs)
 	return a.alignTables(tables, desiredTables), a.alignDomains(domains, desiredDomains)
 }
