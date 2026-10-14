@@ -114,23 +114,14 @@ func (c *Catalog) IndexSizes(ctx context.Context) (map[string]int64, error) {
 			AND n.nspname = ANY(@schemas)
 	`
 
-	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get index sizes: %w", err)
-	}
-	defer rows.Close()
-
 	sizes := map[string]int64{}
-	for rows.Next() {
-		var schema, name string
-		var bytes int64
-		if err := rows.Scan(&schema, &name, &bytes); err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan index size: %w", err)
-		}
+	var schema, name string
+	var bytes int64
+	err := c.eachRow(ctx, "index sizes", q, []any{&schema, &name, &bytes}, func() {
 		sizes[model.Ident(schema, name)] = bytes
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan index size rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return sizes, nil
 }
