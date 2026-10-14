@@ -589,7 +589,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				return nil, nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED; DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
-			if cur && des && exprChanged(currentCol.Default, desiredCol.Default) {
+			if cur && exprChanged(currentCol.Default, desiredCol.Default) {
 				// Both sides are STORED GENERATED but the expression differs.
 				// PostgreSQL has no `ALTER COLUMN ... SET GENERATED AS (expr)`;
 				// the only way to change the expression is DROP COLUMN +
