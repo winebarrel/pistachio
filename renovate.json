@@ -4,6 +4,7 @@
     "config:recommended",
     ":disableDependencyDashboard"
   ],
+  "automerge": true,
   "postUpdateOptions": [
     "gomodTidy"
   ],
