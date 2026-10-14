@@ -682,8 +682,8 @@ func renamedTablesAndIndexes(current, desired *orderedmap.Map[string, *model.Tab
 	return tables, indexes
 }
 
-// renamedFrom returns the current name of a table or an index renamed in the
-// plan, or the name itself.
+// renamedFrom returns the current name of a table, an index or a column
+// renamed in the plan, or the name itself.
 func renamedFrom(renames map[string]string, name string) string {
 	if old, ok := renames[name]; ok {
 		return old
