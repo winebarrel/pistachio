@@ -6,6 +6,8 @@
 
 * **BREAKING**: `plan`, `apply`, `diff` and the other commands that read desired schema files now reject a file whose last statement has no semicolon. Before, such a file was read when it was the last file, and when another file followed it, the statement ran into the first statement of that file and the error pointed at the next file.
 
+* `plan` is faster. At 1,000 tables it takes about 10% less time, close to 1.69.1 again. The inline directive checks skip a statement with no `-- pista:` directive, and the line numbers recorded for lint are no longer counted from the start of the file for every object.
+
 * `dump` and `plan` now quote a routine parameter or `RETURNS TABLE` column named after a keyword such as `time`, `position` or `values`. Before, they wrote the name bare, which is a syntax error there, so the routine could not be created and a `dump` of it could not be read back.
 
 ## [1.84.0] - 2026-10-14
