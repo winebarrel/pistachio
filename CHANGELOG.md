@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `dump` and `plan` now quote a routine parameter or `RETURNS TABLE` column named after a keyword such as `time`, `position` or `values`. Before, they wrote the name bare, which is a syntax error there, so the routine could not be created and a `dump` of it could not be read back.
+
 ## [1.84.0] - 2026-10-14
 
 * `apply` and `apply-from` take `--lock-timeout` and `--statement-timeout`. They set `lock_timeout` and `statement_timeout` before the pre-SQL.
