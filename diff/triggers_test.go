@@ -362,11 +362,11 @@ func TestDiffTriggers_UnparseableDesiredDefinition(t *testing.T) {
 // A definition that parses as something other than CREATE TRIGGER cannot be
 // compared, and neither can a file holding more than one statement.
 func TestParseTriggerDef_WrongStatement(t *testing.T) {
-	_, _, err := parseTriggerDef("SELECT 1", "public")
+	_, err := parseTriggerDef("SELECT 1", "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 
-	_, _, err = parseTriggerDef(insertDef+"; "+insertDef, "public")
+	_, err = parseTriggerDef(insertDef+"; "+insertDef, "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
