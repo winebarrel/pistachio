@@ -21,6 +21,15 @@
         "docker-compose"
       ],
       "enabled": false
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "postgres"
+      ],
+      "enabled": false
     }
   ]
 }
