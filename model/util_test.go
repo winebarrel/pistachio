@@ -60,6 +60,19 @@ func TestQuoteIdent_empty(t *testing.T) {
 	assert.Equal(t, `""`, quoteIdent(""))
 }
 
+func TestQuoteParamName(t *testing.T) {
+	assert.Equal(t, "id", quoteParamName("id"))
+	// unreserved keywords stay bare
+	assert.Equal(t, "name", quoteParamName("name"))
+	// col_name keywords are quoted, unlike in quoteIdent
+	assert.Equal(t, `"time"`, quoteParamName("time"))
+	assert.Equal(t, `"values"`, quoteParamName("values"))
+	// names quoteIdent quotes stay quoted
+	assert.Equal(t, `"select"`, quoteParamName("select"))
+	assert.Equal(t, `"left"`, quoteParamName("left"))
+	assert.Equal(t, `"Id"`, quoteParamName("Id"))
+}
+
 func TestQuoteLiteral(t *testing.T) {
 	assert.Equal(t, "'hello'", QuoteLiteral("hello"))
 }

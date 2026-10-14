@@ -67,6 +67,24 @@ func quoteIdentUncached(name string) string {
 	}
 }
 
+// quoteParamName quotes the name of a routine parameter or RETURNS TABLE
+// column. That position takes a bare identifier, an unreserved keyword or a
+// type_func_name keyword, but not a col_name keyword such as time or values,
+// which quoteIdent leaves bare.
+func quoteParamName(name string) string {
+	q := quoteIdent(name)
+	if q != name {
+		return q
+	}
+
+	result, err := pg_query.Scan(name)
+	if err == nil && len(result.Tokens) == 1 && result.Tokens[0].KeywordKind == pg_query.KeywordKind_COL_NAME_KEYWORD {
+		return quote(name)
+	}
+
+	return name
+}
+
 // SplitQualifiedName splits a qualified name into its parts, respecting
 // quoting: `public."my.coll"` -> [`public`, `"my.coll"`].
 func SplitQualifiedName(s string) []string {
