@@ -307,9 +307,6 @@ func (r *DumpResult) String() string {
 // splitAtomicRoutines separates the routines with a SQL-standard body from
 // the rest, keeping the order of each.
 func splitAtomicRoutines(routines *orderedmap.Map[string, *model.Routine]) (plain, atomic *orderedmap.Map[string, *model.Routine]) {
-	if routines == nil {
-		return orderedmap.New[string, *model.Routine](), orderedmap.New[string, *model.Routine]()
-	}
 	plain = routines.Filter(func(_ string, r *model.Routine) bool { return !r.Atomic() })
 	atomic = routines.Filter(func(_ string, r *model.Routine) bool { return r.Atomic() })
 	return plain, atomic
