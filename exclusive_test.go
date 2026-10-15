@@ -125,6 +125,34 @@ func TestApplyExclusiveConflict(t *testing.T) {
 	assert.Zero(t, count)
 }
 
+// The lock key includes a hash of the database name, so an exclusive apply on
+// one database does not exclude one on another database of the same server.
+func TestApplyExclusiveOtherDatabase(t *testing.T) {
+	ctx := context.Background()
+	holder := testutil.ConnectDB(t)
+	defer holder.Close(ctx)
+	holdExclusive(t, ctx, holder)
+	defer releaseExclusive(ctx, holder) //nolint:errcheck
+
+	conn := testutil.NewDBPool(t).Connect(t)
+	testutil.SetupDB(t, ctx, conn, "")
+	require.NotEqual(t, holder.Config().Database, conn.Config().Database)
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	result, err := client.Apply(ctx, &ApplyOptions{
+		Files:     []string{writeDesiredFile(t, exclusiveDesired)},
+		Exclusive: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.True(t, result.Applied)
+	assert.Contains(t, buf.String(), "CREATE TABLE")
+}
+
 func TestApplyExclusiveWaitTimeout(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
