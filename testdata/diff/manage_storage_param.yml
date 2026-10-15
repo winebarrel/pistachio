@@ -1,0 +1,14 @@
+# With --manage-storage-param the WITH clause is compared.
+manage_storage_param: true
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90);
+diff: |
+  ALTER TABLE public.users SET (fillfactor='90');

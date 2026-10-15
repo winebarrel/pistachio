@@ -11,10 +11,12 @@ import (
 )
 
 type diffTestCase struct {
-	Current                  string          `yaml:"current"`
-	Desired                  string          `yaml:"desired"`
-	Diff                     string          `yaml:"diff"`
-	Error                    string          `yaml:"error"`
+	Current string `yaml:"current"`
+	Desired string `yaml:"desired"`
+	Diff    string `yaml:"diff"`
+	Error   string `yaml:"error"`
+	// Schemas sets -n. It defaults to public.
+	Schemas                  []string        `yaml:"schemas,omitempty"`
 	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
@@ -54,7 +56,11 @@ func TestDiff(t *testing.T) {
 			desiredFile := filepath.Join(tmpDir, "desired.sql")
 			require.NoError(t, os.WriteFile(desiredFile, []byte(tc.Desired), 0o644))
 
-			client := NewClient(&Options{Schemas: []string{"public"}})
+			schemas := []string{"public"}
+			if tc.Schemas != nil {
+				schemas = tc.Schemas
+			}
+			client := NewClient(&Options{Schemas: schemas})
 
 			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
 			if tc.DropPolicy != nil {
