@@ -113,24 +113,20 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 		currentByName[c.Name] = c
 	}
 
-	desiredByName := make(map[string]*model.DomainConstraint)
-	for _, c := range desired {
-		desiredByName[c.Name] = c
-	}
-
 	// A validated constraint the desired schema writes NOT VALID is dropped
 	// and added back, as a table's is, since nothing clears the flag.
-	change := func(cur, des *model.DomainConstraint) definitionChange {
-		return newDefinitionChange(equalConstraintDef(cur.Definition, des.Definition), cur.Validated, des.Validated)
+	changes := make(map[string]definitionChange, len(desired))
+	for _, des := range desired {
+		if cur, ok := currentByName[des.Name]; ok {
+			changes[des.Name] = newDefinitionChange(equalConstraintDef(cur.Definition, des.Definition), cur.Validated, des.Validated)
+		}
 	}
 
 	// Drop removed or changed constraints. One that only needs validating is
 	// kept.
 	for _, c := range current {
-		if d, ok := desiredByName[c.Name]; ok {
-			if ch := change(c, d); !ch.changed || ch.validateOnly {
-				continue
-			}
+		if ch, ok := changes[c.Name]; ok && (!ch.changed || ch.validateOnly) {
+			continue
 		}
 		stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 	}
@@ -140,7 +136,7 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 	currentComments := map[string]*string{}
 	for _, c := range desired {
 		if cur, ok := currentByName[c.Name]; ok {
-			ch := change(cur, c)
+			ch := changes[c.Name]
 			if !ch.changed || ch.validateOnly {
 				currentComments[c.Name] = cur.Comment
 			}
