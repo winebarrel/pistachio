@@ -220,8 +220,9 @@ It applies to:
 ```sql
 -- pista:lint-ignore require-primary-key
 CREATE TABLE public.event_log (
-    -- pista:lint-ignore prefer-timestamptz, prefer-text -- written by an external system
+    -- pista:lint-ignore prefer-timestamptz -- written by an external system
     at timestamp NOT NULL,
+    -- pista:lint-ignore prefer-text -- written by an external system
     body varchar(200) NOT NULL
 );
 ```
