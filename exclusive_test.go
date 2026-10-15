@@ -351,6 +351,56 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 	assert.NotContains(t, err.Error(), "did not finish within")
 }
 
+// The desired files are read and parsed before the connection is opened, so a
+// broken file fails at once with its own error, even while another session
+// holds the exclusion.
+func TestApplyExclusiveBrokenDesiredFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, "")
+
+	holder := testutil.ConnectDB(t)
+	defer holder.Close(ctx)
+	holdExclusive(t, ctx, holder)
+	defer releaseExclusive(ctx, holder) //nolint:errcheck
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	files := map[string]struct {
+		file string
+		err  string
+	}{
+		"unparsable": {writeDesiredFile(t, "CREATE TABEL users (id integer);"), `syntax error at or near "TABEL"`},
+		"unreadable": {filepath.Join(t.TempDir(), "missing.sql"), "missing.sql"},
+	}
+	modes := map[string]*ApplyOptions{
+		"exclusive":      {Exclusive: true},
+		"exclusive-wait": {ExclusiveWait: durationPtr(10 * time.Second)},
+	}
+
+	for fileName, f := range files {
+		for modeName, mode := range modes {
+			t.Run(fileName+" "+modeName, func(t *testing.T) {
+				opts := *mode
+				opts.Files = []string{f.file}
+
+				start := time.Now()
+				var buf bytes.Buffer
+				_, err := client.Apply(ctx, &opts, &buf)
+				elapsed := time.Since(start)
+				require.ErrorContains(t, err, f.err)
+				assert.NotContains(t, err.Error(), "exclusive apply")
+				assert.Less(t, elapsed, exclusivePollInterval)
+				assert.Empty(t, buf.String())
+			})
+		}
+	}
+}
+
 func TestUnsignedDuration(t *testing.T) {
 	var d UnsignedDuration
 	require.NoError(t, d.UnmarshalText([]byte("5m")))
