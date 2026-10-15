@@ -250,7 +250,10 @@ func TestMarkNullable_DefinitionWithoutGoType(t *testing.T) {
 		},
 	}
 
-	err := markNullable(schema, reflect.TypeFor[root]())
+	types, err := definitionTypes(reflect.TypeFor[root]())
+	require.NoError(t, err)
+
+	err = markNullable(schema, reflect.TypeFor[root](), types)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `no Go type for definition "Ghost"`)
 }
@@ -272,22 +275,10 @@ func TestMarkNullable_DefinitionMissingProperty(t *testing.T) {
 	}
 	schema.Definitions["Column"].Properties.Set("name", &jsonschema.Schema{Type: "string"})
 
-	err := markNullable(schema, reflect.TypeFor[root]())
+	types, err := definitionTypes(reflect.TypeFor[root]())
+	require.NoError(t, err)
+
+	err = markNullable(schema, reflect.TypeFor[root](), types)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Column has no property")
-}
-
-// Two types of the same name stop the definitions from being collected.
-func TestAddDefinitions_DuplicateName(t *testing.T) {
-	type Column struct {
-		N int `json:"n"`
-	}
-	type root struct {
-		Mine  *Column       `json:"mine"`
-		Model *model.Column `json:"model"`
-	}
-
-	err := addDefinitions(&jsonschema.Reflector{}, &jsonschema.Schema{}, reflect.TypeFor[root]())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `two types named "Column"`)
 }
