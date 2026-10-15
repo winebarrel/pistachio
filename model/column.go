@@ -54,10 +54,6 @@ func (b ColumnGenerated) IsStoredGeneratedColumn() bool {
 	return b == 's'
 }
 
-func (b ColumnGenerated) IsVirtualGeneratedColumn() bool {
-	return b == 'v'
-}
-
 type Column struct {
 	Name       string  `json:"name"`
 	RenameFrom *string `json:"rename_from"`
