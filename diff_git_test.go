@@ -287,3 +287,56 @@ func TestDiff_GitDirectoryPath(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "db is not a file in HEAD^")
 }
+
+// A range with its desired side left out takes HEAD there, not the working
+// tree, so an uncommitted edit is not part of the diff.
+func TestDiff_GitRangeOmittedDesired(t *testing.T) {
+	initGitRepo(t)
+	gitCommit(t, "first", map[string]string{"schema.sql": "CREATE TABLE users (id int);"})
+	gitCommit(t, "second", map[string]string{"schema.sql": "CREATE TABLE users (id int, email text);"})
+	writeWorkingTree(t, map[string]string{"schema.sql": "CREATE TABLE users (id int, email text, name text);"})
+
+	got, err := diffGit(t, "HEAD^..", "schema.sql")
+	require.NoError(t, err)
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN email text;", got.SQL)
+}
+
+// A range with its current side left out takes HEAD there.
+func TestDiff_GitRangeOmittedCurrent(t *testing.T) {
+	initGitRepo(t)
+	gitCommit(t, "base", map[string]string{"schema.sql": "CREATE TABLE users (id int);"})
+	runGit(t, "checkout", "-q", "-b", "topic")
+	gitCommit(t, "topic", map[string]string{"schema.sql": "CREATE TABLE users (id int, email text);"})
+	runGit(t, "checkout", "-q", "main")
+	gitCommit(t, "main", map[string]string{"schema.sql": "CREATE TABLE users (id int, name text);"})
+
+	got, err := diffGit(t, "..topic", "schema.sql")
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users DROP COLUMN name;")
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users ADD COLUMN email text;")
+}
+
+// A path resolves against the working directory, not the repository root, so
+// in a subdirectory the path plan accepts is the path to pass.
+func TestDiff_GitPathInSubdirectory(t *testing.T) {
+	dir := initGitRepo(t)
+	gitCommit(t, "first", map[string]string{"db/schema.sql": "CREATE TABLE users (id int);"})
+	gitCommit(t, "second", map[string]string{"db/schema.sql": "CREATE TABLE users (id int, email text);"})
+	t.Chdir(filepath.Join(dir, "db"))
+
+	got, err := diffGit(t, "HEAD^..HEAD", "schema.sql")
+	require.NoError(t, err)
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN email text;", got.SQL)
+}
+
+// The same holds for the working tree side of a one-revision range.
+func TestDiff_GitPathInSubdirectoryWorkingTree(t *testing.T) {
+	dir := initGitRepo(t)
+	gitCommit(t, "first", map[string]string{"db/schema.sql": "CREATE TABLE users (id int);"})
+	t.Chdir(filepath.Join(dir, "db"))
+	writeWorkingTree(t, map[string]string{"schema.sql": "CREATE TABLE users (id int, email text);"})
+
+	got, err := diffGit(t, "HEAD", "schema.sql")
+	require.NoError(t, err)
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN email text;", got.SQL)
+}
