@@ -1,0 +1,20 @@
+# An unqualified name is qualified with the first schema given by -n, and an
+# object outside the schemas is out of scope on both sides.
+schemas: [app]
+current: |
+  CREATE TABLE users (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.legacy (
+      id integer NOT NULL
+  );
+desired: |
+  CREATE TABLE app.users (
+      id integer NOT NULL,
+      email text
+  );
+  CREATE TABLE public.upcoming (
+      id integer NOT NULL
+  );
+diff: |
+  ALTER TABLE app.users ADD COLUMN email text;
