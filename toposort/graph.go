@@ -66,9 +66,7 @@ func (g *graph) Sort() ([]string, error) {
 		result = append(result, node)
 
 		// Reduce in-degree for dependents
-		deps := dependents[node]
-		slices.Sort(deps)
-		for _, dep := range deps {
+		for _, dep := range dependents[node] {
 			inDegree[dep]--
 			if inDegree[dep] == 0 {
 				queue = append(queue, dep)
