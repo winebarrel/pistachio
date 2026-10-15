@@ -930,10 +930,8 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 				if err != nil {
 					return nil, err
 				}
-				if fk != nil {
-					if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
-						return nil, err
-					}
+				if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
+					return nil, err
 				}
 			} else {
 				constraint, err := parseTableConstraint(con, table.Name)
@@ -1543,10 +1541,8 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 			if err != nil {
 				return err
 			}
-			if fk != nil {
-				if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
-					return err
-				}
+			if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
+				return err
 			}
 		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE,
 			pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_EXCLUSION:
