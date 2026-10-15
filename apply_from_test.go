@@ -301,6 +301,85 @@ CREATE TABLE public.users (
 		assert.Contains(t, output, "SET lock_timeout = '5s';")
 	})
 
+	// The concurrently-pre-SQL belongs to the plan as well, and runs before
+	// the CONCURRENTLY index statement.
+	t.Run("the concurrently-pre-SQL from the file runs before the CONCURRENTLY statement", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		dir := t.TempDir()
+		desiredFile := filepath.Join(dir, "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE public.users (id integer NOT NULL, name text);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+		out := filepath.Join(dir, "plan.json")
+
+		client := NewClient(&Options{
+			ConnString:   testutil.ConnString(),
+			ScopeOptions: publicScope,
+		})
+		_, err := client.Plan(ctx, &PlanOptions{
+			AllowDrop:          []string{"all"},
+			Files:              []string{desiredFile},
+			PreSQL:             "SET statement_timeout = '10s';",
+			ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+			Out:                out,
+		})
+		require.NoError(t, err)
+
+		_, output, err := applyFrom(t, ctx, out, false)
+		require.NoError(t, err)
+		pre := strings.Index(output, "SET statement_timeout = '10s';")
+		concurrentlyPre := strings.Index(output, "SET lock_timeout = '5s';")
+		index := strings.Index(output, "CREATE INDEX CONCURRENTLY idx_users_name")
+		require.GreaterOrEqual(t, pre, 0)
+		assert.Less(t, pre, concurrentlyPre)
+		assert.Less(t, concurrentlyPre, index)
+		assert.Contains(t, dumpPublic(t, ctx), "CREATE INDEX idx_users_name")
+	})
+
+	// --try-tx runs a plan file holding CONCURRENTLY index DDL without a
+	// transaction instead of refusing it.
+	t.Run("--try-tx runs a CONCURRENTLY plan without a transaction", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		path := writePlan(t, ctx, `
+CREATE TABLE public.users (id integer NOT NULL, name text);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`, publicScope)
+
+		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		var buf bytes.Buffer
+		result, err := client.ApplyFrom(ctx, &ApplyFromOptions{
+			PlanFile: path,
+			TryTx:    true,
+		}, &buf)
+		require.NoError(t, err)
+		assert.True(t, result.Applied)
+		out := buf.String()
+		assert.Contains(t, out, "CREATE INDEX CONCURRENTLY idx_users_name")
+		assert.Contains(t, out, "-- Transaction skipped")
+		assert.NotContains(t, out, "-- Transaction started")
+		assert.Contains(t, dumpPublic(t, ctx), "CREATE INDEX idx_users_name")
+	})
+
+	t.Run("--timing writes the elapsed time after each statement", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
+		path := writePlan(t, ctx, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text
+);`, publicScope)
+
+		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		var buf bytes.Buffer
+		_, err := client.ApplyFrom(ctx, &ApplyFromOptions{
+			PlanFile: path,
+			Timing:   true,
+		}, &buf)
+		require.NoError(t, err)
+		assert.Contains(t, normalizeTimings(buf.String()),
+			"ALTER TABLE public.users ADD COLUMN name text;\n-- Time: <elapsed>")
+	})
+
 	// execute-first runs before the managed DDL, as it does in apply.
 	t.Run("execute-first runs before the DDL", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
