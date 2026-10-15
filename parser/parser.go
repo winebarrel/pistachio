@@ -2718,8 +2718,9 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 // parseInlineForeignKey builds a ForeignKey from a FOREIGN KEY constraint
 // written inside CREATE TABLE or added by ALTER TABLE.
 func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
+	cols := fkAttrCols(con)
 	if con.Conname == "" {
-		con.Conname = autoNameConstraint(table, fkAttrCols(con), con.Contype)
+		con.Conname = autoNameConstraint(table, cols, con.Contype)
 	}
 
 	def, err := deparseConstraintDef(con)
@@ -2742,7 +2743,7 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 		Name:       con.Conname,
 		Type:       model.ConstraintType('f'),
 		Definition: def,
-		Columns:    fkAttrCols(con),
+		Columns:    cols,
 		Deferrable: con.Deferrable,
 		Deferred:   con.Initdeferred,
 		Validated:  !con.SkipValidation,
