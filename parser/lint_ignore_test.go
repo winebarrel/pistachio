@@ -294,3 +294,16 @@ CREATE TABLE public.t (
 		{Kind: parser.LintColumn, Table: "public.t", Name: "y"}: {"d--e"},
 	}, got)
 }
+
+// A DEFAULT partition child has no element list, and the directive before it
+// applies to the table.
+func TestLintIgnore_DefaultPartitionChild(t *testing.T) {
+	got := parseLintIgnores(t, `
+CREATE TABLE public.p (id int) PARTITION BY LIST (id);
+-- pista:lint-ignore require-primary-key
+CREATE TABLE public.p_def PARTITION OF public.p DEFAULT;`)
+
+	assert.Equal(t, map[parser.LintTarget][]string{
+		{Kind: parser.LintTable, Table: "public.p_def"}: {"require-primary-key"},
+	}, got)
+}

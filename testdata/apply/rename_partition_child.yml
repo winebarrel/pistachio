@@ -1,0 +1,24 @@
+# renamed-from works on partition children, both a bound one and the
+# DEFAULT one.
+init: |
+  CREATE TABLE public.p (id integer) PARTITION BY LIST (id);
+  CREATE TABLE public.p_1 PARTITION OF public.p FOR VALUES IN (1);
+  CREATE TABLE public.old_def PARTITION OF public.p DEFAULT;
+desired: |
+  CREATE TABLE public.p (id integer) PARTITION BY LIST (id);
+  -- pista:renamed-from public.p_1
+  CREATE TABLE public.p_one PARTITION OF public.p FOR VALUES IN (1);
+  -- pista:renamed-from public.old_def
+  CREATE TABLE public.p_def PARTITION OF public.p DEFAULT;
+applied: |
+  -- public.p
+  CREATE TABLE public.p (
+      id integer
+  )
+  PARTITION BY LIST (id);
+
+  -- public.p_def
+  CREATE TABLE public.p_def PARTITION OF public.p DEFAULT;
+
+  -- public.p_one
+  CREATE TABLE public.p_one PARTITION OF public.p FOR VALUES IN (1);
