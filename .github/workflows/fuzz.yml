@@ -36,8 +36,8 @@ jobs:
           - package: ./format/
             target: FuzzFormat
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/checkout@v7.0.1 # v7
+      - uses: actions/setup-go@v7.0.0 # v7.0.0
         with:
           go-version-file: go.mod
       # go stores the corpus it grows under GOCACHE, so a run starts from
@@ -46,7 +46,7 @@ jobs:
       # how a cache entry gets replaced rather than frozen at its first write.
       - id: gocache
         run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/cache@v6.1.0 # v6.1.0
         with:
           path: ${{ steps.gocache.outputs.dir }}/fuzz
           key: fuzz-${{ matrix.target }}-${{ github.run_id }}
@@ -59,7 +59,7 @@ jobs:
       # A failing input is written into the package's testdata/fuzz/, where it
       # becomes a seed the ordinary tests replay. Keep it so the crash can be
       # committed and reproduced instead of having to be found again.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2 # v7.0.2
         if: failure()
         with:
           name: fuzz-crash-${{ matrix.target }}
