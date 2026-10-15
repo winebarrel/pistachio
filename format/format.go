@@ -689,7 +689,7 @@ func render(toks []*token, l *layout) string {
 			newline(indentFor(i, t), false)
 			pending = false
 
-		case listElem && t.orig == ",":
+		case owed:
 			// The comma belongs to the element it ends, whichever line the
 			// input put it on, unless that line ends in a comment, which
 			// would swallow it.
@@ -722,7 +722,6 @@ func render(toks []*token, l *layout) string {
 		}
 
 		cur.WriteString(t.out)
-		started = true
 
 		switch t.orig {
 		case "(":
