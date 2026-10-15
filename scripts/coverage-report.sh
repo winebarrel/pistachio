@@ -2,9 +2,10 @@
 # Merge the coverage profiles the CI test jobs upload and write the report
 # winebarrel/pistachio-coverage serves on GitHub Pages:
 #
-#   coverage.txt  the merged profile
-#   index.html    go tool cover -html of it
-#   badge.svg     a badge with the total
+#   coverage.txt   the merged profile
+#   coverage.html  go tool cover -html of it
+#   index.html     a list of the files with their coverage
+#   badge.svg      a badge with the total
 #
 # Usage: scripts/coverage-report.sh OUTDIR PROFILE...
 #
@@ -60,8 +61,68 @@ END {
     }
 }' "$@" >"$outdir/coverage.txt"
 
-go tool cover -html="$outdir/coverage.txt" -o "$outdir/index.html"
+go tool cover -html="$outdir/coverage.txt" -o "$outdir/coverage.html"
 total=$(go tool cover -func="$outdir/coverage.txt" | awk '$1 == "total:" { sub("%", "", $NF); print $NF }')
+
+# index.html lists the files, least covered first, each linked to its page
+# in coverage.html. That page is #fileN, where N counts the files in the
+# order go tool cover sorts them, which is by name, byte by byte.
+{
+    cat <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pistachio coverage</title>
+<style>
+:root { color-scheme: light dark; --fg: #1f2328; --bg: #fff; --line: #d1d9e0; --bar: #2da44e; --track: #eaeef2; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6edf3; --bg: #0d1117; --line: #3d444d; --bar: #3fb950; --track: #262c36; }
+}
+body { margin: 0 auto; max-width: 960px; padding: 16px; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; word-break: break-all; }
+a { color: inherit; }
+.bar { display: inline-block; width: 80px; height: 8px; margin-left: 8px; background: var(--track); vertical-align: middle; }
+.bar span { display: block; height: 100%; background: var(--bar); }
+</style>
+</head>
+<body>
+<h1>Coverage: $total%</h1>
+<table>
+<thead><tr><th>File</th><th>Statements</th><th>Missed</th><th>Coverage</th></tr></thead>
+<tbody>
+EOF
+    awk 'NR > 1 {
+        file = substr($1, 1, index($1, ":") - 1)
+        stmts[file] += $2
+        if ($3 > 0) {
+            covered[file] += $2
+        }
+    }
+    END {
+        for (file in stmts) {
+            print file, stmts[file], covered[file] + 0
+        }
+    }' "$outdir/coverage.txt" |
+        LC_ALL=C sort |
+        awk -v prefix="$module/" '{
+            pct = $2 > 0 ? 100 * $3 / $2 : 0
+            name = substr($1, 1, length(prefix)) == prefix ? substr($1, length(prefix) + 1) : $1
+            printf "%.3f\t%s\t<tr><td><a href=\"coverage.html#file%d\">%s</a></td><td>%d</td><td>%d</td><td>%.1f%%<span class=\"bar\"><span style=\"width: %.1f%%\"></span></span></td></tr>\n",
+                pct, name, NR - 1, name, $2, $2 - $3, pct, pct
+        }' |
+        LC_ALL=C sort -t "$(printf '\t')" -k1,1n -k2,2 |
+        cut -f3
+    cat <<EOF
+</tbody>
+</table>
+</body>
+</html>
+EOF
+} >"$outdir/index.html"
 
 if awk -v t="$total" 'BEGIN { exit !(t >= 90) }'; then
     color='#4c1'
