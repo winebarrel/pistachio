@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -147,4 +148,23 @@ CREATE TABLE public.users (
 	assert.Contains(t, buf.String(), "-- ignored: public.legacy")
 	assert.Contains(t, buf.String(), "-- skipped: DROP TABLE public.old;")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+}
+
+// The invalid index warning goes under the header, as apply writes it.
+func TestApplyFrom_Run_InvalidIndexWarning(t *testing.T) {
+	ctx := context.Background()
+	options, desiredFile := setupInvalidIndex(t, ctx)
+
+	out := filepath.Join(t.TempDir(), "plan.json")
+	plan := &command.Plan{Options: options, Files: []string{desiredFile}, Out: out}
+	require.NoError(t, plan.Run(ctx, &bytes.Buffer{}))
+
+	var buf bytes.Buffer
+	cmd := &command.ApplyFrom{ConnString: options.ConnString, PlanFile: out}
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 4)
+	assert.Equal(t, "-- Warning: index public.users_email_key is invalid", lines[2])
+	assert.Equal(t, "-- No changes", lines[3])
 }
