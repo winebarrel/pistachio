@@ -487,12 +487,9 @@ func Exec(ctx context.Context, conn Conn, stmt string) error {
 
 // isAsync reports a statement Finish wrote ASYNC in.
 func isAsync(stmt string) bool {
-	for _, prefix := range []string{"CREATE INDEX ASYNC ", "CREATE UNIQUE INDEX ASYNC ", "ALTER TABLE ASYNC "} {
-		if strings.HasPrefix(stmt, prefix) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc([]string{"CREATE INDEX ASYNC ", "CREATE UNIQUE INDEX ASYNC ", "ALTER TABLE ASYNC "}, func(prefix string) bool {
+		return strings.HasPrefix(stmt, prefix)
+	})
 }
 
 // StripAsync blanks out the ASYNC of each CREATE [UNIQUE] INDEX ASYNC, for a

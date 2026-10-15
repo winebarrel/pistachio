@@ -2,6 +2,7 @@ package dsqlproxy
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -353,12 +354,9 @@ func isDDL(node *pg_query.Node) bool {
 }
 
 func hasOption(opts []*pg_query.Node, name string) bool {
-	for _, o := range opts {
-		if o.GetDefElem().GetDefname() == name {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(opts, func(o *pg_query.Node) bool {
+		return o.GetDefElem().GetDefname() == name
+	})
 }
 
 func runJob(jobType, stmt string) string {
