@@ -26,7 +26,7 @@ jobs:
     # A run by hand has no head commit, so only the actor check applies.
     if: >-
       !contains(github.event.head_commit.message, '/release-from-') &&
-      github.actor != 'pistachio-release[bot]'
+      github.actor != 'pistachio-app[bot]'
     runs-on: ubuntu-latest
     steps:
       # The App token, unlike GITHUB_TOKEN, lets CI run on the pull request.
