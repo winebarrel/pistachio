@@ -139,6 +139,21 @@ func TestDiffCompositeTypes_RenameAttributeDestinationExists(t *testing.T) {
 	assert.Contains(t, err.Error(), "destination already exists")
 }
 
+func TestDiffCompositeTypes_RenameAttributeSourceNotFound(t *testing.T) {
+	current := newCompositeTypeMap(ct("address", attr("street", "text")))
+	renameFrom := "nonexist"
+	desired := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public",
+		Name:   "address",
+		Attributes: []*model.CompositeAttribute{
+			{Name: "road", TypeName: "text", RenameFrom: &renameFrom},
+		},
+	})
+	_, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source attribute nonexist not found in composite type public.address")
+}
+
 func TestDiffCompositeTypes_RenameTypeSourceNotFound(t *testing.T) {
 	current := newCompositeTypeMap()
 	renameFrom := "public.nonexist"
