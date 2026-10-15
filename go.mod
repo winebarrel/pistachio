@@ -23,7 +23,6 @@ require (
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jstemmer/go-junit-report/v2 v2.1.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
@@ -41,7 +40,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
 )
 
-tool (
-	github.com/jstemmer/go-junit-report/v2
-	golang.org/x/tools/cmd/deadcode
-)
+tool golang.org/x/tools/cmd/deadcode

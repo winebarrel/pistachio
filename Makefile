@@ -44,19 +44,6 @@ json-schema:
 vet:
 	go vet ./...
 
-# TEST_JUNIT names a file to write a JUnit XML report to, which is what
-# Codecov Test Analytics ingests. Leave it empty and the report is skipped;
-# `go test` then writes straight to the terminal. Set, the output goes through
-# go-junit-report, which -iocopy passes on to the terminal unchanged.
-#
-# -set-exit-code is what carries a failure out of the pipeline: make on Windows
-# does not use the SHELL set above, so pipefail is not in effect there and the
-# pipeline would otherwise report go-junit-report's own status. It covers a
-# failed test, a package that fails as a whole, and a build failure.
-ifneq ($(TEST_JUNIT),)
-TEST_REPORT = | go tool go-junit-report -iocopy -set-exit-code -out $(TEST_JUNIT)
-endif
-
 # The Go tests reset `public` and nothing else, so whatever `make schema`
 # loaded into the other schemas is still there while they run. A test that
 # looks something up without naming its schema then finds a sample's object
@@ -68,7 +55,7 @@ endif
 # another. Override PGPORT, or wipe the other server yourself.
 .PHONY: test
 test: clean-schema
-	go test -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
+	go test -p 1 -v ./... $(TEST_OPTS)
 
 .PHONY: lint
 lint:
@@ -124,7 +111,7 @@ test-fidelity: clean-schema
 # it in a job of its own.
 .PHONY: test-dsql
 test-dsql:
-	TEST_PISTA_DSQL=1 go test -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
+	TEST_PISTA_DSQL=1 go test -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS)
 
 # Makes the TestDSQL recording again against a live cluster. DSQL_HOST names
 # the cluster endpoint, and its public schema must be empty. See
