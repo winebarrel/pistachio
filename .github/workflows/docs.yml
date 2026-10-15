@@ -38,8 +38,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-python@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14"
       # Cairo and its friends are what the social plugin renders the card
@@ -47,7 +47,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
       - run: pip install -r requirements-docs.txt
       - run: mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v5.0.0 # v5.0.0
+      - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: site
 
@@ -67,4 +67,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5.0.1 # v5.0.1
+        uses: actions/deploy-pages@v5.0.1

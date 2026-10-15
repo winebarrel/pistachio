@@ -20,7 +20,7 @@ jobs:
   ascii:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
+      - uses: actions/checkout@v7.0.1
       - name: Check for non-ASCII characters
         run: |
           matches=$(LC_ALL=C git grep -nIP '[^\x00-\x7F]' -- .) && status=0 || status=$?
@@ -36,7 +36,7 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
+      - uses: actions/checkout@v7.0.1
       - run: make test-changelog
 
   keywords:
@@ -46,8 +46,8 @@ jobs:
     # is what happens when pg_query_go is upgraded without running
     # `make keywords`.
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       # gen-keywords.sh reads kwlist.h out of the module cache, so the module
@@ -60,8 +60,8 @@ jobs:
   tidy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       # A diff here means go.mod or go.sum is stale: run `go mod tidy` and
@@ -71,11 +71,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v9.3.0 # v9.3.0
+      - uses: golangci/golangci-lint-action@v9.3.0
       - run: make deadcode
       - run: make check-test-imports
 
@@ -114,8 +114,8 @@ jobs:
     steps:
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - name: Install GNU Make
@@ -168,7 +168,7 @@ jobs:
         env:
           GOFLAGS: ${{ matrix.goflags }}
       # Uploaded even when the tests failed; the coverage job reports on it.
-      - uses: actions/upload-artifact@v7.0.2 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-windows-${{ matrix.shard }}
@@ -197,8 +197,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
@@ -217,7 +217,7 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-18
       - run: make test-fidelity
       # Uploaded even when the tests failed; the coverage job reports on it.
-      - uses: actions/upload-artifact@v7.0.2 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-pg${{ matrix.postgres }}
@@ -230,13 +230,13 @@ jobs:
     # test jobs leave unset, so it runs here once. A failure here usually means
     # a statement pistachio sends changed: run `make record-dsql`.
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - run: make test-dsql TEST_OPTS='-coverprofile=coverage.txt'
       # Uploaded even when the test failed; the coverage job reports on it.
-      - uses: actions/upload-artifact@v7.0.2 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: coverage-dsql
@@ -251,13 +251,13 @@ jobs:
     needs: [windows, test, dsql]
     if: ${{ !cancelled() }}
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       # Each artifact holds a file named coverage.txt, so they are kept in a
       # directory each rather than merged into one.
-      - uses: actions/download-artifact@v8.0.2 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           path: ${{ runner.temp }}/coverage
           pattern: coverage-*
@@ -276,7 +276,7 @@ jobs:
           echo "Coverage: $total%" >> "$GITHUB_STEP_SUMMARY"
       - id: app-token
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/create-github-app-token@v3.2.0 # v3.2.0
+        uses: actions/create-github-app-token@v3.2.0
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
@@ -333,8 +333,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - run: make test-dsql-proxy
@@ -362,8 +362,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - run: make check-dsql-recording
@@ -399,8 +399,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     steps:
-      - uses: actions/checkout@v7.0.1 # v7
-      - uses: actions/setup-go@v7.0.0 # v7.0.0
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       # The discourse sample declares `CREATE EXTENSION vector`, the osm and
@@ -421,7 +421,7 @@ jobs:
       # last entry, so a change to one sample leaves the others cached. The
       # bodies no sample read in this run are removed before the save, which
       # keeps a replaced pin from staying in the cache.
-      - uses: actions/cache@v6.1.0 # v6.1.0
+      - uses: actions/cache@v6.1.0
         with:
           path: ${{ runner.temp }}/sample-cache
           key: samples-${{ matrix.shard }}-${{ hashFiles('sample-db.mk') }}
