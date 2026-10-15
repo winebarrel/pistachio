@@ -388,3 +388,56 @@ func TestApply_LockTimeout_OutOfRange(t *testing.T) {
 	assert.Equal(t, "SET lock_timeout = '3600000000ms';", strings.TrimSpace(buf.String()))
 	assert.False(t, usersHasColumn(t, ctx, conn, "name"))
 }
+
+// --lock-retries also retries when lock_timeout comes from the pre-SQL rather
+// than --lock-timeout.
+func TestApply_LockRetry_PreSQLLockTimeout(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+	testutil.SetupDB(t, ctx, conn, lockRetryInit)
+
+	release := holdTableLock(t, ctx, "ACCESS SHARE")
+	var buf bytes.Buffer
+	w := newLockRetryWriter(&buf)
+	releaseOnRetry(w, release)
+
+	result, err := lockRetryClient(conn).Apply(ctx, &ApplyOptions{
+		Files:          []string{writeDesiredFile(t, lockRetryDesired)},
+		PreSQL:         "SET lock_timeout = '100ms';",
+		LockRetries:    3,
+		LockRetryDelay: UnsignedDuration(500 * time.Millisecond),
+	}, w)
+	require.NoError(t, err)
+	assert.True(t, result.Applied)
+	assert.Equal(t, `SET lock_timeout = '100ms';
+ALTER TABLE public.users ADD COLUMN name text;
+-- Lock timeout: retrying in 500ms (1/3)
+ALTER TABLE public.users ADD COLUMN name text;`, strings.TrimSpace(buf.String()))
+	assert.True(t, usersHasColumn(t, ctx, conn, "name"))
+}
+
+// A SET lock_timeout in the pre-SQL overrides --lock-timeout: the statement
+// gives up after the pre-SQL's 100ms, not after --lock-timeout's hour.
+func TestApply_LockTimeout_PreSQLOverrides(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+	testutil.SetupDB(t, ctx, conn, lockRetryInit)
+	holdTableLock(t, ctx, "ACCESS SHARE")
+
+	start := time.Now()
+	var buf bytes.Buffer
+	_, err := lockRetryClient(conn).Apply(ctx, &ApplyOptions{
+		Files:       []string{writeDesiredFile(t, lockRetryDesired)},
+		PreSQL:      "SET lock_timeout = '100ms';",
+		LockTimeout: durationPtr(time.Hour),
+	}, &buf)
+	require.Error(t, err)
+	assert.True(t, isLockTimeout(err))
+	assert.Less(t, time.Since(start), time.Minute)
+	assert.Equal(t, `SET lock_timeout = '3600000ms';
+SET lock_timeout = '100ms';
+ALTER TABLE public.users ADD COLUMN name text;`, strings.TrimSpace(buf.String()))
+	assert.False(t, usersHasColumn(t, ctx, conn, "name"))
+}
