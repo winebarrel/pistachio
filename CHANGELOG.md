@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.85.1] - 2026-10-15
 
 * `diff` without `--git` now exits with 80, the usage error status, when it is not given exactly two files. Before, it exited with 1.
 
