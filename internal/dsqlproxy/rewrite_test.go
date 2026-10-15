@@ -58,6 +58,28 @@ func TestRewriteMultipleDDL(t *testing.T) {
 	assert.Equal(t, "CREATE TABLE u (c int)", got)
 }
 
+func TestRewriteMultipleDDLAsync(t *testing.T) {
+	// CREATE INDEX ASYNC as the second DDL statement of a transaction.
+	s := newSession(true)
+	s.rewrite("CREATE TABLE t (c int)")
+	got, tags := s.rewrite("CREATE INDEX ASYNC i ON t (c)")
+	assert.Equal(t, refuse(msgMultipleDDL), got)
+	assert.Equal(t, []string{""}, tags)
+
+	// ALTER TABLE ASYNC ... VALIDATE CONSTRAINT as the second one.
+	s = newSession(true)
+	s.rewrite("CREATE TABLE t (c int)")
+	got, tags = s.rewrite("ALTER TABLE ASYNC t VALIDATE CONSTRAINT k")
+	assert.Equal(t, refuse(msgMultipleDDL), got)
+	assert.Equal(t, []string{""}, tags)
+}
+
+func TestRewriteTableLevelPrimaryKey(t *testing.T) {
+	got, tags := newSession(false).rewrite("CREATE TABLE t (id bigint, PRIMARY KEY (id))")
+	assert.Equal(t, "CREATE TABLE t (id bigint, PRIMARY KEY (id))", got)
+	assert.Equal(t, []string{""}, tags)
+}
+
 func TestRewriteUnparsable(t *testing.T) {
 	got, tags := newSession(false).rewrite("CREATE TABLE (")
 	assert.Equal(t, "CREATE TABLE (", got)
