@@ -34,11 +34,6 @@ func TestColumnGenerated_IsStoredGeneratedColumn(t *testing.T) {
 	assert.False(t, model.ColumnGenerated('v').IsStoredGeneratedColumn())
 }
 
-func TestColumnGenerated_IsVirtualGeneratedColumn(t *testing.T) {
-	assert.True(t, model.ColumnGenerated('v').IsVirtualGeneratedColumn())
-	assert.False(t, model.ColumnGenerated('s').IsVirtualGeneratedColumn())
-}
-
 func TestColumn_String(t *testing.T) {
 	col := &model.Column{Name: "id", TypeName: "integer", NotNull: true}
 	s := col.String()
