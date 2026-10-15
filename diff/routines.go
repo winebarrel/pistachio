@@ -72,12 +72,10 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 				result.Stmts = append(result.Stmts, stmts[0])
 			}
 			stmts = stmts[1:]
+			result.Recreated = append(result.Recreated, currentRoutine)
 		}
 		out := result.stmtsFor(desiredRoutine)
 		*out = append(*out, stmts...)
-		if recreated {
-			result.Recreated = append(result.Recreated, currentRoutine)
-		}
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, disallowed...)
 	}
 
