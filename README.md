@@ -1,7 +1,7 @@
 ![pistachio](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
 
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
+[![coverage](https://winebarrel.github.io/pistachio-coverage/badge.svg)](https://winebarrel.github.io/pistachio-coverage/)
 
 pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow. You write the schema you want as DDL in SQL files. pistachio compares the database with the files and prints the DDL that makes the database match.
 
