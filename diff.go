@@ -25,6 +25,15 @@ type DiffOptions struct {
 	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does and what its lock blocks. No database is read, so no size is shown, and a type change or a default that calls a function reads as may rewrite."`
 }
 
+// ValidateFiles checks the number of files. Without --git it is one per side;
+// with it every file is read at both ends of the range, so any number goes.
+func (options *DiffOptions) ValidateFiles() error {
+	if options.Git == "" && len(options.Files) != 2 {
+		return fmt.Errorf("diff takes a current and a desired schema SQL file, got %d file(s); --git reads them from git instead", len(options.Files))
+	}
+	return nil
+}
+
 // Diff diffs two schemas without a database: the first stands in for the
 // current state the catalog gives Plan, the second is the desired state.
 // Without --git the two are the files named on the command line; with it both
@@ -95,11 +104,11 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 // ends of the range, and the schema of a side is all of its files together,
 // the way plan reads the files of a desired schema.
 func (client *Client) diffInput(options *DiffOptions) (*parser.ParseResult, *parser.ParseResult, error) {
-	if options.Git == "" {
-		if len(options.Files) != 2 {
-			return nil, nil, fmt.Errorf("diff takes a current and a desired schema SQL file, got %d file(s); --git reads them from git instead", len(options.Files))
-		}
+	if err := options.ValidateFiles(); err != nil {
+		return nil, nil, err
+	}
 
+	if options.Git == "" {
 		// Not wrapped: the parser's message already names the file.
 		current, err := parser.ParseSQLFilesWithSchema(options.Files[:1], client.Schemas[0])
 		if err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -431,4 +432,52 @@ func TestRun_EngineUnknown(t *testing.T) {
 	code, stderr := runCLI(t, &stdout, "dump", "--engine", "mysql")
 	assert.Equal(t, 80, code)
 	assert.Contains(t, stderr, `--engine must be one of "postgres","dsql"`)
+}
+
+// Without --git, diff takes exactly two files. Any other count is a usage
+// error, which exits with 80 before a file is read.
+func TestRun_DiffWrongFileCount(t *testing.T) {
+	for _, files := range [][]string{{"only.sql"}, {"a.sql", "b.sql", "c.sql"}} {
+		t.Run(strings.Join(files, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, append([]string{"diff"}, files...)...)
+			assert.Equal(t, 80, code)
+			assert.Contains(t, stderr, "diff takes a current and a desired schema SQL file")
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+// With --git, every file is read at both ends of the range, so one file or
+// three are accepted.
+func TestRun_DiffGitFileCount(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	t.Chdir(t.TempDir())
+
+	git := func(args ...string) {
+		t.Helper()
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, out)
+	}
+	git("init", "-q", "-b", "main")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "test")
+	for _, name := range []string{"a.sql", "b.sql", "c.sql"} {
+		table := strings.TrimSuffix(name, ".sql")
+		require.NoError(t, os.WriteFile(name, []byte("CREATE TABLE "+table+" (id int);\n"), 0o644))
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "first")
+	require.NoError(t, os.WriteFile("a.sql", []byte("CREATE TABLE a (id int, name text);\n"), 0o644))
+
+	for _, files := range [][]string{{"a.sql"}, {"a.sql", "b.sql", "c.sql"}} {
+		t.Run(strings.Join(files, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, append([]string{"diff", "--git", "HEAD"}, files...)...)
+			assert.Equal(t, 0, code)
+			assert.Empty(t, stderr)
+			assert.Equal(t, "ALTER TABLE public.a ADD COLUMN name text;\n", stdout.String())
+		})
+	}
 }

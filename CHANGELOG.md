@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `diff` without `--git` now exits with 80, the usage error status, when it is not given exactly two files. Before, it exited with 1.
+
 * `apply-from` now prints the invalid index warning that `plan` and `apply` print.
 
 ## [1.85.0] - 2026-10-14

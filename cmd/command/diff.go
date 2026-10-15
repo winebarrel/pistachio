@@ -28,6 +28,13 @@ func (cmd *Diff) AfterApply() error {
 	return nil
 }
 
+// Validate refuses a wrong number of files while kong parses the command
+// line, so the error is a usage error. No tag can say it: the count depends
+// on --git.
+func (cmd *Diff) Validate() error {
+	return cmd.ValidateFiles()
+}
+
 func (cmd *Diff) Run(w io.Writer) error {
 	client := pistachio.NewClient(&pistachio.Options{Schemas: cmd.Schemas})
 

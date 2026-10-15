@@ -17,6 +17,20 @@ func TestDiff_AfterApply_TrimsSchemas(t *testing.T) {
 	assert.Equal(t, []string{"public", "billing"}, cmd.Schemas)
 }
 
+// Without --git diff takes two files; with it, any number.
+func TestDiff_Validate(t *testing.T) {
+	cmd := &command.Diff{}
+	cmd.Files = []string{"only.sql"}
+	require.ErrorContains(t, cmd.Validate(), "diff takes a current and a desired schema SQL file, got 1 file(s)")
+
+	cmd.Files = []string{"a.sql", "b.sql"}
+	require.NoError(t, cmd.Validate())
+
+	cmd.Git = "HEAD"
+	cmd.Files = []string{"only.sql"}
+	require.NoError(t, cmd.Validate())
+}
+
 func TestDiff_Run(t *testing.T) {
 	current := writeSQLFile(t, "current.sql", `
 create table users (
