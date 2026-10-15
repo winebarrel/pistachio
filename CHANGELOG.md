@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `apply-from` now prints the invalid index warning that `plan` and `apply` print.
+
 ## [1.85.0] - 2026-10-14
 
 * **BREAKING**: `plan`, `apply`, `diff` and the other commands that read desired schema files now reject a file whose last statement has no semicolon. Before, such a file was read when it was the last file, and when another file followed it, the statement ran into the first statement of that file and the error pointed at the next file.
