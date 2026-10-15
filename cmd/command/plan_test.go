@@ -457,6 +457,39 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.Contains(t, got, "read-only transaction")
 }
 
+func TestPlan_Run_ExecuteCheckWrites_NoReadOnly(t *testing.T) {
+	// --no-read-only opens a read-write connection, so the same writing check
+	// is evaluated at plan time and its result decides whether the statement
+	// is shown.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "CREATE SEQUENCE public.s;")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE SEQUENCE public.s;
+-- pista:execute SELECT nextval('public.s') > 0
+CREATE OR REPLACE FUNCTION public.kept_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+-- pista:execute SELECT nextval('public.s') < 0
+CREATE OR REPLACE FUNCTION public.skipped_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	options := pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	}
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Options: options, NoReadOnly: true, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.kept_func")
+	assert.NotContains(t, got, "public.skipped_func")
+	assert.NotContains(t, got, "read-only transaction")
+}
+
 func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	// Pre-SQL is prepended only when the plan has statements, so it does
 	// not turn an empty plan into a diff.
