@@ -311,6 +311,25 @@ func TestRun_ForceInConfig(t *testing.T) {
 	assert.Contains(t, stderr, "error: config key(s) only for the command line: force")
 }
 
+// The plan file records the options that decide what is read or what is run,
+// so apply-from does not accept them on the command line. kong rejects them
+// before the plan file or a database is reached.
+func TestRun_ApplyFromRefusesPlanOptions(t *testing.T) {
+	for _, args := range [][]string{
+		{"apply-from", "--include", "users", "plan.json"},
+		{"apply-from", "-n", "myschema", "plan.json"},
+		{"apply-from", "--pre-sql", "SELECT 1", "plan.json"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, args...)
+			assert.Equal(t, 80, code)
+			assert.Contains(t, stderr, "unknown flag")
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
 // --engine dsql refuses the options DSQL cannot use. kong's xor tag looks at
 // whether a flag was given rather than at its value, so the commands refuse
 // them in a hook. The hook runs before a database is reached, so no
