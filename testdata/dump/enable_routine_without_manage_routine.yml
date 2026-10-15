@@ -1,0 +1,5 @@
+# --enable routine does not turn routines on without --manage-routine.
+enable: [routine]
+init: |
+  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+dump: ""
