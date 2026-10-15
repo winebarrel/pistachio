@@ -91,6 +91,28 @@ func TestRun_FmtCheckDiff(t *testing.T) {
 	assert.Contains(t, out.String(), path)
 }
 
+// With --check, a file that could not be parsed makes the exit status 1 even
+// when another file is not formatted.
+func TestRun_FmtCheckParseError(t *testing.T) {
+	broken := "CREATE TABLE (;\n"
+	unformattedSQL := "CREATE TABLE users (id integer NOT NULL, name text);\n"
+	path := writeFile(t, "broken.sql", broken)
+	unformatted := writeFile(t, "unformatted.sql", unformattedSQL)
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "fmt", "--check", path, unformatted)
+	assert.Equal(t, 1, code)
+	assert.NotEmpty(t, stderr)
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, broken, string(got))
+
+	got, err = os.ReadFile(unformatted)
+	require.NoError(t, err)
+	assert.Equal(t, unformattedSQL, string(got))
+}
+
 func TestRun_Lint(t *testing.T) {
 	rules := writeFile(t, "rules.yml", "rules:\n  - {name: require-primary-key, on: table, assert: 'table.constraints.values().exists(c, c.type == \"primary_key\")', message: no primary key}\n")
 	bad := writeFile(t, "bad.sql", "CREATE TABLE public.logs (msg text);\n")

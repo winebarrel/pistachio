@@ -130,6 +130,29 @@ func TestFmt_Run_CheckFormatted(t *testing.T) {
 	assert.Empty(t, buf.String())
 }
 
+// A file that fails takes precedence over a file that is not formatted, so
+// the error is not ErrFormatDiff and pista exits with 1 rather than 2.
+func TestFmt_Run_CheckWithParseError(t *testing.T) {
+	broken := "CREATE TABLE (;\n"
+	path := writeSQLFile(t, "broken.sql", broken)
+	unformatted := writeSQLFile(t, "unformatted.sql", unformattedSQL)
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path, unformatted}, Check: true}
+	err := cmd.Run(&buf)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, command.ErrFormatDiff)
+	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, broken, string(got))
+
+	got, err = os.ReadFile(unformatted)
+	require.NoError(t, err)
+	assert.Equal(t, unformattedSQL, string(got), "--check must not write the file")
+}
+
 const renamedSQL = `-- pista:renamed-from public.old_items
 create table public.items (id integer not null,
     -- pista:renamed-from title
