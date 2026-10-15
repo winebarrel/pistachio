@@ -66,12 +66,17 @@ func Build() (*jsonschema.Schema, error) {
 	// Reflect each reachable type and collect what they define. This one
 	// leaves the type it is given in the definitions rather than expanding it
 	// into the document.
-	defs := &jsonschema.Reflector{Mapper: mapper}
-	if err := addDefinitions(defs, schema, root); err != nil {
+	types, err := definitionTypes(root)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := markNullable(schema, root); err != nil {
+	defs := &jsonschema.Reflector{Mapper: mapper}
+	if err := addDefinitions(defs, schema, root, types); err != nil {
+		return nil, err
+	}
+
+	if err := markNullable(schema, root, types); err != nil {
 		return nil, err
 	}
 
@@ -79,13 +84,8 @@ func Build() (*jsonschema.Schema, error) {
 }
 
 // addDefinitions writes a definition for every struct reachable from root that
-// the reflector left out.
-func addDefinitions(r *jsonschema.Reflector, schema *jsonschema.Schema, root reflect.Type) error {
-	types, err := definitionTypes(root)
-	if err != nil {
-		return err
-	}
-
+// the reflector left out. types is what definitionTypes returns for root.
+func addDefinitions(r *jsonschema.Reflector, schema *jsonschema.Schema, root reflect.Type, types map[string]reflect.Type) error {
 	if schema.Definitions == nil {
 		schema.Definitions = jsonschema.Definitions{}
 	}

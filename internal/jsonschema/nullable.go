@@ -15,12 +15,8 @@ import (
 //
 // The walk starts at the root struct and follows the definitions the reflector
 // wrote, so a type reached only through an ordered map is covered as well.
-func markNullable(schema *jsonschema.Schema, root reflect.Type) error {
-	types, err := definitionTypes(root)
-	if err != nil {
-		return err
-	}
-
+// types is what definitionTypes returns for root.
+func markNullable(schema *jsonschema.Schema, root reflect.Type, types map[string]reflect.Type) error {
 	// The root is expanded into the document itself rather than a definition.
 	if err := markStruct(schema, root); err != nil {
 		return err
