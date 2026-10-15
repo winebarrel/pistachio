@@ -1062,3 +1062,15 @@ GRANT SELECT ON public.a TO someone;`, "public", nil)
 		assert.Equal(t, "SELECT count(*) = 0 FROM public.a", r.ExecuteStmts[0].CheckSQL)
 	})
 }
+
+// A DEFAULT partition child has no parenthesis, so no element list to scan
+// for inline directives; the table's own renamed-from still applies.
+func TestRenameFromOnDefaultPartitionChild(t *testing.T) {
+	r, err := parseSQLWithSchema(`CREATE TABLE public.p (id integer) PARTITION BY LIST (id);
+-- pista:renamed-from public.old_def
+CREATE TABLE public.p_def PARTITION OF public.p DEFAULT;`, "public", nil)
+	require.NoError(t, err)
+	d := r.Tables.Get("public.p_def")
+	require.NotNil(t, d.RenameFrom)
+	assert.Equal(t, "public.old_def", *d.RenameFrom)
+}
