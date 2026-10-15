@@ -91,6 +91,7 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 		Count:           plan.Count,
 		DisallowedDrops: strings.Join(plan.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(ignoredObjectComments(plan.IgnoredObjects), "\n"),
+		InvalidIndexes:  strings.Join(invalidIndexWarnings(current.Tables, current.Views), "\n"),
 	}
 
 	if err := scoped.applyStmts(ctx, conn, &applyInput{
