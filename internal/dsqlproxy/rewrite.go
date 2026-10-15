@@ -321,7 +321,11 @@ func dropPkeyGuard(node *pg_query.Node) string {
 	for _, c := range at.GetCmds() {
 		cmd := c.GetAlterTableCmd()
 		if cmd.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint {
-			guard.WriteString("PERFORM dsql_proxy.refuse_drop_pkey(" + quoteLiteral(rel) + ", " + quoteLiteral(cmd.GetName()) + ");")
+			guard.WriteString("PERFORM dsql_proxy.refuse_drop_pkey(")
+			guard.WriteString(quoteLiteral(rel))
+			guard.WriteString(", ")
+			guard.WriteString(quoteLiteral(cmd.GetName()))
+			guard.WriteString(");")
 		}
 	}
 	return guard.String()
