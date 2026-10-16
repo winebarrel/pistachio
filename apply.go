@@ -24,7 +24,7 @@ type ApplyOptions struct {
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
-	NotNullViaCheck          bool     `xor:"tx-mode" env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
+	NotNullViaCheck          bool     `xor:"not-null-via-check-tx" env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	ExecOptions
@@ -33,7 +33,7 @@ type ApplyOptions struct {
 // ExecOptions decides how the statements are run rather than what they are, so
 // apply and apply-from, which takes its statements from a plan file, share it.
 type ExecOptions struct {
-	WithTx bool `xor:"tx-mode,tx-choice,tx-retry" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	WithTx bool `xor:"tx-mode,tx-choice,tx-retry,not-null-via-check-tx" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
 	TryTx  bool `xor:"tx-choice,tx-retry" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL or NOT NULL added through a CHECK constraint runs without a transaction instead of failing."`
 	Timing bool `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
 	// Exclusive and ExclusiveWait guard the database rather than one apply, so

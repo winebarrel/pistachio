@@ -1702,6 +1702,17 @@ func TestApplyOptions_NotNullViaCheck_XorWithTx(t *testing.T) {
 	_, err = parser.Parse([]string{"--not-null-via-check", "--with-tx", "schema.sql"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--not-null-via-check")
+
+	// Both run outside a transaction, so nothing keeps them apart.
+	for _, args := range [][]string{
+		{"--not-null-via-check", "--force-index-concurrently", "schema.sql"},
+		{"--not-null-via-check", "--try-tx", "schema.sql"},
+	} {
+		parser, err := kong.New(&ApplyOptions{})
+		require.NoError(t, err)
+		_, err = parser.Parse(args)
+		require.NoError(t, err, args)
+	}
 }
 
 func TestApplyOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {

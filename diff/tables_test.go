@@ -2863,6 +2863,15 @@ func TestNotNullViaCheckSQL(t *testing.T) {
 		assert.Contains(t, stmts, "ALTER TABLE public.users VALIDATE CONSTRAINT "+name+";")
 	})
 
+	t.Run("a plain SET NOT NULL when desired declares the check", func(t *testing.T) {
+		current, desired := newPair()
+		desired.Constraints.Set("users_email_not_null_check", check(true))
+		stmts, setNotNull, names := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, stmts)
+		assert.Empty(t, setNotNull)
+		assert.Empty(t, names)
+	})
+
 	t.Run("nothing to do", func(t *testing.T) {
 		for name, edit := range map[string]func(current, desired *model.Table){
 			"column already NOT NULL": func(current, _ *model.Table) { current.Columns.Get("email").NotNull = true },
@@ -2873,9 +2882,6 @@ func TestNotNullViaCheckSQL(t *testing.T) {
 			},
 			"new column": func(current, _ *model.Table) {
 				current.Columns = orderedmap.New[string, *model.Column]()
-			},
-			"desired declares the check": func(_, desired *model.Table) {
-				desired.Constraints.Set("users_email_not_null_check", check(true))
 			},
 		} {
 			t.Run(name, func(t *testing.T) {

@@ -1,0 +1,15 @@
+not_null_via_check: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL)
+  );
+plan: |
+  ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;
+  ALTER TABLE public.users ADD CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL);

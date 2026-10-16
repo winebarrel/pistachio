@@ -894,7 +894,15 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 			continue
 		}
 		conName := parser.MakeObjectName(desired.Name, name, "not_null_check")
+		conIdent := model.Ident(conName)
+		colIdent := model.Ident(name)
+		// A CHECK of that name in the desired schema is the user's, not the
+		// directive's. It is added after the column statements, so it proves
+		// nothing yet, and the column gets a plain SET NOT NULL.
 		if _, ok := desired.Constraints.GetOk(conName); ok {
+			if !currentCol.NotNull {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
+			}
 			continue
 		}
 		con, hasCon := current.Constraints.GetOk(conName)
@@ -904,8 +912,6 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 			}
 			names[conName] = true
 		}
-		conIdent := model.Ident(conName)
-		colIdent := model.Ident(name)
 		switch {
 		case !currentCol.NotNull:
 			if !hasCon {
