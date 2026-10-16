@@ -68,6 +68,9 @@ The [general options](index.md#general-options) apply as well.
 `--bulk-alter`
 :   Merge consecutive `ALTER TABLE` actions on one table into one statement. The environment variable is `PISTA_BULK_ALTER`.
 
+`--not-null-via-check`
+:   Do what `-- pista:not-null-via-check` does for every column. The environment variable is `PISTA_NOT_NULL_VIA_CHECK`.
+
 `--assume-validated`
 :   Treat every constraint and foreign key as validated. The environment variable is `PISTA_ASSUME_VALIDATED`.
 

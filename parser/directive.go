@@ -32,8 +32,11 @@ var (
 	executeFirstDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute-first(?:[ \t]+(.+?))?[ \t]*\r?$`)
 	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*\r?$`)
 	// Matches -- pista:concurrently with trailing content (invalid usage).
-	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
-	bulkAlterDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*\r?$`)
+	concurrentlyWithArgsPattern     = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
+	notNullViaCheckDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:not-null-via-check[ \t]*\r?$`)
+	// Matches -- pista:not-null-via-check with trailing content (invalid usage).
+	notNullViaCheckWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:not-null-via-check[ \t]+\S`)
+	bulkAlterDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*\r?$`)
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
 	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
@@ -47,14 +50,15 @@ var (
 
 // knownDirectives lists all recognized directive names.
 var knownDirectives = map[string]bool{
-	"renamed-from":  true,
-	"execute":       true,
-	"execute-first": true,
-	"concurrently":  true,
-	"bulk-alter":    true,
-	"ignore":        true,
-	"retype-using":  true,
-	"lint-ignore":   true,
+	"renamed-from":       true,
+	"execute":            true,
+	"execute-first":      true,
+	"concurrently":       true,
+	"bulk-alter":         true,
+	"ignore":             true,
+	"retype-using":       true,
+	"not-null-via-check": true,
+	"lint-ignore":        true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -96,6 +100,10 @@ func validateDirectives(rawSQL string) error {
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
 		return &locatedError{msg: "-- pista:concurrently does not accept arguments", offset: m[0]}
+	}
+
+	if m := notNullViaCheckWithArgsPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:not-null-via-check does not accept arguments", offset: m[0]}
 	}
 
 	if m := bulkAlterWithArgsPattern.FindStringIndex(rawSQL); m != nil {
@@ -501,20 +509,23 @@ func blockCommentEnd(s string, pos int) int {
 
 // inlineDirectives holds the directives for columns and constraints within a CREATE TABLE.
 type inlineDirectives struct {
-	Columns     map[string]string // new column name -> old column name
-	Constraints map[string]string // new constraint name -> old constraint name
-	RetypeUsing map[string]string // column name -> USING expression
+	Columns         map[string]string // new column name -> old column name
+	Constraints     map[string]string // new constraint name -> old constraint name
+	RetypeUsing     map[string]string // column name -> USING expression
+	NotNullViaCheck map[string]bool   // column name -> -- pista:not-null-via-check
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
-// `-- pista:renamed-from <old_name>` and `-- pista:retype-using <expression>`
-// directives that appear on lines immediately before column or constraint
-// definitions. retype-using applies to a column only.
+// `-- pista:renamed-from <old_name>`, `-- pista:retype-using <expression>` and
+// `-- pista:not-null-via-check` directives that appear on lines immediately
+// before column or constraint definitions. retype-using and
+// not-null-via-check apply to a column only.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{
-		Columns:     make(map[string]string),
-		Constraints: make(map[string]string),
-		RetypeUsing: make(map[string]string),
+		Columns:         make(map[string]string),
+		Constraints:     make(map[string]string),
+		RetypeUsing:     make(map[string]string),
+		NotNullViaCheck: make(map[string]bool),
 	}
 
 	// Every directive needs this text, and most statements hold none.
@@ -531,6 +542,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	lines := strings.Split(body, "\n")
 
 	var pendingRename, pendingRetype string
+	var pendingNotNull bool
 	for _, line := range lines {
 		// A leading comma belongs to the previous element, so the name that
 		// follows it is the one the directive renames.
@@ -544,6 +556,10 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingRetype = m[1]
 			continue
 		}
+		if notNullViaCheckDirectivePattern.MatchString(line) {
+			pendingNotNull = true
+			continue
+		}
 		// Read by extractInlineLintIgnores.
 		if lintIgnoreDirectivePattern.MatchString(line) {
 			continue
@@ -553,7 +569,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		if pendingRename != "" || pendingRetype != "" {
+		if pendingRename != "" || pendingRetype != "" || pendingNotNull {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
@@ -568,10 +584,14 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 				if colName != "" && pendingRetype != "" {
 					result.RetypeUsing[colName] = pendingRetype
 				}
+				if colName != "" && pendingNotNull {
+					result.NotNullViaCheck[colName] = true
+				}
 			}
 		}
 		pendingRename = ""
 		pendingRetype = ""
+		pendingNotNull = false
 	}
 
 	return result

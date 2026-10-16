@@ -114,6 +114,9 @@ The [general options](index.md#general-options) apply as well.
 `--bulk-alter`
 :   Merge consecutive `ALTER TABLE` actions on one table into one statement. Only column and constraint actions are merged. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles, storage parameters and skipped drops remain separate. The `-- pista:bulk-alter` directive does the same for one table. The environment variable is `PISTA_BULK_ALTER`.
 
+`--not-null-via-check`
+:   Do what `-- pista:not-null-via-check` does for every column. This option cannot be used with `--with-tx`. The environment variable is `PISTA_NOT_NULL_VIA_CHECK`.
+
 `--assume-validated`
 :   Treat every table constraint, domain constraint and foreign key as validated. `NOT VALID` in the desired schema is ignored. Neither `NOT VALID` nor `VALIDATE CONSTRAINT` is run. The environment variable is `PISTA_ASSUME_VALIDATED`.
 
@@ -123,10 +126,10 @@ The [general options](index.md#general-options) apply as well.
 ### Execution
 
 `--with-tx`
-:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement, because such a statement cannot run in a transaction. A `CONCURRENTLY` opt-in on an index that does not change does not block this option. This option cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
+:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement, because such a statement cannot run in a transaction. It is also refused when the plan adds `NOT NULL` through a `CHECK` constraint. A `CONCURRENTLY` opt-in on an index that does not change does not block this option. This option cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
 
 `--try-tx`
-:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
+:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement or adds `NOT NULL` through a `CHECK` constraint, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
 
 `--timing`
 :   Write the elapsed time of each statement after it, as a comment. The time is measured on the client, so it includes the round trip and any wait for a lock. The environment variable is `PISTA_TIMING`.

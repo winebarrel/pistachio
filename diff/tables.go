@@ -43,6 +43,10 @@ type TableDiffResult struct {
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
+	// StandaloneStmts are the statements --bulk-alter must not merge.
+	StandaloneStmts map[string]bool
+	// HasNotNullViaCheck is true if a column gets NOT NULL through a CHECK.
+	HasNotNullViaCheck bool
 }
 
 // RetypedColumn is a column that goes out as SET DATA TYPE. Name is
@@ -231,6 +235,15 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			if tableResult.HasConcurrently {
 				result.HasConcurrently = true
 			}
+			if len(tableResult.ViaCheckSetNotNull) > 0 {
+				result.HasNotNullViaCheck = true
+				if result.StandaloneStmts == nil {
+					result.StandaloneStmts = map[string]bool{}
+				}
+				for _, s := range tableResult.ViaCheckSetNotNull {
+					result.StandaloneStmts[s] = true
+				}
+			}
 		}
 	}
 	result.PersistenceStmts = orderPersistenceChanges(persistence)
@@ -405,6 +418,7 @@ type tableDiffResult struct {
 	FKAddStmts            []string
 	DisallowedDropStmts   []string
 	HasConcurrently       bool
+	ViaCheckSetNotNull    []string
 }
 
 // diffTable diffs one table. columns are the ones its indexes are compared
@@ -464,6 +478,21 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		return nil, err
 	}
 
+	// The CHECK constraints that -- pista:not-null-via-check adds belong to
+	// the directive, so the constraint diff does not see them.
+	viaCheckStmts, viaCheckSetNotNull, viaCheckNames := notNullViaCheckSQL(fqtn, current, desired)
+	if len(viaCheckNames) > 0 {
+		clone := *current
+		clone.Constraints = orderedmap.New[string, *model.Constraint]()
+		for name, con := range current.Constraints.All() {
+			if !viaCheckNames[name] {
+				clone.Constraints.Set(name, con)
+			}
+		}
+		current = &clone
+	}
+	result.ViaCheckSetNotNull = viaCheckSetNotNull
+
 	// Rewrite column references in dependent objects so that subsequent diffs
 	// don't see the renamed column as a definition change. PostgreSQL applies
 	// RENAME COLUMN transparently to the indexes, constraints, FKs, triggers
@@ -493,9 +522,11 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		result.Stmts = append(result.Stmts, conDrops...)
 		result.Stmts = append(result.Stmts, checkDrops...)
 		result.Stmts = append(result.Stmts, colStmts...)
+		result.Stmts = append(result.Stmts, viaCheckStmts...)
 	} else {
 		result.Stmts = append(result.Stmts, conDrops...)
 		result.Stmts = append(result.Stmts, colStmts...)
+		result.Stmts = append(result.Stmts, viaCheckStmts...)
 		result.Stmts = append(result.Stmts, checkDrops...)
 	}
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
@@ -813,7 +844,10 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// A DROP NOT NULL is not here: dropNotNullSQL renders it, and the caller
 	// runs it after the constraint statements.
 	if !current.NotNull && desired.NotNull && !desIsIdent {
-		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
+		// notNullViaCheckSQL writes the statements instead.
+		if !desired.NotNullViaCheck {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
+		}
 	} else if current.NotNull && desired.NotNull && !desIsIdent &&
 		current.NotNullName != nil && desired.NotNullName != nil &&
 		*current.NotNullName != *desired.NotNullName {
@@ -831,6 +865,89 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	stmts = append(stmts, columnStorageSQL(fqtn, current, desired, retyped)...)
 
 	return stmts
+}
+
+// notNullViaCheckSQL returns the statements that add NOT NULL to the columns
+// with -- pista:not-null-via-check. Each column gets a CHECK (col IS NOT NULL)
+// that is added NOT VALID and then validated, which scans the table without
+// blocking reads and writes. SET NOT NULL then takes the CHECK as proof and
+// skips its own scan, and the CHECK is dropped. A run that stopped part way
+// leaves the CHECK behind, so the statements pick up where it stopped.
+//
+// setNotNull lists the SET NOT NULL statements, which --bulk-alter must not
+// merge with a DROP CONSTRAINT of the CHECK: PostgreSQL drops the CHECK before
+// it checks the column. names are the CHECK constraints the current side
+// holds for the directive.
+func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setNotNull []string, names map[string]bool) {
+	for name, desiredCol := range desired.Columns.All() {
+		if !desiredCol.NotNullViaCheck || !desiredCol.NotNull || desiredCol.Identity.IsIdentityColumn() {
+			continue
+		}
+		currentName := name
+		if desiredCol.RenameFrom != nil {
+			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+				currentName = *desiredCol.RenameFrom
+			}
+		}
+		currentCol, ok := current.Columns.GetOk(currentName)
+		if !ok {
+			continue
+		}
+		conName := parser.MakeObjectName(desired.Name, name, "not_null_check")
+		conIdent := model.Ident(conName)
+		colIdent := model.Ident(name)
+		// A constraint of that name in the desired schema is the user's, not
+		// the directive's, and so is one on the current side that is not a
+		// CHECK (col IS NOT NULL). The constraint diff handles it, and the
+		// column gets a plain SET NOT NULL.
+		_, declared := desired.Constraints.GetOk(conName)
+		con, hasCon := current.Constraints.GetOk(conName)
+		if declared || hasCon && !isNotNullCheckOn(con, currentName) {
+			if !currentCol.NotNull {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
+			}
+			continue
+		}
+		if hasCon {
+			if names == nil {
+				names = map[string]bool{}
+			}
+			names[conName] = true
+		}
+		switch {
+		case !currentCol.NotNull:
+			if !hasCon {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" ADD CONSTRAINT "+conIdent+" CHECK ("+colIdent+" IS NOT NULL) NOT VALID;")
+			}
+			if !hasCon || !con.Validated {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+conIdent+";")
+			}
+			set := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET NOT NULL;"
+			stmts = append(stmts, set)
+			setNotNull = append(setNotNull, set)
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+conIdent+";")
+		case hasCon:
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+conIdent+";")
+		}
+	}
+	return stmts, setNotNull, names
+}
+
+// isNotNullCheckOn reports whether con is CHECK (col IS NOT NULL).
+func isNotNullCheckOn(con *model.Constraint, col string) bool {
+	if !con.Type.IsCheckConstraint() {
+		return false
+	}
+	_, c, err := pgast.ParseConstraintDefStrict(con.Definition)
+	if err != nil {
+		return false
+	}
+	nt := c.GetRawExpr().GetNullTest()
+	if nt == nil || nt.GetNulltesttype() != pg_query.NullTestType_IS_NOT_NULL {
+		return false
+	}
+	fields := nt.GetArg().GetColumnRef().GetFields()
+	return len(fields) == 1 && fields[0].GetString_().GetSval() == col
 }
 
 // dropNotNullSQL returns the DROP NOT NULL a column change needs, or "" when

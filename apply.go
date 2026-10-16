@@ -24,6 +24,7 @@ type ApplyOptions struct {
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
+	NotNullViaCheck          bool     `xor:"not-null-via-check-tx" env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	ExecOptions
@@ -32,8 +33,8 @@ type ApplyOptions struct {
 // ExecOptions decides how the statements are run rather than what they are, so
 // apply and apply-from, which takes its statements from a plan file, share it.
 type ExecOptions struct {
-	WithTx bool `xor:"tx-mode,tx-choice,tx-retry" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
-	TryTx  bool `xor:"tx-choice,tx-retry" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
+	WithTx bool `xor:"tx-mode,tx-choice,tx-retry,not-null-via-check-tx" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	TryTx  bool `xor:"tx-choice,tx-retry" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL or NOT NULL added through a CHECK constraint runs without a transaction instead of failing."`
 	Timing bool `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
 	// Exclusive and ExclusiveWait guard the database rather than one apply, so
 	// apply-from takes them too: a plan file executed beside another apply
@@ -74,6 +75,7 @@ type applyInput struct {
 	PreSQL               string
 	ConcurrentlyPreSQL   string
 	HasConcurrentlyIndex bool
+	HasNotNullViaCheck   bool
 	Stmts                []string
 	ExecuteStmts         []*parser.ExecuteStmt
 }
@@ -140,6 +142,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
+		NotNullViaCheck:          options.NotNullViaCheck,
 		AssumeValidated:          options.AssumeValidated,
 		EvaluateLiterals:         options.EvaluateLiterals,
 	})
@@ -158,6 +161,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		PreSQL:               result.PreSQL,
 		ConcurrentlyPreSQL:   result.ConcurrentlyPreSQL,
 		HasConcurrentlyIndex: result.HasConcurrentlyIndex,
+		HasNotNullViaCheck:   result.HasNotNullViaCheck,
 		Stmts:                result.Stmts,
 		ExecuteStmts:         result.ExecuteStmts,
 	}, &options.ExecOptions, w, applyResult); err != nil {
@@ -200,7 +204,13 @@ func (client *Client) applyStmts(
 	if options.WithTx && input.HasConcurrentlyIndex {
 		return errors.New("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
-	withTx := options.WithTx || (options.TryTx && !input.HasConcurrentlyIndex)
+	// NOT NULL through a CHECK runs its scan under a weak lock only when each
+	// statement commits on its own. In one transaction the ADD CONSTRAINT
+	// holds ACCESS EXCLUSIVE until the end.
+	if options.WithTx && input.HasNotNullViaCheck {
+		return errors.New("--with-tx cannot be used with NOT NULL added through a CHECK constraint")
+	}
+	withTx := options.WithTx || (options.TryTx && !input.HasConcurrentlyIndex && !input.HasNotNullViaCheck)
 
 	// A unique constraint takes over its index only once the index is valid,
 	// so it cannot follow a build nobody waits for.
@@ -298,7 +308,11 @@ func (client *Client) applyStmts(
 	} else if options.TryTx {
 		// Record why the requested transaction was not opened, in the same
 		// sentence form as the comments above.
-		fmt.Fprintln(w, "-- Transaction skipped: plan contains CONCURRENTLY index DDL") //nolint:errcheck
+		reason := "CONCURRENTLY index DDL"
+		if !input.HasConcurrentlyIndex {
+			reason = "NOT NULL added through a CHECK constraint"
+		}
+		fmt.Fprintln(w, "-- Transaction skipped: plan contains "+reason) //nolint:errcheck
 	}
 
 	// --lock-timeout and --statement-timeout come before the pre-SQL, so a

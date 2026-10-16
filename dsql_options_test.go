@@ -64,7 +64,7 @@ func TestValidateApplyFromEngine(t *testing.T) {
 		return path
 	}
 
-	dsqlPlan := write(t, `{"version":5,"scope":{"engine":"dsql"}}`)
+	dsqlPlan := write(t, `{"version":6,"scope":{"engine":"dsql"}}`)
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan}))
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, DSQLNoWaitJob: true}))
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, TryTx: true}), "--try-tx cannot be used with --engine dsql")
@@ -72,11 +72,11 @@ func TestValidateApplyFromEngine(t *testing.T) {
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: dsqlPlan, LockTimeout: &second}), "--lock-timeout cannot be used with --engine dsql")
 
 	// A plan file written before the engine was recorded is postgres.
-	oldPlan := write(t, `{"version":5,"scope":{}}`)
+	oldPlan := write(t, `{"version":6,"scope":{}}`)
 	require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: oldPlan, WithTx: true}))
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: oldPlan, DSQLNoWaitJob: true}), "--dsql-no-wait-job requires --engine dsql")
 
-	unknownPlan := write(t, `{"version":5,"scope":{"engine":"mysql"}}`)
+	unknownPlan := write(t, `{"version":6,"scope":{"engine":"mysql"}}`)
 	require.EqualError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: unknownPlan}), "plan file "+unknownPlan+`: unknown engine "mysql"`)
 
 	require.ErrorContains(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: filepath.Join(t.TempDir(), "missing.json")}), "failed to read the plan file")

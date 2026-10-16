@@ -20,6 +20,7 @@ type PlanOptions struct {
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
+	NotNullViaCheck          bool     `env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
@@ -108,6 +109,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
+		NotNullViaCheck:          options.NotNullViaCheck,
 		AssumeValidated:          options.AssumeValidated,
 		EvaluateLiterals:         options.EvaluateLiterals,
 		StateHash:                options.Out != "",
@@ -243,6 +245,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			PreSQL:               result.PreSQL,
 			ConcurrentlyPreSQL:   result.ConcurrentlyPreSQL,
 			HasConcurrentlyIndex: result.HasConcurrentlyIndex,
+			HasNotNullViaCheck:   result.HasNotNullViaCheck,
 			Stmts:                planStmts,
 			ExecuteStmts:         decided,
 			DisallowedDrops:      result.DisallowedDrops,

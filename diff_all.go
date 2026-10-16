@@ -27,6 +27,7 @@ type diffAllOptions struct {
 	DisableIndexConcurrently bool
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
+	NotNullViaCheck          bool
 	AssumeValidated          bool
 	EvaluateLiterals         bool
 	// StateHash asks for the hash of the current side the diff read. Only a
@@ -94,6 +95,9 @@ type diffAllResult struct {
 	Count                ObjectCount
 	ExecuteStmts         []*parser.ExecuteStmt
 	HasConcurrentlyIndex bool
+	// HasNotNullViaCheck is set when the statements add NOT NULL through a
+	// CHECK constraint, which does its work only outside a transaction.
+	HasNotNullViaCheck bool
 	// CurrentTables is every table the catalog read, before the filters, and
 	// DesiredTables and DesiredDomains the desired side after them. --explain
 	// reads the current side for the tables the statements touch, including a
@@ -373,6 +377,14 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		setConcurrentlyDirectives(desiredTables, desiredViews, true)
 	}
 
+	if options.NotNullViaCheck {
+		for _, t := range desiredTables.CollectValues() {
+			for _, col := range t.Columns.CollectValues() {
+				col.NotNullViaCheck = true
+			}
+		}
+	}
+
 	if options.AssumeValidated {
 		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
@@ -482,7 +494,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	if options.BulkAlter || len(bulkAlterTables) > 0 {
 		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts, func(fqtn string) bool {
 			return options.BulkAlter || bulkAlterTables[fqtn]
-		})
+		}, tableDiff.StandaloneStmts)
 	}
 
 	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
@@ -544,6 +556,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		Count:                 count,
 		ExecuteStmts:          desired.ExecuteStmts,
 		HasConcurrentlyIndex:  tableDiff.HasConcurrently || viewDiff.HasConcurrently,
+		HasNotNullViaCheck:    tableDiff.HasNotNullViaCheck,
 		CurrentTables:         currentTables,
 		DesiredTables:         desiredTables,
 		DesiredDomains:        desiredDomains,

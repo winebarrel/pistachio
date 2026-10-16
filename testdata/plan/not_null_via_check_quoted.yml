@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public."Users" (
+      id integer NOT NULL,
+      "Email" text
+  );
+desired: |
+  CREATE TABLE public."Users" (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      "Email" text NOT NULL
+  );
+plan: |
+  ALTER TABLE public."Users" ADD CONSTRAINT "Users_Email_not_null_check" CHECK ("Email" IS NOT NULL) NOT VALID;
+  ALTER TABLE public."Users" VALIDATE CONSTRAINT "Users_Email_not_null_check";
+  ALTER TABLE public."Users" ALTER COLUMN "Email" SET NOT NULL;
+  ALTER TABLE public."Users" DROP CONSTRAINT "Users_Email_not_null_check";

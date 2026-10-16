@@ -186,7 +186,7 @@ pistachio matches columns by name. It does not compare their order. A new column
 | Removed | `ALTER TABLE ... DROP COLUMN`, requires `--allow-drop column` |
 | Type or collation | `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE` |
 | Default | `SET DEFAULT` or `DROP DEFAULT` |
-| `NOT NULL` | `SET NOT NULL` or `DROP NOT NULL` |
+| `NOT NULL` | `SET NOT NULL` or `DROP NOT NULL`. See also [`-- pista:not-null-via-check`](directives.md#-pistanot-null-via-check). |
 | Identity | `ADD GENERATED ... AS IDENTITY`, `DROP IDENTITY`, or `SET GENERATED` with the sequence options that changed |
 | Storage or compression | `SET STORAGE` or `SET COMPRESSION` |
 | Generated expression | The change is an error. See below. |

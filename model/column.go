@@ -62,6 +62,10 @@ type Column struct {
 	// -- pista:retype-using. Only the desired side sets it, and it only shapes
 	// the SET DATA TYPE statement.
 	RetypeUsing *string `json:"-"`
+	// NotNullViaCheck is set by -- pista:not-null-via-check and
+	// --not-null-via-check. Only the desired side sets it, and it only shapes
+	// the statements that add NOT NULL to an existing column.
+	NotNullViaCheck bool `json:"-"`
 	// SerialSequence is the schema-qualified name of the sequence that the
 	// column owns and takes its default from. Only the catalog sets it; nil
 	// otherwise. The type name is a serial type only when the sequence has

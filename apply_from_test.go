@@ -251,6 +251,28 @@ CREATE INDEX CONCURRENTLY users_name_idx ON public.users (name);`, publicScope)
 		assert.Contains(t, err.Error(), "--with-tx")
 	})
 
+	t.Run("--with-tx is refused where the plan adds NOT NULL through a CHECK", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		path := writePlan(t, ctx, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pista:not-null-via-check
+    name text NOT NULL
+);`, publicScope)
+
+		plan, err := readPlanFile(path)
+		require.NoError(t, err)
+		require.True(t, plan.HasNotNullViaCheck)
+
+		client := NewClient(&Options{ConnString: testutil.ConnString()})
+		var buf bytes.Buffer
+		_, err = client.ApplyFrom(ctx, &ApplyFromOptions{
+			PlanFile: path,
+			WithTx:   true,
+		}, &buf)
+		require.EqualError(t, err, "--with-tx cannot be used with NOT NULL added through a CHECK constraint")
+	})
+
 	t.Run("--with-tx wraps the plan in a transaction", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
 		path := writePlan(t, ctx, `

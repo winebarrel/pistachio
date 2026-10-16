@@ -40,10 +40,10 @@ The options that decide what is read or what is run are not accepted. The plan f
 ### Execution
 
 `--with-tx`
-:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement. It cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
+:   Run the pre-SQL and the statements in one transaction. This option is refused when the plan contains a `CONCURRENTLY` index statement or adds `NOT NULL` through a `CHECK` constraint. It cannot be used with `--try-tx` or `--lock-retries`. The environment variable is `PISTA_WITH_TX`.
 
 `--try-tx`
-:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
+:   This option is like `--with-tx`. But when the plan contains a `CONCURRENTLY` index statement or adds `NOT NULL` through a `CHECK` constraint, the plan runs without a transaction instead of being refused. This option cannot be used with `--lock-retries`. The environment variable is `PISTA_TRY_TX`.
 
 `--timing`
 :   Write the elapsed time of each statement after it, as a comment. The environment variable is `PISTA_TIMING`. See the [notes on `apply`](apply.md#timing).

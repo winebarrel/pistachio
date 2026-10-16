@@ -1,0 +1,24 @@
+not_null_via_check: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      kind text
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+  INSERT INTO public.events VALUES (1, 'k');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      kind text NOT NULL
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      kind text NOT NULL
+  )
+  PARTITION BY RANGE (id);
+
+  -- public.events_1
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);

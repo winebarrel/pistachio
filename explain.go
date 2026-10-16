@@ -148,6 +148,9 @@ type explainer struct {
 	// dropped holds, per table, the constraints that the statements read so
 	// far drop.
 	dropped map[string]map[string]bool
+	// added holds, per table, the CHECK (col IS NOT NULL) constraints that the
+	// statements read so far add, by name, and whether they are validated.
+	added map[string]map[string]*addedCheck
 	// offline is set for diff, which has no server: no size is shown, and a
 	// statement only the server can place reads as may rewrite.
 	offline  bool
@@ -243,6 +246,7 @@ func newExplainer(
 		columnAlias: map[string]map[string]string{},
 		domains:     domains,
 		dropped:     map[string]map[string]bool{},
+		added:       map[string]map[string]*addedCheck{},
 	}
 	for _, t := range current.CollectValues() {
 		if t.PartitionOf != nil {
@@ -438,6 +442,33 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 	for _, n := range as.Cmds {
 		eff.merge(ex.classifyAlterTableCmd(key, t, as.Relation.Inh, n.GetAlterTableCmd(), dropped))
 	}
+
+	// A CHECK this statement adds validated, or validates, proves a column
+	// for the statements after it. The one validated can be on the current
+	// side, left NOT VALID by an earlier run.
+	if ex.added[key] == nil {
+		ex.added[key] = map[string]*addedCheck{}
+	}
+	for _, n := range as.Cmds {
+		cmd := n.GetAlterTableCmd()
+		switch cmd.GetSubtype() {
+		case pg_query.AlterTableType_AT_AddConstraint:
+			con := cmd.GetDef().GetConstraint()
+			if col := notNullTestColumn(con); col != "" {
+				ex.added[key][con.GetConname()] = &addedCheck{column: col, validated: !con.GetSkipValidation()}
+			}
+		case pg_query.AlterTableType_AT_ValidateConstraint:
+			if c := ex.added[key][cmd.GetName()]; c != nil {
+				c.validated = true
+			} else if con, ok := t.Constraints.GetOk(cmd.GetName()); ok {
+				if _, c, err := pgast.ParseConstraintDefStrict(con.Definition); err == nil {
+					if col := notNullTestColumn(c); col != "" {
+						ex.added[key][cmd.GetName()] = &addedCheck{column: col, validated: true}
+					}
+				}
+			}
+		}
+	}
 	if eff.touch == touchNone {
 		return explainEffect{}
 	}
@@ -475,7 +506,8 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
 	case pg_query.AlterTableType_AT_SetNotNull:
-		if provesNotNull(t, renamedFrom(ex.columnAlias[key], cmd.GetName()), dropped, recurse && len(ex.descendants(t)) > 0) {
+		col := renamedFrom(ex.columnAlias[key], cmd.GetName())
+		if provesNotNull(t, col, dropped, recurse && len(ex.descendants(t)) > 0) || ex.addedProves(key, cmd.GetName(), dropped) {
 			return explainEffect{}
 		}
 		return self(touchScan, blockAll)
@@ -535,16 +567,47 @@ func provesNotNull(t *model.Table, col string, dropped map[string]bool, children
 		if err != nil || children && c.GetIsNoInherit() {
 			continue
 		}
-		nt := c.GetRawExpr().GetNullTest()
-		if nt == nil || nt.GetNulltesttype() != pg_query.NullTestType_IS_NOT_NULL {
-			continue
-		}
-		fields := nt.GetArg().GetColumnRef().GetFields()
-		if len(fields) == 1 && fields[0].GetString_().GetSval() == col {
+		if notNullTestColumn(c) == col {
 			return true
 		}
 	}
 	return false
+}
+
+// addedCheck is a CHECK (col IS NOT NULL) that the plan adds.
+type addedCheck struct {
+	column    string
+	validated bool
+}
+
+// addedProves reports whether a validated CHECK (col IS NOT NULL) that an
+// earlier statement of the plan adds, and no statement drops, proves the
+// column. The CHECK is on every child table, since it is added without NO
+// INHERIT.
+func (ex *explainer) addedProves(key, col string, dropped map[string]bool) bool {
+	for name, c := range ex.added[key] {
+		if c.validated && c.column == col && !dropped[name] {
+			return true
+		}
+	}
+	return false
+}
+
+// notNullTestColumn returns the column of a CHECK (col IS NOT NULL), or "" for
+// any other constraint.
+func notNullTestColumn(c *pg_query.Constraint) string {
+	if c.GetContype() != pg_query.ConstrType_CONSTR_CHECK {
+		return ""
+	}
+	nt := c.GetRawExpr().GetNullTest()
+	if nt == nil || nt.GetNulltesttype() != pg_query.NullTestType_IS_NOT_NULL {
+		return ""
+	}
+	fields := nt.GetArg().GetColumnRef().GetFields()
+	if len(fields) != 1 {
+		return ""
+	}
+	return fields[0].GetString_().GetSval()
 }
 
 // addColumnTouch decides what ADD COLUMN does to the rows that exist. A

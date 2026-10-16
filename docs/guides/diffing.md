@@ -48,7 +48,7 @@ Both files go through the parser that `plan` and `apply` use. The diff is the on
 
 By default a drop is skipped and printed as a comment. `--allow-drop` enables it. See [Controlling drops](drops.md).
 
-The filter options, `--bulk-alter`, `--assume-validated` and the index CONCURRENTLY flags work as they do for `plan`. Directives do too. A `-- pista:renamed-from` on the desired side is resolved against the names on the current side.
+The filter options, `--bulk-alter`, `--not-null-via-check`, `--assume-validated` and the index CONCURRENTLY flags work as they do for `plan`. Directives do too. A `-- pista:renamed-from` on the desired side is resolved against the names on the current side.
 
 
 ## Reading the files from git

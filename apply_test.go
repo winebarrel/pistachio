@@ -32,6 +32,7 @@ type applyTestCase struct {
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
 	ForceIndexConcurrently   bool             `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool             `yaml:"bulk_alter,omitempty"`
+	NotNullViaCheck          bool             `yaml:"not_null_via_check,omitempty"`
 	AssumeValidated          bool             `yaml:"assume_validated,omitempty"`
 	EvaluateLiterals         bool             `yaml:"evaluate_literals,omitempty"`
 	Timing                   bool             `yaml:"timing,omitempty"`
@@ -148,6 +149,7 @@ func TestApply(t *testing.T) {
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
+				NotNullViaCheck:          tc.NotNullViaCheck,
 				AssumeValidated:          tc.AssumeValidated,
 				EvaluateLiterals:         tc.EvaluateLiterals,
 				Timing:                   tc.Timing,
@@ -182,6 +184,7 @@ func TestApply(t *testing.T) {
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					ForceIndexConcurrently:   tc.ForceIndexConcurrently,
+					NotNullViaCheck:          tc.NotNullViaCheck,
 					AssumeValidated:          tc.AssumeValidated,
 					EvaluateLiterals:         tc.EvaluateLiterals,
 					PreSQL:                   tc.PreSQL,
@@ -1641,6 +1644,75 @@ CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 	}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CONCURRENTLY")
+}
+
+func TestApply_NotNullViaCheck_Transaction(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pista:not-null-via-check
+    name text NOT NULL
+);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	t.Run("--with-tx is refused", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		_, err := client.Apply(ctx, &ApplyOptions{
+			Files:  []string{desiredFile},
+			WithTx: true,
+		}, io.Discard)
+		require.EqualError(t, err, "--with-tx cannot be used with NOT NULL added through a CHECK constraint")
+	})
+
+	t.Run("--try-tx runs without a transaction", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		var buf bytes.Buffer
+		_, err := client.Apply(ctx, &ApplyOptions{
+			Files: []string{desiredFile},
+			TryTx: true,
+		}, &buf)
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "VALIDATE CONSTRAINT users_name_not_null_check")
+		assert.Contains(t, buf.String(), "-- Transaction skipped: plan contains NOT NULL added through a CHECK constraint")
+		assert.NotContains(t, buf.String(), "-- Transaction started")
+	})
+
+	t.Run("--with-tx is accepted when the column is already NOT NULL", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text NOT NULL);`)
+		_, err := client.Apply(ctx, &ApplyOptions{
+			Files:  []string{desiredFile},
+			WithTx: true,
+		}, io.Discard)
+		require.NoError(t, err)
+	})
+}
+
+func TestApplyOptions_NotNullViaCheck_XorWithTx(t *testing.T) {
+	var opts ApplyOptions
+	parser, err := kong.New(&opts)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"--not-null-via-check", "--with-tx", "schema.sql"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--not-null-via-check")
+
+	// Both run outside a transaction, so nothing keeps them apart.
+	for _, args := range [][]string{
+		{"--not-null-via-check", "--force-index-concurrently", "schema.sql"},
+		{"--not-null-via-check", "--try-tx", "schema.sql"},
+	} {
+		parser, err := kong.New(&ApplyOptions{})
+		require.NoError(t, err)
+		_, err = parser.Parse(args)
+		require.NoError(t, err, args)
+	}
 }
 
 func TestApplyOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {

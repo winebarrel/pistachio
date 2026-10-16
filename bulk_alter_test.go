@@ -271,7 +271,7 @@ func TestMergeAlterTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeAlterTable(tt.in, func(string) bool { return true })
+			got := mergeAlterTable(tt.in, func(string) bool { return true }, nil)
 			if tt.want == nil {
 				assert.Empty(t, got)
 				return
@@ -289,7 +289,7 @@ func TestMergeAlterTable_ShouldMergePerTable(t *testing.T) {
 		"ALTER TABLE public.posts ADD COLUMN body text;",
 	}
 
-	got := mergeAlterTable(in, func(fqtn string) bool { return fqtn == "public.users" })
+	got := mergeAlterTable(in, func(fqtn string) bool { return fqtn == "public.users" }, nil)
 
 	want := []string{
 		"ALTER TABLE public.users\n  ADD COLUMN email text,\n  ADD COLUMN age integer;",
@@ -325,4 +325,24 @@ func TestParseMergeableAlterTable_Negatives(t *testing.T) {
 			assert.False(t, ok, "expected non-mergeable: %q", stmt)
 		})
 	}
+}
+
+func TestMergeAlterTable_Standalone(t *testing.T) {
+	set := "ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"
+	in := []string{
+		"ALTER TABLE public.users ADD COLUMN note text;",
+		"ALTER TABLE public.users ADD COLUMN age integer;",
+		set,
+		"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;",
+		"ALTER TABLE public.users ADD CONSTRAINT users_id_check CHECK (id > 0);",
+	}
+
+	got := mergeAlterTable(in, func(string) bool { return true }, map[string]bool{set: true})
+
+	want := []string{
+		"ALTER TABLE public.users\n  ADD COLUMN note text,\n  ADD COLUMN age integer;",
+		set,
+		"ALTER TABLE public.users\n  DROP CONSTRAINT users_email_not_null_check,\n  ADD CONSTRAINT users_id_check CHECK (id > 0);",
+	}
+	assert.Equal(t, want, got)
 }

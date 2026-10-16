@@ -21,6 +21,7 @@ type DiffOptions struct {
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
+	NotNullViaCheck          bool     `env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does and what its lock blocks. No database is read, so no size is shown, and a type change or a default that calls a function reads as may rewrite."`
 }
@@ -77,6 +78,7 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
+		NotNullViaCheck:          options.NotNullViaCheck,
 		AssumeValidated:          options.AssumeValidated,
 	})
 	if err != nil {

@@ -13,10 +13,12 @@ import "strings"
 // current group and is emitted unchanged. Groups also break when the target
 // fqtn changes between consecutive statements.
 //
+// A statement in standalone is left alone, and it splits the run it is in.
+//
 // Caller must only invoke this on statements that are sequenced per-table
 // (i.e. diff.TableDiffResult.Stmts), since merging relies on the natural
 // per-table contiguity that DiffTables produces.
-func mergeAlterTable(stmts []string, shouldMerge func(fqtn string) bool) []string {
+func mergeAlterTable(stmts []string, shouldMerge func(fqtn string) bool, standalone map[string]bool) []string {
 	result := make([]string, 0, len(stmts))
 
 	var groupFQTN string
@@ -41,7 +43,7 @@ func mergeAlterTable(stmts []string, shouldMerge func(fqtn string) bool) []strin
 
 	for _, stmt := range stmts {
 		fqtn, action, ok := parseMergeableAlterTable(stmt)
-		if !ok || !shouldMerge(fqtn) {
+		if !ok || !shouldMerge(fqtn) || standalone[stmt] {
 			flush()
 			result = append(result, stmt)
 			continue

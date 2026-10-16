@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"strings"
 	"testing"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -2779,6 +2780,192 @@ func TestDiffTable_checkDropAfterSetNotNull(t *testing.T) {
 			"ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE bigint;",
 		}, result.Stmts)
 	})
+}
+
+func TestNotNullViaCheckSQL(t *testing.T) {
+	newPair := func() (*model.Table, *model.Table) {
+		current := newTable("public", "users")
+		current.Columns.Set("email", &model.Column{Name: "email", TypeName: "text"})
+		desired := newTable("public", "users")
+		desired.Columns.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullViaCheck: true})
+		return current, desired
+	}
+	check := func(validated bool) *model.Constraint {
+		return &model.Constraint{
+			Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+			Definition: "CHECK ((email IS NOT NULL))", Validated: validated,
+		}
+	}
+
+	t.Run("adds, validates, sets and drops", func(t *testing.T) {
+		current, desired := newPair()
+		stmts, setNotNull, names := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ADD CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL) NOT VALID;",
+			"ALTER TABLE public.users VALIDATE CONSTRAINT users_email_not_null_check;",
+			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;",
+		}, stmts)
+		assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, setNotNull)
+		assert.Empty(t, names)
+	})
+
+	t.Run("resumes after a NOT VALID check", func(t *testing.T) {
+		current, desired := newPair()
+		current.Constraints.Set("users_email_not_null_check", check(false))
+		stmts, _, names := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users VALIDATE CONSTRAINT users_email_not_null_check;",
+			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;",
+		}, stmts)
+		assert.Equal(t, map[string]bool{"users_email_not_null_check": true}, names)
+	})
+
+	t.Run("resumes after a validated check", func(t *testing.T) {
+		current, desired := newPair()
+		current.Constraints.Set("users_email_not_null_check", check(true))
+		stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;",
+		}, stmts)
+	})
+
+	t.Run("drops a check left after SET NOT NULL", func(t *testing.T) {
+		current, desired := newPair()
+		current.Columns.Get("email").NotNull = true
+		current.Constraints.Set("users_email_not_null_check", check(true))
+		stmts, setNotNull, _ := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;"}, stmts)
+		assert.Empty(t, setNotNull)
+	})
+
+	t.Run("renamed column", func(t *testing.T) {
+		current, _ := newPair()
+		old := "email"
+		desired := newTable("public", "users")
+		desired.Columns.Set("mail", &model.Column{Name: "mail", TypeName: "text", NotNull: true, NotNullViaCheck: true, RenameFrom: &old})
+		stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
+		assert.Contains(t, stmts, "ALTER TABLE public.users ALTER COLUMN mail SET NOT NULL;")
+		assert.Contains(t, stmts, "ALTER TABLE public.users ADD CONSTRAINT users_mail_not_null_check CHECK (mail IS NOT NULL) NOT VALID;")
+	})
+
+	t.Run("long names are shortened", func(t *testing.T) {
+		long := strings.Repeat("c", 60)
+		current := newTable("public", "users")
+		current.Columns.Set(long, &model.Column{Name: long, TypeName: "text"})
+		desired := newTable("public", "users")
+		desired.Columns.Set(long, &model.Column{Name: long, TypeName: "text", NotNull: true, NotNullViaCheck: true})
+		stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
+		name := "users_" + strings.Repeat("c", 42) + "_not_null_check"
+		assert.Len(t, name, 63)
+		assert.Contains(t, stmts, "ALTER TABLE public.users VALIDATE CONSTRAINT "+name+";")
+	})
+
+	t.Run("a plain SET NOT NULL when desired declares the check", func(t *testing.T) {
+		current, desired := newPair()
+		desired.Constraints.Set("users_email_not_null_check", check(true))
+		stmts, setNotNull, names := notNullViaCheckSQL("public.users", current, desired)
+		assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, stmts)
+		assert.Empty(t, setNotNull)
+		assert.Empty(t, names)
+	})
+
+	t.Run("another constraint holds the name", func(t *testing.T) {
+		for name, con := range map[string]*model.Constraint{
+			"unique": {Name: "users_email_not_null_check", Type: model.ConstraintType('u'), Definition: "UNIQUE (email)", Validated: true},
+			"other check": {
+				Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+				Definition: "CHECK ((email <> ''::text))", Validated: true,
+			},
+			"check on another column": {
+				Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+				Definition: "CHECK ((name IS NOT NULL))", Validated: true,
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				current, desired := newPair()
+				current.Constraints.Set("users_email_not_null_check", con)
+				stmts, setNotNull, names := notNullViaCheckSQL("public.users", current, desired)
+				assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, stmts)
+				assert.Empty(t, setNotNull)
+				assert.Empty(t, names)
+
+				current.Columns.Get("email").NotNull = true
+				stmts, _, names = notNullViaCheckSQL("public.users", current, desired)
+				assert.Empty(t, stmts)
+				assert.Empty(t, names)
+			})
+		}
+	})
+
+	t.Run("nothing to do", func(t *testing.T) {
+		for name, edit := range map[string]func(current, desired *model.Table){
+			"column already NOT NULL": func(current, _ *model.Table) { current.Columns.Get("email").NotNull = true },
+			"desired column nullable": func(_, desired *model.Table) { desired.Columns.Get("email").NotNull = false },
+			"no directive":            func(_, desired *model.Table) { desired.Columns.Get("email").NotNullViaCheck = false },
+			"identity": func(_, desired *model.Table) {
+				desired.Columns.Get("email").Identity = model.ColumnIdentity('a')
+			},
+			"new column": func(current, _ *model.Table) {
+				current.Columns = orderedmap.New[string, *model.Column]()
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				current, desired := newPair()
+				edit(current, desired)
+				stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
+				assert.Empty(t, stmts)
+			})
+		}
+	})
+}
+
+func TestDiffTable_notNullViaCheck(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("email", &model.Column{Name: "email", TypeName: "text"})
+	current.Constraints.Set("users_email_not_null_check", &model.Constraint{
+		Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+		Definition: "CHECK ((email IS NOT NULL))", Validated: false,
+	})
+	current.Constraints.Set("users_email_check", &model.Constraint{
+		Name: "users_email_check", Type: model.ConstraintType('c'),
+		Definition: "CHECK ((email <> ''::text))", Validated: true,
+	})
+	desired := newTable("public", "users")
+	desired.Columns.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullViaCheck: true})
+	desired.Constraints.Set("users_email_check", &model.Constraint{
+		Name: "users_email_check", Type: model.ConstraintType('c'),
+		Definition: "CHECK ((email <> ''::text))", Validated: true,
+	})
+
+	// The CHECK the directive owns is not a drop the policy gates.
+	result, err := diffTable(current, desired, nil, denyAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.users VALIDATE CONSTRAINT users_email_not_null_check;",
+		"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+		"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;",
+	}, result.Stmts)
+	assert.Empty(t, result.DisallowedDropStmts)
+	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, result.ViaCheckSetNotNull)
+}
+
+func TestDiffTables_notNullViaCheck(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	ct := newTable("public", "users")
+	ct.Columns.Set("email", &model.Column{Name: "email", TypeName: "text"})
+	current.Set("public.users", ct)
+	desired := orderedmap.New[string, *model.Table]()
+	dt := newTable("public", "users")
+	dt.Columns.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullViaCheck: true})
+	desired.Set("public.users", dt)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.True(t, result.HasNotNullViaCheck)
+	assert.Equal(t, map[string]bool{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;": true}, result.StandaloneStmts)
 }
 
 func TestTableRetyped(t *testing.T) {

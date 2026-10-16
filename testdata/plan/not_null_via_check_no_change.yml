@@ -1,0 +1,24 @@
+not_null_via_check: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      title text NOT NULL
+  );
+plan: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL
+  );
+  ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;

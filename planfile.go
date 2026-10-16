@@ -19,7 +19,7 @@ import (
 // field to a model struct changes it for an unchanged database: a file
 // written before that change would otherwise be reported as drift, and the
 // operator would go looking at the database for it.
-const planFileVersion = 5
+const planFileVersion = 6
 
 // planFile is what plan --out writes: the statements apply-from is to run, the
 // scope they were computed under, and the fingerprint of the schema they were
@@ -54,6 +54,7 @@ type planFile struct {
 	PreSQL               string                `json:"pre_sql"`
 	ConcurrentlyPreSQL   string                `json:"concurrently_pre_sql"`
 	HasConcurrentlyIndex bool                  `json:"has_concurrently_index"`
+	HasNotNullViaCheck   bool                  `json:"has_not_null_via_check"`
 	Stmts                []string              `json:"statements"`
 	ExecuteStmts         []*parser.ExecuteStmt `json:"execute_statements"`
 	DisallowedDrops      []string              `json:"disallowed_drops"`
