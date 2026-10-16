@@ -6,8 +6,6 @@
 
 * Add `-- pista:not-null-via-check` and `--not-null-via-check`. They add `NOT NULL` to an existing column through a temporary `CHECK` constraint, so the table scan does not block reads and writes. `apply --with-tx` refuses such a plan. Plan files written by earlier versions are refused.
 
-## [1.86.0] - 2026-10-16
-
 * `plan` now drops a removed CHECK constraint after `SET NOT NULL` on the same table. Before, the CHECK was dropped first, so a validated `CHECK (col IS NOT NULL)` could not keep `SET NOT NULL` from reading every row. `--explain` no longer shows a scan for such a `SET NOT NULL`.
 
 ## [1.85.1] - 2026-10-15
