@@ -475,7 +475,7 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
 	case pg_query.AlterTableType_AT_SetNotNull:
-		if provesNotNull(t, renamedFrom(ex.columnAlias[key], cmd.GetName()), dropped) {
+		if provesNotNull(t, renamedFrom(ex.columnAlias[key], cmd.GetName()), dropped, recurse && len(ex.descendants(t)) > 0) {
 			return explainEffect{}
 		}
 		return self(touchScan, blockAll)
@@ -523,14 +523,16 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 }
 
 // provesNotNull reports whether a validated CHECK (col IS NOT NULL) on the
-// table, other than one in dropped, lets SET NOT NULL skip its scan.
-func provesNotNull(t *model.Table, col string, dropped map[string]bool) bool {
+// table, other than one in dropped, lets SET NOT NULL skip its scan. When the
+// statement reaches child tables, a NO INHERIT CHECK does not count, because
+// the children do not have it.
+func provesNotNull(t *model.Table, col string, dropped map[string]bool, children bool) bool {
 	for name, con := range t.Constraints.All() {
 		if !con.Type.IsCheckConstraint() || !con.Validated || dropped[name] {
 			continue
 		}
 		_, c, err := pgast.ParseConstraintDefStrict(con.Definition)
-		if err != nil {
+		if err != nil || children && c.GetIsNoInherit() {
 			continue
 		}
 		nt := c.GetRawExpr().GetNullTest()

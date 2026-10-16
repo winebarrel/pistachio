@@ -43,7 +43,7 @@ Each takes ACCESS EXCLUSIVE.
 
 A scan comes from:
 
-- `SET NOT NULL`, except when the table has a validated `CHECK (col IS NOT NULL)` that the plan has not dropped by then
+- `SET NOT NULL`, except when the table has a validated `CHECK (col IS NOT NULL)` that the plan has not dropped by then. On a table with `INHERITS` children, the CHECK must not be `NO INHERIT`, because the children do not have it.
 - `ADD COLUMN ... NOT NULL` without a default
 - `ADD CONSTRAINT` for a check, a primary key, a unique key or a foreign key
 - `VALIDATE CONSTRAINT`
