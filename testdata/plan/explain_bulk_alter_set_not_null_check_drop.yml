@@ -5,7 +5,7 @@ init: |
       id integer NOT NULL,
       email text,
       CONSTRAINT users_pkey PRIMARY KEY (id),
-      CONSTRAINT users_email_not_null CHECK (email IS NOT NULL)
+      CONSTRAINT users_email_check CHECK (email IS NOT NULL)
   );
   INSERT INTO public.users SELECT g, 'e' FROM generate_series(1, 3) g;
   ANALYZE public.users;
@@ -19,4 +19,4 @@ plan: |
   -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.users
     ALTER COLUMN email SET NOT NULL,
-    DROP CONSTRAINT users_email_not_null;
+    DROP CONSTRAINT users_email_check;

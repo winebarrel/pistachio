@@ -4,7 +4,7 @@ init: |
       email text,
       code integer,
       CONSTRAINT users_pkey PRIMARY KEY (id),
-      CONSTRAINT users_email_not_null CHECK (email IS NOT NULL),
+      CONSTRAINT users_email_check CHECK (email IS NOT NULL),
       CONSTRAINT users_code_check CHECK (code > 0)
   );
 desired: |
@@ -16,6 +16,6 @@ desired: |
   );
 plan: |
   ALTER TABLE public.users DROP CONSTRAINT users_code_check;
-  ALTER TABLE public.users DROP CONSTRAINT users_email_not_null;
+  ALTER TABLE public.users DROP CONSTRAINT users_email_check;
   ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;
   ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE text;

@@ -4,7 +4,7 @@ init: |
   CREATE TABLE public.events (
       id integer NOT NULL,
       kind text,
-      CONSTRAINT events_kind_not_null CHECK (kind IS NOT NULL)
+      CONSTRAINT events_kind_check CHECK (kind IS NOT NULL)
   ) PARTITION BY RANGE (id);
   CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
   INSERT INTO public.events VALUES (1, 'k');

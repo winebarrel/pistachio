@@ -145,6 +145,9 @@ type explainer struct {
 	// domains is the desired side, read for ADD COLUMN: a column of a domain
 	// that carries a constraint is verified by a rewrite.
 	domains *orderedmap.Map[string, *model.Domain]
+	// dropped holds, per table, the constraints that the statements read so
+	// far drop.
+	dropped map[string]map[string]bool
 	// offline is set for diff, which has no server: no size is shown, and a
 	// statement only the server can place reads as may rewrite.
 	offline  bool
@@ -239,6 +242,7 @@ func newExplainer(
 		tableAlias:  map[string]string{},
 		columnAlias: map[string]map[string]string{},
 		domains:     domains,
+		dropped:     map[string]map[string]bool{},
 	}
 	for _, t := range current.CollectValues() {
 		if t.PartitionOf != nil {
@@ -414,9 +418,14 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 		return explainEffect{}
 	}
 
-	// PostgreSQL checks a new NOT NULL after every action of the statement,
-	// so a constraint the same statement drops proves nothing.
-	dropped := map[string]bool{}
+	// A constraint that an earlier statement drops proves nothing. Neither
+	// does one that this statement drops: PostgreSQL checks a new NOT NULL
+	// after every action of the statement.
+	dropped := ex.dropped[key]
+	if dropped == nil {
+		dropped = map[string]bool{}
+		ex.dropped[key] = dropped
+	}
 	for _, n := range as.Cmds {
 		if cmd := n.GetAlterTableCmd(); cmd.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint {
 			dropped[cmd.GetName()] = true

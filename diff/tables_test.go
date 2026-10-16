@@ -2747,8 +2747,8 @@ func TestDiffTable_checkDropAfterSetNotNull(t *testing.T) {
 		current := newTable("public", "users")
 		current.Columns.Set("email", &model.Column{Name: "email", TypeName: "text"})
 		current.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})
-		current.Constraints.Set("users_email_not_null", &model.Constraint{
-			Name: "users_email_not_null", Type: model.ConstraintType('c'),
+		current.Constraints.Set("users_email_check", &model.Constraint{
+			Name: "users_email_check", Type: model.ConstraintType('c'),
 			Definition: "CHECK ((email IS NOT NULL))", Validated: true,
 		})
 
@@ -2764,7 +2764,7 @@ func TestDiffTable_checkDropAfterSetNotNull(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
-			"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_check;",
 		}, result.Stmts)
 	})
 
@@ -2774,7 +2774,7 @@ func TestDiffTable_checkDropAfterSetNotNull(t *testing.T) {
 		result, err := diffTable(current, desired, nil, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
-			"ALTER TABLE public.users DROP CONSTRAINT users_email_not_null;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_check;",
 			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
 			"ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE bigint;",
 		}, result.Stmts)
