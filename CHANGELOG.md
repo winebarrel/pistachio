@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` now drops a removed CHECK constraint after `SET NOT NULL` on the same table. Before, the CHECK was dropped first, so a validated `CHECK (col IS NOT NULL)` could not keep `SET NOT NULL` from reading every row. `--explain` no longer shows a scan for such a `SET NOT NULL`.
+
 ## [1.85.1] - 2026-10-15
 
 * `diff` without `--git` now exits with 80, the usage error status, when it is not given exactly two files. Before, it exited with 1.

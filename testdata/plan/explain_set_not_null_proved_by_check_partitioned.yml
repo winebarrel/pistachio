@@ -1,0 +1,19 @@
+explain: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      kind text,
+      CONSTRAINT events_kind_not_null CHECK (kind IS NOT NULL)
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+  INSERT INTO public.events SELECT g, 'k' FROM generate_series(1, 3) g;
+  ANALYZE public.events_1;
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      kind text NOT NULL
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+plan: |
+  ALTER TABLE public.events ALTER COLUMN kind SET NOT NULL;
+  ALTER TABLE public.events DROP CONSTRAINT events_kind_not_null;

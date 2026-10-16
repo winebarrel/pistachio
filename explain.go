@@ -414,11 +414,20 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 		return explainEffect{}
 	}
 
+	// PostgreSQL checks a new NOT NULL after every action of the statement,
+	// so a constraint the same statement drops proves nothing.
+	dropped := map[string]bool{}
+	for _, n := range as.Cmds {
+		if cmd := n.GetAlterTableCmd(); cmd.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint {
+			dropped[cmd.GetName()] = true
+		}
+	}
+
 	// Every node of Cmds is an AlterTableCmd, and a nil one would read as the
 	// undefined subtype, which the table below does not name.
 	var eff explainEffect
 	for _, n := range as.Cmds {
-		eff.merge(ex.classifyAlterTableCmd(key, t, as.Relation.Inh, n.GetAlterTableCmd()))
+		eff.merge(ex.classifyAlterTableCmd(key, t, as.Relation.Inh, n.GetAlterTableCmd(), dropped))
 	}
 	if eff.touch == touchNone {
 		return explainEffect{}
@@ -428,7 +437,7 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 
 // classifyAlterTableCmd is the table for ALTER TABLE. An action not listed
 // changes the catalog alone and takes nothing.
-func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse bool, cmd *pg_query.AlterTableCmd) explainEffect {
+func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse bool, cmd *pg_query.AlterTableCmd, dropped map[string]bool) explainEffect {
 	self := func(touch touchKind, block blockKind) explainEffect {
 		tg := ex.target(key, t, recurse)
 		if touch >= touchMayRewrite {
@@ -457,6 +466,9 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
 	case pg_query.AlterTableType_AT_SetNotNull:
+		if provesNotNull(t, renamedFrom(ex.columnAlias[key], cmd.GetName()), dropped) {
+			return explainEffect{}
+		}
 		return self(touchScan, blockAll)
 
 	case pg_query.AlterTableType_AT_SetLogged, pg_query.AlterTableType_AT_SetUnLogged:
@@ -499,6 +511,29 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		}
 	}
 	return explainEffect{}
+}
+
+// provesNotNull reports whether a validated CHECK (col IS NOT NULL) on the
+// table, other than one in dropped, lets SET NOT NULL skip its scan.
+func provesNotNull(t *model.Table, col string, dropped map[string]bool) bool {
+	for name, con := range t.Constraints.All() {
+		if !con.Type.IsCheckConstraint() || !con.Validated || dropped[name] {
+			continue
+		}
+		_, c, err := pgast.ParseConstraintDefStrict(con.Definition)
+		if err != nil {
+			continue
+		}
+		nt := c.GetRawExpr().GetNullTest()
+		if nt == nil || nt.GetNulltesttype() != pg_query.NullTestType_IS_NOT_NULL {
+			continue
+		}
+		fields := nt.GetArg().GetColumnRef().GetFields()
+		if len(fields) == 1 && fields[0].GetString_().GetSval() == col {
+			return true
+		}
+	}
+	return false
 }
 
 // addColumnTouch decides what ADD COLUMN does to the rows that exist. A

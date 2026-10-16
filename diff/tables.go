@@ -84,6 +84,23 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, ori
 	return cols
 }
 
+// tableRetyped reports whether a column of the table goes out as SET DATA
+// TYPE.
+func tableRetyped(fqtn string, current, desired *model.Table) bool {
+	for name, desiredCol := range desired.Columns.All() {
+		currentName := name
+		if desiredCol.RenameFrom != nil {
+			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+				currentName = *desiredCol.RenameFrom
+			}
+		}
+		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
+			return true
+		}
+	}
+	return false
+}
+
 // descendants lists the partitions and INHERITS children of the table, at
 // every level below it.
 func descendants(tables *orderedmap.Map[string, *model.Table], fqtn string) []string {
@@ -463,15 +480,24 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		current = &clone
 	}
 
-	conDrops, conStmts, conCommentStmts, conDisallowed, usingIndexStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
+	conDrops, checkDrops, conStmts, conCommentStmts, conDisallowed, usingIndexStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
 	}
 	// The constraint drops go before the column statements: a type change
 	// rebuilds the CHECK constraints on the column, and fails on one the new
-	// type rejects.
-	result.Stmts = append(result.Stmts, conDrops...)
-	result.Stmts = append(result.Stmts, colStmts...)
+	// type rejects. Without a type change, a CHECK the plan removes stays
+	// until the column statements have run, so that SET NOT NULL can take a
+	// validated CHECK (col IS NOT NULL) as proof and skip the scan.
+	if tableRetyped(fqtn, current, desired) {
+		result.Stmts = append(result.Stmts, conDrops...)
+		result.Stmts = append(result.Stmts, checkDrops...)
+		result.Stmts = append(result.Stmts, colStmts...)
+	} else {
+		result.Stmts = append(result.Stmts, conDrops...)
+		result.Stmts = append(result.Stmts, colStmts...)
+		result.Stmts = append(result.Stmts, checkDrops...)
+	}
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 	result.Stmts = append(result.Stmts, conStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, conDisallowed...)
@@ -1615,13 +1641,16 @@ func sameConstraintDef(current, desired *model.Constraint) bool {
 // rebuilds the CHECK constraints on the column, and one the new type rejects
 // fails it. The ADD of a constraint written USING INDEX is also returned
 // apart, so the caller can put it after the CREATE INDEX of its index.
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (dropStmts []string, stmts []string, commentStmts []string, disallowed []string, usingIndexStmts []string, err error) {
+// diffConstraints returns the drops of a CHECK constraint that is removed
+// outright in checkDrops, apart from the other drops, so that the caller can
+// run them after the column statements.
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (dropStmts, checkDrops, stmts, commentStmts, disallowed, usingIndexStmts []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	changes := constraintChanges(current, desired)
@@ -1650,7 +1679,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// run DROP+ADD. A NOT VALID -> validated constraint keeps its definition,
 	// so it is left to VALIDATE CONSTRAINT below.
 	conAllowed := dc.IsDropAllowed("constraint")
-	for name := range current.Keys() {
+	for name, con := range current.All() {
 		_, ok := desired.GetOk(name)
 		ch := changes[name]
 		if ok && (!ch.changed || ch.validateOnly) {
@@ -1663,6 +1692,10 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
 		if !ok && !conAllowed {
 			disallowed = append(disallowed, "-- skipped: "+drop)
+			continue
+		}
+		if !ok && con.Type.IsCheckConstraint() {
+			checkDrops = append(checkDrops, drop)
 			continue
 		}
 		dropStmts = append(dropStmts, drop)
@@ -1703,7 +1736,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	return dropStmts, stmts, commentStmts, disallowed, usingIndexStmts, nil
+	return dropStmts, checkDrops, stmts, commentStmts, disallowed, usingIndexStmts, nil
 }
 
 // constraintCommentSQL renders the COMMENT ON a table constraint and a foreign
