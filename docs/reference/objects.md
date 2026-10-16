@@ -210,6 +210,8 @@ A trigger blocks the change even when the column is only in its `UPDATE OF` list
 
 `DROP NOT NULL` runs after the table's constraint statements, so a primary key dropped in the same plan comes first. `DROP COLUMN` runs after the table's constraint, index, trigger, policy and comment statements.
 
+`SET NOT NULL` reads every row to check for NULLs. PostgreSQL skips this when the table has a validated `CHECK (col IS NOT NULL)`. So a CHECK constraint that the plan removes is dropped after the column statements, and `SET NOT NULL` runs while the CHECK still exists. If the table also has a type or collation change, the CHECK is dropped first, because `SET DATA TYPE` rebuilds the CHECK constraints on the column. With `--bulk-alter`, the two go into one `ALTER TABLE`. PostgreSQL then drops the CHECK before it checks the column, so it reads every row.
+
 An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error.
 
 A column that changes from `serial` to identity gets a new sequence from `ADD IDENTITY`. pistachio drops the old sequence unless the desired schema declares it. It does the same for a `serial` column given another default. The drop requires `--allow-drop sequence`.

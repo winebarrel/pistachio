@@ -2742,6 +2742,63 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
 }
 
+func TestDiffTable_checkDropAfterSetNotNull(t *testing.T) {
+	newUsers := func() (*model.Table, *model.Table) {
+		current := newTable("public", "users")
+		current.Columns.Set("email", &model.Column{Name: "email", TypeName: "text"})
+		current.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})
+		current.Constraints.Set("users_email_check", &model.Constraint{
+			Name: "users_email_check", Type: model.ConstraintType('c'),
+			Definition: "CHECK ((email IS NOT NULL))", Validated: true,
+		})
+
+		desired := newTable("public", "users")
+		desired.Columns.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true})
+		desired.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})
+		return current, desired
+	}
+
+	t.Run("after the column statements", func(t *testing.T) {
+		current, desired := newUsers()
+		result, err := diffTable(current, desired, nil, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_check;",
+		}, result.Stmts)
+	})
+
+	t.Run("before them on a table with a type change", func(t *testing.T) {
+		current, desired := newUsers()
+		desired.Columns.Get("code").TypeName = "bigint"
+		result, err := diffTable(current, desired, nil, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users DROP CONSTRAINT users_email_check;",
+			"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;",
+			"ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE bigint;",
+		}, result.Stmts)
+	})
+}
+
+func TestTableRetyped(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})
+
+	desired := newTable("public", "users")
+	desired.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})
+	assert.False(t, tableRetyped("public.users", current, desired))
+
+	old := "code"
+	desired = newTable("public", "users")
+	desired.Columns.Set("new_code", &model.Column{Name: "new_code", TypeName: "bigint", RenameFrom: &old})
+	assert.True(t, tableRetyped("public.users", current, desired))
+
+	desired = newTable("public", "users")
+	desired.Columns.Set("other", &model.Column{Name: "other", TypeName: "bigint"})
+	assert.False(t, tableRetyped("public.users", current, desired))
+}
+
 func TestWithInheritedColumns(t *testing.T) {
 	comment := "kept"
 	current := newTable("public", "events_2024")
@@ -5355,8 +5412,9 @@ func TestDiffForeignKeys_comment(t *testing.T) {
 }
 
 // diffConstraintStmts runs diffConstraints and puts its drops ahead of its
-// other statements, the order diffTable gives them.
+// other statements, the order diffTable gives them on a table with a type
+// change.
 func diffConstraintStmts(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) ([]string, []string, []string, []string, error) {
-	drops, stmts, comments, disallowed, usingIndex, err := diffConstraints(fqtn, current, desired, dc)
-	return append(drops, stmts...), comments, disallowed, usingIndex, err
+	drops, checkDrops, stmts, comments, disallowed, usingIndex, err := diffConstraints(fqtn, current, desired, dc)
+	return append(append(drops, checkDrops...), stmts...), comments, disallowed, usingIndex, err
 }

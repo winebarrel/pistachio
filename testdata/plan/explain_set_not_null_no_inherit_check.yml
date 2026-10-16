@@ -1,0 +1,39 @@
+explain: true
+init: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT shapes_name_check CHECK (name IS NOT NULL) NO INHERIT
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_email_check CHECK (email IS NOT NULL) NO INHERIT
+  );
+  INSERT INTO public.shapes VALUES (1, 'a'), (2, 'b');
+  INSERT INTO public.boxes VALUES (3, 'c', 1), (4, 'd', 2), (5, 'e', 3);
+  INSERT INTO public.users VALUES (1, 'e');
+  ANALYZE public.shapes;
+  ANALYZE public.boxes;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT shapes_name_check CHECK (name IS NOT NULL) NO INHERIT
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_email_check CHECK (email IS NOT NULL) NO INHERIT
+  );
+plan: |
+  -- scan, blocks reads and writes: public.shapes (~5 rows, 16 kB, as of {{today}}, 1 child table)
+  ALTER TABLE public.shapes ALTER COLUMN name SET NOT NULL;
+  ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;
