@@ -119,6 +119,9 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 `--bulk-alter`
 :   Merge consecutive `ALTER TABLE` actions on one table into one statement. Only column and constraint actions are merged. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles, storage parameters and skipped drops remain separate. The `-- pista:bulk-alter` directive does the same for one table. The environment variable is `PISTA_BULK_ALTER`.
 
+`--not-null-via-check`
+:   Do what `-- pista:not-null-via-check` does for every column. The environment variable is `PISTA_NOT_NULL_VIA_CHECK`.
+
 `--assume-validated`
 :   Treat every table constraint, domain constraint and foreign key as validated. `NOT VALID` in the desired schema is ignored. Neither `NOT VALID` nor `VALIDATE CONSTRAINT` is written. This option is for a schema in which `NOT VALID` was a migration step, not a desired state. The environment variable is `PISTA_ASSUME_VALIDATED`.
 

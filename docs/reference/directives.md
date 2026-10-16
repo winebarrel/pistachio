@@ -8,6 +8,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 |---|---|---|---|
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers | Renames the object instead of dropping and creating it. |
 | `retype-using` | expression (required) | columns | Gives the `USING` expression of a column type change. |
+| `not-null-via-check` | none | columns | Adds `NOT NULL` to an existing column through a `CHECK` constraint. |
 | `execute` | check SQL (optional) | any statement | Runs non-managed SQL after the managed DDL. |
 | `execute-first` | check SQL (optional) | any statement | Runs non-managed SQL before the managed DDL. |
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
@@ -90,6 +91,38 @@ ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';
 PostgreSQL does not apply the `USING` expression to the column default. So if the column has a default, pistachio drops it before the type change and sets it again after. A serial column keeps its default. Indexes and constraints that use the column get no such handling, and the type change can still fail on them.
 
 If the type does not change, the directive does nothing. You can leave it in the file after the change is applied.
+
+## -- pista:not-null-via-check
+
+Adds `NOT NULL` to an existing column in four statements instead of one `SET NOT NULL`. Write the directive inside `CREATE TABLE`, on the line before the column.
+
+```sql
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pista:not-null-via-check
+    email text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+```
+
+If `email` was nullable, the plan is:
+
+```sql
+ALTER TABLE public.users ADD CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL) NOT VALID;
+ALTER TABLE public.users VALIDATE CONSTRAINT users_email_not_null_check;
+ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;
+ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;
+```
+
+A plain `SET NOT NULL` reads every row under an ACCESS EXCLUSIVE lock, so even reads wait. Here `VALIDATE CONSTRAINT` reads the rows, and its lock does not block reads and writes. `SET NOT NULL` then sees the validated `CHECK` and does not read the rows. The other three statements take ACCESS EXCLUSIVE, but each ends quickly.
+
+The `CHECK` constraint is named `<table>_<column>_not_null_check`. A name longer than 63 bytes is shortened the way PostgreSQL shortens a generated name. pistachio adds and drops the constraint itself, so the drop does not need `--allow-drop constraint`.
+
+If a row holds NULL, `VALIDATE CONSTRAINT` fails and the `CHECK` stays as `NOT VALID`. Fix the rows and run `apply` again. The next plan starts at `VALIDATE CONSTRAINT`.
+
+The statements must run outside a transaction. In a transaction, the lock that `ADD CONSTRAINT` takes is held until the end, and `VALIDATE CONSTRAINT` blocks reads and writes too. So `apply --with-tx` refuses the plan, and `apply --try-tx` runs it without a transaction. `--bulk-alter` keeps `SET NOT NULL` in a statement of its own.
+
+`--not-null-via-check` does the same for every column. The directive does nothing when the column is new or already `NOT NULL`, so you can leave it in the file.
 
 ## -- pista:execute
 

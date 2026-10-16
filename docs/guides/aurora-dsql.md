@@ -56,6 +56,7 @@ DSQL can make these changes only in `CREATE TABLE`, or not at all. `plan` fails 
 | `--with-tx`, `--try-tx` | DSQL allows only one DDL statement in a transaction. |
 | `--exclusive`, `--exclusive-wait` | DSQL has no advisory locks. |
 | `--lock-timeout`, `--lock-retries`, `--statement-timeout` | DSQL does not accept `SET lock_timeout` or `SET statement_timeout`, and has no locks to wait for. |
+| `--not-null-via-check` | DSQL has no `SET NOT NULL` and no `NOT VALID`. |
 | `--force-index-concurrently`, `--disable-index-concurrently`, `--concurrently-pre-sql`, `--concurrently-pre-sql-file` | DSQL has no `CONCURRENTLY`. |
 | `--bulk-alter` | DSQL does not lock or rewrite a table for DDL, so combining statements does not help. |
 | `--explain` | DSQL does not keep the size estimates that `--explain` reads. |

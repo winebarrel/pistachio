@@ -34,6 +34,7 @@ type planTestCase struct {
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
 	ForceIndexConcurrently   bool            `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool            `yaml:"bulk_alter,omitempty"`
+	NotNullViaCheck          bool            `yaml:"not_null_via_check,omitempty"`
 	AssumeValidated          bool            `yaml:"assume_validated,omitempty"`
 	EvaluateLiterals         bool            `yaml:"evaluate_literals,omitempty"`
 	Include                  []string        `yaml:"include,omitempty"`
@@ -456,6 +457,7 @@ func TestPlan(t *testing.T) {
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
+				NotNullViaCheck:          tc.NotNullViaCheck,
 				AssumeValidated:          tc.AssumeValidated,
 				EvaluateLiterals:         tc.EvaluateLiterals,
 				PreSQL:                   tc.PreSQL,

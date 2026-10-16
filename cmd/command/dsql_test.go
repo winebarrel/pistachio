@@ -38,7 +38,7 @@ func TestAfterApply_EngineDSQL(t *testing.T) {
 // apply-from takes the engine from the plan file.
 func TestApplyFrom_AfterApply_EngineDSQL(t *testing.T) {
 	planFile := filepath.Join(t.TempDir(), "plan.json")
-	require.NoError(t, os.WriteFile(planFile, []byte(`{"version":5,"scope":{"engine":"dsql"}}`), 0o644))
+	require.NoError(t, os.WriteFile(planFile, []byte(`{"version":6,"scope":{"engine":"dsql"}}`), 0o644))
 
 	cmd := &command.ApplyFrom{}
 	cmd.PlanFile = planFile

@@ -225,6 +225,56 @@ func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
 	})
 }
 
+func TestExtractInlineDirectives_NotNullViaCheck(t *testing.T) {
+	t.Run("column", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    id integer NOT NULL,
+    -- pista:not-null-via-check
+    "Email" text NOT NULL,
+    name text NOT NULL
+);`
+		assert.Equal(t, map[string]bool{"Email": true}, extractInlineDirectives(sql).NotNullViaCheck)
+	})
+
+	t.Run("with renamed-from", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    -- pista:renamed-from old_email
+    -- pista:not-null-via-check
+    email text NOT NULL
+);`
+		dirs := extractInlineDirectives(sql)
+		assert.Equal(t, map[string]bool{"email": true}, dirs.NotNullViaCheck)
+		assert.Equal(t, map[string]string{"email": "old_email"}, dirs.Columns)
+	})
+
+	t.Run("constraint is not a column", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    id integer,
+    -- pista:not-null-via-check
+    CONSTRAINT t_pkey PRIMARY KEY (id)
+);`
+		assert.Empty(t, extractInlineDirectives(sql).NotNullViaCheck)
+	})
+}
+
+func TestParseSQL_NotNullViaCheck(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`CREATE TABLE public.t (
+    id integer NOT NULL,
+    -- pista:not-null-via-check
+    email text NOT NULL
+);`)
+	require.NoError(t, err)
+	table := result.Tables.Get("public.t")
+	assert.True(t, table.Columns.Get("email").NotNullViaCheck)
+	assert.False(t, table.Columns.Get("id").NotNullViaCheck)
+}
+
+func TestValidateDirectives_NotNullViaCheckWithArgs(t *testing.T) {
+	err := validateDirectives("CREATE TABLE t (\n  -- pista:not-null-via-check extra\n  id int\n);")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pista:not-null-via-check does not accept arguments")
+}
+
 func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))

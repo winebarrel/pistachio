@@ -402,9 +402,9 @@ func TestRun_EngineDSQLEnvRefusesOptions(t *testing.T) {
 // apply-from takes the engine from the plan file, so its hook reads the file
 // to refuse the options that engine cannot use.
 func TestRun_ApplyFromEngineDSQLRefusesOptions(t *testing.T) {
-	dsqlPlan := writeFile(t, "dsql.json", `{"version":5,"scope":{"engine":"dsql"}}`)
-	postgresPlan := writeFile(t, "postgres.json", `{"version":5,"scope":{"engine":"postgres"}}`)
-	unknownPlan := writeFile(t, "unknown.json", `{"version":5,"scope":{"engine":"mysql"}}`)
+	dsqlPlan := writeFile(t, "dsql.json", `{"version":6,"scope":{"engine":"dsql"}}`)
+	postgresPlan := writeFile(t, "postgres.json", `{"version":6,"scope":{"engine":"postgres"}}`)
+	unknownPlan := writeFile(t, "unknown.json", `{"version":6,"scope":{"engine":"mysql"}}`)
 	tests := []struct {
 		args []string
 		err  string

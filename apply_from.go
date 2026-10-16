@@ -98,6 +98,7 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 		PreSQL:               plan.PreSQL,
 		ConcurrentlyPreSQL:   plan.ConcurrentlyPreSQL,
 		HasConcurrentlyIndex: plan.HasConcurrentlyIndex,
+		HasNotNullViaCheck:   plan.HasNotNullViaCheck,
 		Stmts:                plan.Stmts,
 		ExecuteStmts:         plan.ExecuteStmts,
 	}, &options.ExecOptions, w, result); err != nil {

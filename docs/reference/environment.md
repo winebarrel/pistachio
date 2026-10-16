@@ -38,6 +38,7 @@ These options have no variable:
 | `PISTA_DISABLE_INDEX_CONCURRENTLY` | `--disable-index-concurrently` | plan, apply, diff |
 | `PISTA_FORCE_INDEX_CONCURRENTLY` | `--force-index-concurrently` | plan, apply, diff |
 | `PISTA_BULK_ALTER` | `--bulk-alter` | plan, apply, diff |
+| `PISTA_NOT_NULL_VIA_CHECK` | `--not-null-via-check` | plan, apply, diff |
 | `PISTA_ASSUME_VALIDATED` | `--assume-validated` | plan, apply, diff |
 | `PISTA_EVALUATE_LITERALS` | `--evaluate-literals` | plan, apply |
 | `PISTA_NO_READ_ONLY` | `--no-read-only` | plan, dump |

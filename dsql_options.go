@@ -64,6 +64,7 @@ func planRefused(o *PlanOptions) []dsqlRefused {
 	return []dsqlRefused{
 		{"explain", o.Explain},
 		{"bulk-alter", o.BulkAlter},
+		{"not-null-via-check", o.NotNullViaCheck},
 		{"force-index-concurrently", o.ForceIndexConcurrently},
 		{"disable-index-concurrently", o.DisableIndexConcurrently},
 		{"concurrently-pre-sql", o.ConcurrentlyPreSQL != ""},
@@ -109,6 +110,7 @@ func ValidateApplyEngine(engine Engine, o *ApplyOptions) error {
 	}
 	return refuseWithDSQL(engine, append(planRefused(&PlanOptions{
 		BulkAlter:                o.BulkAlter,
+		NotNullViaCheck:          o.NotNullViaCheck,
 		ForceIndexConcurrently:   o.ForceIndexConcurrently,
 		DisableIndexConcurrently: o.DisableIndexConcurrently,
 		ConcurrentlyPreSQL:       o.ConcurrentlyPreSQL,

@@ -1,0 +1,18 @@
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;

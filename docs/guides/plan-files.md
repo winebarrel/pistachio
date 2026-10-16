@@ -39,7 +39,7 @@ The plan file records the options that decide what the plan read: `--schemas`, `
 
 It does accept the connection options, and the flags that decide how the statements run: `--with-tx`, `--try-tx`, `--timing`, `--exclusive`, `--exclusive-wait`, `--lock-timeout`, `--lock-retries`, `--lock-retry-delay` and `--statement-timeout`.
 
-`--pre-sql` and `--concurrently-pre-sql` belong to the plan. `plan --out` writes them into the file, and `apply-from` runs them. The file also records whether the plan contains `CONCURRENTLY` index DDL. That is what makes `--with-tx` refuse the plan.
+`--pre-sql` and `--concurrently-pre-sql` belong to the plan. `plan --out` writes them into the file, and `apply-from` runs them. The file also records whether the plan contains `CONCURRENTLY` index DDL and whether it adds `NOT NULL` through a `CHECK` constraint. That is what makes `--with-tx` refuse the plan.
 
 ## Execute directives
 

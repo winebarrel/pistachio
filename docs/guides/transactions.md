@@ -17,7 +17,7 @@ CREATE INDEX users_email_idx ON public.users USING btree (email);
 -- Transaction committed
 ```
 
-`CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` cannot run in a transaction. So `--with-tx` is refused when the plan contains one of them. An index that opts into `CONCURRENTLY` but does not change is not a problem.
+`CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` cannot run in a transaction. So `--with-tx` is refused when the plan contains one of them. An index that opts into `CONCURRENTLY` but does not change is not a problem. `--with-tx` is also refused when the plan adds `NOT NULL` through a `CHECK` constraint. See [`-- pista:not-null-via-check`](../reference/directives.md#-pistanot-null-via-check).
 
 ## Building indexes without blocking writes
 

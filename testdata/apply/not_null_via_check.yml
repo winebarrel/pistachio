@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users VALUES (1, 'e');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

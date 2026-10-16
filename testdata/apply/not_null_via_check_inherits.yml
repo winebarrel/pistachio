@@ -1,0 +1,31 @@
+init: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+  INSERT INTO public.shapes VALUES (1, 'a');
+  INSERT INTO public.boxes VALUES (2, 'b', 1);
+desired: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      name text NOT NULL
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+applied: |
+  -- public.boxes
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  )
+  INHERITS (public.shapes);
+
+  -- public.shapes
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text NOT NULL
+  );

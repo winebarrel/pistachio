@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      code integer,
+      CONSTRAINT users_code_check CHECK (code > 0)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      email text NOT NULL,
+      code bigint
+  );
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_code_check;
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE bigint;
+  ALTER TABLE public.users ADD CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL) NOT VALID;
+  ALTER TABLE public.users VALIDATE CONSTRAINT users_email_not_null_check;
+  ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;
+  ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;
