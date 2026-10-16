@@ -896,16 +896,18 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 		conName := parser.MakeObjectName(desired.Name, name, "not_null_check")
 		conIdent := model.Ident(conName)
 		colIdent := model.Ident(name)
-		// A CHECK of that name in the desired schema is the user's, not the
-		// directive's. It is added after the column statements, so it proves
-		// nothing yet, and the column gets a plain SET NOT NULL.
-		if _, ok := desired.Constraints.GetOk(conName); ok {
+		// A constraint of that name in the desired schema is the user's, not
+		// the directive's, and so is one on the current side that is not a
+		// CHECK (col IS NOT NULL). The constraint diff handles it, and the
+		// column gets a plain SET NOT NULL.
+		_, declared := desired.Constraints.GetOk(conName)
+		con, hasCon := current.Constraints.GetOk(conName)
+		if declared || hasCon && !isNotNullCheckOn(con, currentName) {
 			if !currentCol.NotNull {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 			}
 			continue
 		}
-		con, hasCon := current.Constraints.GetOk(conName)
 		if hasCon {
 			if names == nil {
 				names = map[string]bool{}
@@ -929,6 +931,23 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 		}
 	}
 	return stmts, setNotNull, names
+}
+
+// isNotNullCheckOn reports whether con is CHECK (col IS NOT NULL).
+func isNotNullCheckOn(con *model.Constraint, col string) bool {
+	if !con.Type.IsCheckConstraint() {
+		return false
+	}
+	_, c, err := pgast.ParseConstraintDefStrict(con.Definition)
+	if err != nil {
+		return false
+	}
+	nt := c.GetRawExpr().GetNullTest()
+	if nt == nil || nt.GetNulltesttype() != pg_query.NullTestType_IS_NOT_NULL {
+		return false
+	}
+	fields := nt.GetArg().GetColumnRef().GetFields()
+	return len(fields) == 1 && fields[0].GetString_().GetSval() == col
 }
 
 // dropNotNullSQL returns the DROP NOT NULL a column change needs, or "" when

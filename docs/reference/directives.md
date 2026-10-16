@@ -116,7 +116,7 @@ ALTER TABLE public.users DROP CONSTRAINT users_email_not_null_check;
 
 A plain `SET NOT NULL` reads every row under an ACCESS EXCLUSIVE lock, so even reads wait. Here `VALIDATE CONSTRAINT` reads the rows, and its lock does not block reads and writes. `SET NOT NULL` then sees the validated `CHECK` and does not read the rows. The other three statements take ACCESS EXCLUSIVE, but each ends quickly.
 
-The `CHECK` constraint is named `<table>_<column>_not_null_check`. A name longer than 63 bytes is shortened the way PostgreSQL shortens a generated name. pistachio adds and drops the constraint itself, so the drop does not need `--allow-drop constraint`.
+The `CHECK` constraint is named `<table>_<column>_not_null_check`. A name longer than 63 bytes is shortened the way PostgreSQL shortens a generated name. pistachio adds and drops the constraint itself, so the drop does not need `--allow-drop constraint`. If another constraint already has that name, or the desired schema declares one, the plan is a plain `SET NOT NULL`.
 
 If a row holds NULL, `VALIDATE CONSTRAINT` fails and the `CHECK` stays as `NOT VALID`. Fix the rows and run `apply` again. The next plan starts at `VALIDATE CONSTRAINT`.
 

@@ -2872,6 +2872,34 @@ func TestNotNullViaCheckSQL(t *testing.T) {
 		assert.Empty(t, names)
 	})
 
+	t.Run("another constraint holds the name", func(t *testing.T) {
+		for name, con := range map[string]*model.Constraint{
+			"unique": {Name: "users_email_not_null_check", Type: model.ConstraintType('u'), Definition: "UNIQUE (email)", Validated: true},
+			"other check": {
+				Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+				Definition: "CHECK ((email <> ''::text))", Validated: true,
+			},
+			"check on another column": {
+				Name: "users_email_not_null_check", Type: model.ConstraintType('c'),
+				Definition: "CHECK ((name IS NOT NULL))", Validated: true,
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				current, desired := newPair()
+				current.Constraints.Set("users_email_not_null_check", con)
+				stmts, setNotNull, names := notNullViaCheckSQL("public.users", current, desired)
+				assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;"}, stmts)
+				assert.Empty(t, setNotNull)
+				assert.Empty(t, names)
+
+				current.Columns.Get("email").NotNull = true
+				stmts, _, names = notNullViaCheckSQL("public.users", current, desired)
+				assert.Empty(t, stmts)
+				assert.Empty(t, names)
+			})
+		}
+	})
+
 	t.Run("nothing to do", func(t *testing.T) {
 		for name, edit := range map[string]func(current, desired *model.Table){
 			"column already NOT NULL": func(current, _ *model.Table) { current.Columns.Get("email").NotNull = true },
