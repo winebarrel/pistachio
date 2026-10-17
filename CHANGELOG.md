@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.88.0] - 2026-10-18
 
 * Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.
 
