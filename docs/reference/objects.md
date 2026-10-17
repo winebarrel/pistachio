@@ -248,6 +248,8 @@ PostgreSQL has no `ALTER` for a constraint's definition, so a change to one is `
 | Deferral clause | `DROP CONSTRAINT` and `ADD CONSTRAINT`. Only a foreign key uses `ALTER CONSTRAINT`. |
 | Renamed | `ALTER TABLE ... RENAME CONSTRAINT` |
 
+To add a primary key or a unique constraint to a table that holds data without blocking reads and writes, see [Adding a key without blocking reads and writes](../guides/transactions.md#adding-a-key-without-blocking-reads-and-writes).
+
 The drop and add rebuild a key's index. PostgreSQL refuses the drop while a foreign key references the key, or while a view groups by the primary key. `plan` fails first and names them:
 
 ```
