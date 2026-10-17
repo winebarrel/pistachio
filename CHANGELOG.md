@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.87.0] - 2026-10-17
 
 * Add `--refuse-hazard` to `plan` and `apply`. It refuses a plan that contains a statement of the given kind: `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. The kinds are those of `--explain`. A refused plan exits with 3.
 
