@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.logs_old (
+      note text
+  ) INHERITS (public.logs);
+desired: |
+  CREATE TABLE public.logs (
+      id bigint NOT NULL
+  );
+  -- pista:refuse-hazard rewrite
+  CREATE TABLE public.logs_old (
+      note text
+  ) INHERITS (public.logs);
+plan: |
+  -- refused: rewrite, blocks reads and writes: public.logs (1 child table)
+  ALTER TABLE public.logs ALTER COLUMN id SET DATA TYPE bigint;
+refused: 1 statement refused by -- pista:refuse-hazard

@@ -315,11 +315,20 @@ func hasRefuseDirective(desired *orderedmap.Map[string, *model.Table]) bool {
 }
 
 // refusedByDirective reports whether a -- pista:refuse-hazard on a table the
-// statement acts on matches its effect.
+// statement acts on matches its effect. A statement that recurses acts on
+// every table under its target too, so their directives count.
 func (ex *explainer) refusedByDirective(eff explainEffect) bool {
-	for _, t := range eff.targets {
-		if ex.refuse[t.key].matches(eff) {
+	for _, tg := range eff.targets {
+		if ex.refuse[tg.key].matches(eff) {
 			return true
+		}
+		if tg.descendants == 0 {
+			continue
+		}
+		for _, d := range ex.descendants(ex.currentTableByKey(tg.key)) {
+			if ex.refuse[d.FQTN()].matches(eff) {
+				return true
+			}
 		}
 	}
 	return false
