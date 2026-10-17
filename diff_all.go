@@ -106,6 +106,9 @@ type diffAllResult struct {
 	CurrentTables  *orderedmap.Map[string, *model.Table]
 	DesiredTables  *orderedmap.Map[string, *model.Table]
 	DesiredDomains *orderedmap.Map[string, *model.Domain]
+	// RefuseDirectives holds, per desired table, the kinds
+	// -- pista:refuse-hazard gives it. It is read before the filters.
+	RefuseDirectives map[string]hazardSet
 	// DroppedViews names the views and materialized views the statements
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
@@ -320,7 +323,12 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
 	desiredCompositeTypes := options.filterCompositeTypes(client.reverseRemapCompositeTypeSchemas(desired.CompositeTypes))
-	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
+	// The directives are read before the filters, so a partition takes the
+	// directive of a parent a filter leaves out, and a statement on the
+	// parent is refused by the directive of a partition left out.
+	remappedTables := client.reverseRemapTableSchemas(desired.Tables)
+	refuse := refuseDirectives(remappedTables)
+	desiredTables := options.filterTables(remappedTables)
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
 	desiredSequences := options.filterSequences(client.reverseRemapSequenceSchemas(desired.Sequences))
 	desiredRoutines := options.filterRoutines(client.reverseRemapRoutineSchemas(desired.Routines))
@@ -489,7 +497,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		if len(bulkAlterTables) > 0 {
 			return nil, errors.New("-- pista:bulk-alter cannot be used with --engine dsql")
 		}
-		if hasRefuseDirective(desiredTables) {
+		if len(refuse) > 0 {
 			return nil, errors.New("-- pista:refuse-hazard cannot be used with --engine dsql")
 		}
 		tableDiff.Stmts = dsql.Split(tableDiff.Stmts)
@@ -563,6 +571,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		CurrentTables:         currentTables,
 		DesiredTables:         desiredTables,
 		DesiredDomains:        desiredDomains,
+		RefuseDirectives:      refuse,
 		DroppedViews:          viewDiff.DroppedViews,
 		RetypedColumns:        tableDiff.RetypedColumns,
 		DroppedConstraints:    droppedConstraints,

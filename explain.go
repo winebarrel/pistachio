@@ -139,6 +139,9 @@ type explainer struct {
 	children map[string][]*model.Table
 	// tableAlias maps a table's new name to its current one.
 	tableAlias map[string]string
+	// renamedTo maps a table's current name to its new one, the reverse of
+	// tableAlias.
+	renamedTo map[string]string
 	// columnAlias maps, per new table name, a column's new name to its
 	// current one.
 	columnAlias map[string]map[string]string
@@ -164,7 +167,7 @@ type explainer struct {
 
 // explainStmts returns the statements with the comment prepended to each one
 // that scans or rewrites a table, when explain is set, and to each one that
-// refuse or a -- pista:refuse-hazard on a desired table matches, which it also
+// refuse or the -- pista:refuse-hazard directives match, which it also
 // returns the positions of. Without explain no size is read, and a statement
 // nothing refuses takes no comment.
 func (client *Client) explainStmts(
@@ -175,9 +178,10 @@ func (client *Client) explainStmts(
 	domains *orderedmap.Map[string, *model.Domain],
 	explain bool,
 	refuse hazardSet,
+	directives map[string]hazardSet,
 ) ([]string, []int, refusedBy, error) {
 	ex := newExplainer(client.Schemas, current, desired, domains)
-	ex.refuse = refuseDirectives(desired)
+	ex.refuse = directives
 	parsed := parseStmts(stmts)
 
 	var changes []catalog.TypeChange
@@ -254,6 +258,7 @@ func newExplainer(
 		current:     current,
 		children:    map[string][]*model.Table{},
 		tableAlias:  map[string]string{},
+		renamedTo:   map[string]string{},
 		columnAlias: map[string]map[string]string{},
 		domains:     domains,
 		dropped:     map[string]map[string]bool{},
@@ -267,6 +272,7 @@ func newExplainer(
 	for key, t := range desired.All() {
 		if t.RenameFrom != nil && *t.RenameFrom != key {
 			ex.tableAlias[key] = *t.RenameFrom
+			ex.renamedTo[*t.RenameFrom] = key
 		}
 		for name, col := range t.Columns.All() {
 			if col.RenameFrom != nil && *col.RenameFrom != name {
@@ -302,36 +308,36 @@ func refuseDirectives(desired *orderedmap.Map[string, *model.Table]) map[string]
 	return refuse
 }
 
-// hasRefuseDirective reports whether a desired table carries
-// -- pista:refuse-hazard, which is when plan and apply classify the
-// statements without --refuse-hazard.
-func hasRefuseDirective(desired *orderedmap.Map[string, *model.Table]) bool {
-	for _, t := range desired.All() {
-		if len(t.RefuseHazard) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // refusedByDirective reports whether a -- pista:refuse-hazard on a table the
 // statement acts on matches its effect. A statement that recurses acts on
 // every table under its target too, so their directives count.
 func (ex *explainer) refusedByDirective(eff explainEffect) bool {
 	for _, tg := range eff.targets {
-		if ex.refuse[tg.key].matches(eff) {
+		if ex.refuseFor(tg.key).matches(eff) {
 			return true
 		}
 		if tg.descendants == 0 {
 			continue
 		}
 		for _, d := range ex.descendants(ex.currentTableByKey(tg.key)) {
-			if ex.refuse[d.FQTN()].matches(eff) {
+			if ex.refuseFor(d.FQTN()).matches(eff) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// refuseFor returns the kinds the directives give the table a statement
+// names. A target read from the current side, such as a table under a
+// recursing statement or one an ALTER DOMAIN scans, carries the name the
+// table has before a -- pista:renamed-from, so that name is mapped to the
+// desired one when no desired table has it.
+func (ex *explainer) refuseFor(key string) hazardSet {
+	if kinds, ok := ex.refuse[key]; ok {
+		return kinds
+	}
+	return ex.refuse[ex.renamedTo[key]]
 }
 
 func parseStmts(stmts []string) []*pg_query.Node {

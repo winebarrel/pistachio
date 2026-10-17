@@ -276,7 +276,7 @@ CREATE TABLE public.orders (
 );
 ```
 
-A statement is checked against every table its comment names. Adding a foreign key names both tables, so the directive also covers a foreign key that references the table. The directive on a partitioned table covers its partitions, and the directive on an `INHERITS` parent covers its children. The directive on a partition or a child also covers a statement on a table above it that reaches it, such as a column type change on the parent. Statements on a table that the plan creates are not refused.
+A statement is checked against every table its comment names. Adding a foreign key names both tables, so the directive also covers a foreign key that references the table. The directive on a partitioned table covers its partitions, and the directive on an `INHERITS` parent covers its children. The directive on a partition or a child also covers a statement on a table above it that reaches it, such as a column type change on the parent. `-I` and `-E` do not change which tables a directive covers. Statements on a table that the plan creates are not refused.
 
 When `--refuse-hazard` is also given, a statement that either of them matches is refused. The error says which one refused the plan.
 

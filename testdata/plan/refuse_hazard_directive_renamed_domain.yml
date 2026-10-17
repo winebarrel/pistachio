@@ -1,0 +1,22 @@
+# ALTER DOMAIN names the table it scans by the name the catalog read, which
+# is the one before the rename.
+init: |
+  CREATE DOMAIN public.positive AS integer;
+  CREATE TABLE public.old_orders (
+      id integer NOT NULL,
+      qty public.positive
+  );
+desired: |
+  CREATE DOMAIN public.positive AS integer
+      CONSTRAINT positive_check CHECK (VALUE > 0);
+  -- pista:renamed-from public.old_orders
+  -- pista:refuse-hazard scan
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty public.positive
+  );
+plan: |
+  ALTER TABLE public.old_orders RENAME TO orders;
+  -- refused: scan, blocks writes: public.old_orders
+  ALTER DOMAIN public.positive ADD CONSTRAINT positive_check CHECK (value > 0);
+refused: 1 statement refused by -- pista:refuse-hazard

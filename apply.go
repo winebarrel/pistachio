@@ -154,14 +154,14 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	// Classified before applyStmts sets the search_path, as plan does, since
 	// the type names the server resolves were printed under this one.
-	if (len(options.RefuseHazard) > 0 || hasRefuseDirective(result.DesiredTables)) && len(result.Stmts) > 0 {
+	if (len(options.RefuseHazard) > 0 || len(result.RefuseDirectives) > 0) && len(result.Stmts) > 0 {
 		cat, err := catalog.NewCatalog(conn, client.Schemas)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog: %w", err)
 		}
 		annotated, refused, by, err := client.explainStmts(
 			ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains,
-			false, options.RefuseHazard,
+			false, options.RefuseHazard, result.RefuseDirectives,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to explain plan: %w", err)
