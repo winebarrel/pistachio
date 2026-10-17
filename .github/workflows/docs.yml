@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       # Cairo and its friends are what the social plugin renders the card
       # images with. Pillow and CairoSVG bind to them but do not ship them.
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
