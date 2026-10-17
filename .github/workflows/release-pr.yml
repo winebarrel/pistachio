@@ -82,16 +82,26 @@ jobs:
           body="See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
           body+=$'\n\n'"Changes: [$TAG...$BRANCH](https://github.com/$GH_REPO/compare/$TAG...$BRANCH)"
           body+=$'\n\n'"To rebuild this pull request, run [release-pr](https://github.com/$GH_REPO/actions/workflows/release-pr.yml)."
-          numbers=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request #(?<n>[0-9]+) ") | .n')
+          # Each commit on main's first-parent line since the tag is looked up
+          # as the merge commit of a pull request. A commit's message is not
+          # enough: Renovate merges with "<title> (#N)" rather than "Merge pull
+          # request #N". A merged release pull request is left out.
+          shas=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" | jq -r --arg main "$MAIN" '
+            (.commits | map({key: .sha, value: .parents[0].sha}) | from_entries) as $p
+            | $main | recurse($p[.] // empty) | select($p[.])')
+          pulls=$(for sha in $shas; do
+            gh api "repos/$GH_REPO/commits/$sha/pulls" | jq -c --arg sha "$sha" '
+              .[] | select(.merge_commit_sha == $sha and (.head.ref | startswith("release-from-") | not))
+              | {number, labels: [.labels[].name]}'
+          done)
           # Grouped by label: feat, bug, refactor and test first, then any
           # other label by name, then "other", which also takes the pull
           # requests with no label. One with several labels goes under the
           # first of them in that order.
-          if [ -n "$numbers" ]; then
-            prs=$(for n in $numbers; do
-              gh api "repos/$GH_REPO/issues/$n" --jq '{number, labels: [.labels[].name]}'
-            done | jq -rs '
-              ["feat", "bug", "refactor", "test"] as $order
+          if [ -n "$pulls" ]; then
+            prs=$(jq -rs '
+              unique_by(.number)
+              | ["feat", "bug", "refactor", "test"] as $order
               | map(. + {group: (
                   (.labels | map(select(. as $l | $order | index($l))) | sort_by(. as $l | $order | index($l)) | first)
                   // (.labels | sort | first)
@@ -100,7 +110,7 @@ jobs:
               | group_by(.group)
               | sort_by(.[0].group as $g | [($order | index($g)) // (if $g == "other" then 1e9 else 1e8 end), $g])
               | map("### \(.[0].group)\n\n" + (map("- #\(.number)") | join("\n")))
-              | join("\n\n")')
+              | join("\n\n")' <<< "$pulls")
             body+=$'\n\n## Pull requests\n\n'"$prs"
           fi
           number=$(gh pr list --label release --state open --json number --jq '.[0].number // empty')
