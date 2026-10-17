@@ -283,21 +283,30 @@ jobs:
           repositories: pistachio-coverage
           permission-contents: write
       # A new orphan commit each time, so the repository holds only the
-      # latest report.
+      # latest report. GitHub signs a commit made through the API, not one
+      # pushed, so the files go up as blobs and the commit is made from
+      # their tree.
       - name: Publish the report
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: ${{ runner.temp }}/site
         run: |
-          id=$(gh api "users/$SLUG%5Bbot%5D" --jq .id)
-          git init -q -b main
-          git config user.name "${SLUG}[bot]"
-          git config user.email "$id+${SLUG}[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Coverage of winebarrel/pistachio@$GITHUB_SHA"
-          git push -f "https://x-access-token:$GH_TOKEN@github.com/winebarrel/pistachio-coverage.git" main
+          # .nojekyll included.
+          shopt -s dotglob
+          : > "$RUNNER_TEMP/entries"
+          for path in *; do
+            sha=$(base64 -w0 "$path" | jq -Rsc '{content: ., encoding: "base64"}' |
+              gh api "repos/$GH_REPO/git/blobs" --input - --jq .sha)
+            jq -nc --arg path "$path" --arg sha "$sha" \
+              '{path: $path, mode: "100644", type: "blob", sha: $sha}' >> "$RUNNER_TEMP/entries"
+          done
+          tree=$(jq -s '{tree: .}' "$RUNNER_TEMP/entries" |
+            gh api "repos/$GH_REPO/git/trees" --input - --jq .sha)
+          commit=$(gh api "repos/$GH_REPO/git/commits" \
+            -f message="Coverage of winebarrel/pistachio@$GITHUB_SHA" -f tree="$tree" --jq .sha)
+          gh api -X PATCH "repos/$GH_REPO/git/refs/heads/main" -f sha="$commit" -F force=true --silent
         env:
+          GH_REPO: winebarrel/pistachio-coverage
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          SLUG: ${{ steps.app-token.outputs.app-slug }}
       # Checked after the push, so the badge shows a drop too.
       - name: Check the threshold
         run: |
