@@ -25,6 +25,7 @@ type PlanOptions struct {
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
 	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does, what its lock blocks, and the table's row and byte estimate from pg_class."`
+	RefuseHazard             []string `enum:"rewrite,scan,blocks-reads,blocks-writes" env:"PISTA_REFUSE_HAZARD" placeholder:"KIND" help:"Refuse the plan if it contains a statement of one of these kinds: rewrite, scan, blocks-reads, blocks-writes. The kinds are those of --explain. The plan is still printed, with each refused statement marked, and the exit code is 3. With --out, no plan file is written."`
 	Out                      string   `type:"path" env:"PISTA_OUT" placeholder:"FILE" help:"Also write the plan to this file, for pista apply-from to execute later. The plan is fixed when it is written: apply-from runs these statements, and only checks that the schema has not changed under them."`
 }
 
@@ -81,6 +82,9 @@ type PlanResult struct {
 	// InvalidIndexes warns about each managed index that is invalid, one
 	// comment per line.
 	InvalidIndexes string
+	// Refused is set when --refuse-hazard refused the plan. The plan is
+	// complete otherwise, so the caller prints it before reporting this.
+	Refused *HazardRefusedError
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
@@ -128,12 +132,16 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	// search_path, so this runs before the SET below changes it. A plan with
 	// no statements is left alone, so the common no-drift run pays for no
 	// catalog read.
-	if options.Explain && len(result.Stmts) > 0 {
+	var refused []int
+	if (options.Explain || len(options.RefuseHazard) > 0) && len(result.Stmts) > 0 {
 		cat, err := catalog.NewCatalog(conn, client.Schemas)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog: %w", err)
 		}
-		result.Stmts, err = client.explainStmts(ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains)
+		result.Stmts, refused, err = client.explainStmts(
+			ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains,
+			options.Explain, options.RefuseHazard,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to explain plan: %w", err)
 		}
@@ -224,7 +232,9 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		stmts = append(prefix, stmts...)
 	}
 
-	if options.Out != "" {
+	// A refused plan is still printed, so the marked statements can be read,
+	// but is not written for apply-from to run.
+	if options.Out != "" && len(refused) == 0 {
 		scope := client.ScopeOptions
 		// The effective value, so that apply-from opens its connection the
 		// way this run did even where the default applied.
@@ -255,7 +265,13 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		}
 	}
 
+	var refusedErr *HazardRefusedError
+	if len(refused) > 0 {
+		refusedErr = &HazardRefusedError{Count: len(refused), Kinds: options.RefuseHazard}
+	}
+
 	return &PlanResult{
+		Refused:         refusedErr,
 		SQL:             strings.Join(stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),

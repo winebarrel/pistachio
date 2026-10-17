@@ -67,6 +67,60 @@ func TestRun_Plan(t *testing.T) {
 	assert.Contains(t, out.String(), "CREATE TABLE public.users")
 }
 
+// --refuse-hazard exits with 3, after plan has printed the plan, and ahead of
+// the 2 --check would give it.
+func TestRun_PlanRefuseHazard(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+
+	desired := writeFile(t, "desired.sql", `CREATE TABLE public.users (id integer NOT NULL, name text NOT NULL);`)
+
+	for _, args := range [][]string{
+		{"plan", "--refuse-hazard", "scan", "-c", testutil.ConnString(), desired},
+		{"plan", "--check", "--refuse-hazard", "scan", "-c", testutil.ConnString(), desired},
+	} {
+		var out bytes.Buffer
+		code, stderr := runCLI(t, &out, args...)
+		assert.Equal(t, 3, code)
+		assert.Contains(t, stderr, "error: 1 statement refused by --refuse-hazard=scan\n")
+		assert.Contains(t, out.String(), "-- refused: scan, blocks reads and writes: public.users\nALTER TABLE public.users ALTER COLUMN name SET NOT NULL;")
+	}
+
+	// PISTA_REFUSE_HAZARD takes the kinds separated by commas.
+	t.Setenv("PISTA_REFUSE_HAZARD", "rewrite,scan")
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "plan", "-c", testutil.ConnString(), desired)
+	assert.Equal(t, 3, code)
+	assert.Contains(t, stderr, "error: 1 statement refused by --refuse-hazard=rewrite,scan\n")
+}
+
+func TestRun_ApplyRefuseHazard(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+
+	desired := writeFile(t, "desired.sql", `CREATE TABLE public.users (id integer NOT NULL, name text NOT NULL);`)
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "apply", "--refuse-hazard", "blocks-reads", "-c", testutil.ConnString(), desired)
+	assert.Equal(t, 3, code)
+	assert.Contains(t, stderr, "error: 1 statement refused by --refuse-hazard=blocks-reads:\n")
+	assert.Contains(t, stderr, "-- refused: scan, blocks reads and writes: public.users\n")
+	assert.Contains(t, stderr, "ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;\n")
+	assert.Empty(t, out.String())
+}
+
+// A kind --refuse-hazard does not know is a usage error.
+func TestRun_RefuseHazardUnknownKind(t *testing.T) {
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "plan", "--refuse-hazard", "drop", writeFile(t, "desired.sql", usersTable))
+	assert.Equal(t, 80, code)
+	assert.Contains(t, stderr, "--refuse-hazard")
+}
+
 func TestRun_PlanCheckDiff(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -365,11 +419,13 @@ func TestRun_EngineDSQLRefusesOptions(t *testing.T) {
 		err  string
 	}{
 		{[]string{"plan", "--engine", "dsql", "--explain", desired}, "--explain cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--refuse-hazard", "scan", desired}, "--refuse-hazard cannot be used with --engine dsql"},
 		{[]string{"plan", "--engine", "dsql", "--bulk-alter", desired}, "--bulk-alter cannot be used with --engine dsql"},
 		{[]string{"plan", "--engine", "dsql", "--force-index-concurrently", desired}, "--force-index-concurrently cannot be used with --engine dsql"},
 		{[]string{"plan", "--engine", "dsql", "--disable-index-concurrently", desired}, "--disable-index-concurrently cannot be used with --engine dsql"},
 		{[]string{"plan", "--engine", "dsql", "--concurrently-pre-sql", "SELECT 1", desired}, "--concurrently-pre-sql cannot be used with --engine dsql"},
 		{[]string{"plan", "--engine", "dsql", "--concurrently-pre-sql-file", desired, desired}, "--concurrently-pre-sql-file cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--refuse-hazard", "scan", desired}, "--refuse-hazard cannot be used with --engine dsql"},
 		{[]string{"apply", "--engine", "dsql", "--bulk-alter", desired}, "--bulk-alter cannot be used with --engine dsql"},
 		{[]string{"apply", "--engine", "dsql", "--with-tx", desired}, "--with-tx cannot be used with --engine dsql"},
 		{[]string{"apply", "--engine", "dsql", "--try-tx", desired}, "--try-tx cannot be used with --engine dsql"},

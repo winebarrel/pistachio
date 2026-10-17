@@ -58,6 +58,10 @@ type planTestCase struct {
 	// That also dates the estimate, which the comment prints; write {{today}}
 	// in the expected plan for it.
 	Explain bool `yaml:"explain,omitempty"`
+	// RefuseHazard sets --refuse-hazard. Refused is the message the plan is
+	// refused with, or empty for a plan it lets through.
+	RefuseHazard []string `yaml:"refuse_hazard,omitempty"`
+	Refused      string   `yaml:"refused,omitempty"`
 }
 
 // expandToday puts today's date where an expected plan writes {{today}}, for
@@ -465,6 +469,7 @@ func TestPlan(t *testing.T) {
 				ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
 				ConcurrentlyPreSQLFile:   concurrentlyPreSQLFile,
 				Explain:                  tc.Explain,
+				RefuseHazard:             tc.RefuseHazard,
 			})
 			if tc.Error != "" {
 				require.Error(t, err)
@@ -477,6 +482,12 @@ func TestPlan(t *testing.T) {
 			assert.Equal(t, strings.TrimSpace(tc.Ignored), strings.TrimSpace(got.Ignored))
 			assert.Equal(t, got.SQL != "", got.HasChanges, "HasChanges must match presence of executable SQL")
 			assertExpectedCount(t, tc.Count, got.Count)
+			if tc.Refused != "" {
+				require.NotNil(t, got.Refused, "Refused")
+				assert.Equal(t, tc.Refused, got.Refused.Error())
+			} else {
+				assert.Nil(t, got.Refused, "Refused")
+			}
 		})
 	}
 }

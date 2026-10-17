@@ -1,0 +1,28 @@
+refuse_hazard: [blocks-reads]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id)
+  );
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+plan: |
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+  ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);

@@ -1,0 +1,17 @@
+refuse_hazard: [rewrite]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE DOMAIN public.money_amount AS integer;
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount public.money_amount,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE DOMAIN public.money_amount AS integer;
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE public.money_amount;

@@ -57,12 +57,14 @@ func refuseWithDSQL(engine Engine, opts ...dsqlRefused) error {
 }
 
 // planRefused lists the plan options DSQL has no use for. --explain reads the
-// size estimates in pg_class, which DSQL does not keep. --bulk-alter saves the
+// size estimates in pg_class, which DSQL does not keep, and --refuse-hazard
+// judges the locks a statement takes, which DSQL does not take. --bulk-alter saves the
 // lock and the rewrite a combined ALTER TABLE spares, and DSQL has neither.
 // DSQL has no CONCURRENTLY.
 func planRefused(o *PlanOptions) []dsqlRefused {
 	return []dsqlRefused{
 		{"explain", o.Explain},
+		{"refuse-hazard", len(o.RefuseHazard) > 0},
 		{"bulk-alter", o.BulkAlter},
 		{"not-null-via-check", o.NotNullViaCheck},
 		{"force-index-concurrently", o.ForceIndexConcurrently},
@@ -109,6 +111,7 @@ func ValidateApplyEngine(engine Engine, o *ApplyOptions) error {
 		return err
 	}
 	return refuseWithDSQL(engine, append(planRefused(&PlanOptions{
+		RefuseHazard:             o.RefuseHazard,
 		BulkAlter:                o.BulkAlter,
 		NotNullViaCheck:          o.NotNullViaCheck,
 		ForceIndexConcurrently:   o.ForceIndexConcurrently,

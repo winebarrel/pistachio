@@ -1,0 +1,22 @@
+refuse_hazard: [scan]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount bigint,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  -- pista:concurrently
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+plan: |
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+  -- refused: scan, blocks nothing: public.orders
+  CREATE INDEX CONCURRENTLY orders_at_idx ON public.orders USING btree (at);
+refused: 1 statement refused by --refuse-hazard=scan

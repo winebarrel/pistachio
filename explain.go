@@ -160,14 +160,18 @@ type explainer struct {
 }
 
 // explainStmts returns the statements with the comment prepended to each one
-// that scans or rewrites a table.
+// that scans or rewrites a table, when explain is set, and to each one that
+// refuse matches, which it also returns the positions of. Without explain no
+// size is read, and a statement refuse does not match takes no comment.
 func (client *Client) explainStmts(
 	ctx context.Context,
 	cat *catalog.Catalog,
 	stmts []string,
 	current, desired *orderedmap.Map[string, *model.Table],
 	domains *orderedmap.Map[string, *model.Domain],
-) ([]string, error) {
+	explain bool,
+	refuse hazardSet,
+) ([]string, []int, error) {
 	ex := newExplainer(client.Schemas, current, desired, domains)
 	parsed := parseStmts(stmts)
 
@@ -198,10 +202,10 @@ func (client *Client) explainStmts(
 	// plan holds nothing that needs it.
 	var err error
 	if ex.types, err = cat.TypeChanges(ctx, changes); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if ex.volatile, err = cat.VolatileFunctions(ctx, funcs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	effects, sized := ex.classifyAll(parsed)
@@ -209,13 +213,14 @@ func (client *Client) explainStmts(
 	// The sizes are read only once a statement is known to want one, so a plan
 	// that creates and drops alone touches pg_class no more than plan does
 	// without the flag.
-	if sized {
+	if explain && sized {
 		if ex.stats, err = cat.TableStats(ctx); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return ex.annotate(stmts, effects), nil
+	out, refused := ex.annotate(stmts, effects, explain, refuse)
+	return out, refused, nil
 }
 
 // explainStmtsOffline is explainStmts without a server, for diff. No size is
@@ -228,7 +233,8 @@ func (client *Client) explainStmtsOffline(
 	ex := newExplainer(client.Schemas, current, desired, domains)
 	ex.offline = true
 	effects, _ := ex.classifyAll(parseStmts(stmts))
-	return ex.annotate(stmts, effects)
+	out, _ := ex.annotate(stmts, effects, true, nil)
+	return out
 }
 
 // newExplainer indexes the current tables by parent and the desired rename
@@ -292,16 +298,27 @@ func (ex *explainer) classifyAll(parsed []*pg_query.Node) ([]explainEffect, bool
 	return effects, sized
 }
 
-// annotate prepends each statement's comment, if it has one.
-func (ex *explainer) annotate(stmts []string, effects []explainEffect) []string {
+// annotate prepends each statement's comment, if it has one, and returns the
+// positions of the statements refuse matches. A refused statement's comment
+// starts with "-- refused:" in place of "--", so it still takes one line.
+func (ex *explainer) annotate(stmts []string, effects []explainEffect, explain bool, refuse hazardSet) ([]string, []int) {
 	out := make([]string, len(stmts))
+	var refused []int
 	for i, sql := range stmts {
 		out[i] = sql
-		if line := ex.render(effects[i]); line != "" {
-			out[i] = line + "\n" + sql
+		line := ex.render(effects[i])
+		if line == "" {
+			continue
 		}
+		if refuse.matches(effects[i]) {
+			line = "-- refused: " + strings.TrimPrefix(line, "-- ")
+			refused = append(refused, i)
+		} else if !explain {
+			continue
+		}
+		out[i] = line + "\n" + sql
 	}
-	return out
+	return out, refused
 }
 
 // parseOneStmt parses a statement the diff emitted. Anything that does not
@@ -1014,8 +1031,10 @@ func (ex *explainer) renderTarget(tg explainTarget, mayRewrite bool) string {
 	if tg.descendants > 0 {
 		relations = append(relations, ex.descendants(t)...)
 	}
+	// No size is read for diff, which has no server, or for --refuse-hazard
+	// without --explain.
 	var details []string
-	if !ex.offline {
+	if ex.stats != nil {
 		details = sizeDetails(ex.stats, relations)
 	}
 	if tg.rebuilt > 0 {

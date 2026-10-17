@@ -60,6 +60,7 @@ DSQL can make these changes only in `CREATE TABLE`, or not at all. `plan` fails 
 | `--force-index-concurrently`, `--disable-index-concurrently`, `--concurrently-pre-sql`, `--concurrently-pre-sql-file` | DSQL has no `CONCURRENTLY`. |
 | `--bulk-alter` | DSQL does not lock or rewrite a table for DDL, so combining statements does not help. |
 | `--explain` | DSQL does not keep the size estimates that `--explain` reads. |
+| `--refuse-hazard` | DSQL does not lock or rewrite a table for DDL. |
 
 `apply-from` reads the engine from the plan file and rejects the same options.
 

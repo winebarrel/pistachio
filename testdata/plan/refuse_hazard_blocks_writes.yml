@@ -1,0 +1,25 @@
+refuse_hazard: [blocks-writes]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer NOT NULL,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+  -- pista:concurrently
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+plan: |
+  -- refused: scan, blocks reads and writes: public.orders
+  ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;
+  -- refused: scan, blocks writes: public.orders
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+  CREATE INDEX CONCURRENTLY orders_at_idx ON public.orders USING btree (at);
+refused: 2 statements refused by --refuse-hazard=blocks-writes

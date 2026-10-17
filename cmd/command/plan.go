@@ -36,6 +36,10 @@ func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
 	writeHeader(w, client, "Plan for", result.Count)
 	writePlanResult(w, result)
 
+	if result.Refused != nil {
+		return result.Refused
+	}
+
 	if cmd.Check && result.HasChanges {
 		return ErrPlanDiff
 	}

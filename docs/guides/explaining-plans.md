@@ -92,6 +92,40 @@ It reports the lock that the statement takes, not the wait to get it. An ACCESS 
 In two cases the comment is coarser than what PostgreSQL does. A binary-coercible type change that still changes an index's operator class, such as `integer` to `oid`, rebuilds that index but gets no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child, even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse. pistachio writes foreign keys with `ONLY`, so nothing that it emits reaches this case.
 
 
+## Refusing statements
+
+`plan --refuse-hazard` and `apply --refuse-hazard` refuse a plan that contains a statement of a given kind. A kind is one part of the comment described above:
+
+| Kind | Refused statement | Lock mode |
+| --- | --- | --- |
+| `rewrite` | The comment starts with `rewrite`. | ACCESS EXCLUSIVE |
+| `scan` | The comment starts with `scan`. | Any |
+| `blocks-reads` | The comment says `blocks reads and writes`. | ACCESS EXCLUSIVE |
+| `blocks-writes` | The comment says `blocks writes` or `blocks reads and writes`. | SHARE, SHARE ROW EXCLUSIVE, EXCLUSIVE or ACCESS EXCLUSIVE |
+
+A statement that takes SHARE UPDATE EXCLUSIVE, such as `CREATE INDEX CONCURRENTLY` or `VALIDATE CONSTRAINT`, matches only `scan`. So does `CREATE MATERIALIZED VIEW`. A statement that changes only the catalog has no comment, so it matches no kind, even if it takes ACCESS EXCLUSIVE. `may rewrite` does not match `rewrite`, but it matches `blocks-reads`.
+
+To give more than one kind, separate them with commas or repeat the option. A statement that matches any of them is refused. The environment variable is `PISTA_REFUSE_HAZARD`.
+
+If one statement is refused, the whole plan is refused. Skipping only that statement could make a later statement fail. For example, `ADD CONSTRAINT ... USING INDEX` needs the index built before it.
+
+`plan` prints the whole plan and then fails. A `-- refused:` comment comes before each refused statement. With `--explain`, this comment takes the place of the usual one and still shows the sizes. With `--out`, no plan file is written.
+
+```sql
+$ pista plan --refuse-hazard=blocks-reads schema.sql
+-- refused: scan, blocks reads and writes: public.orders
+ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;
+CREATE INDEX CONCURRENTLY orders_at_idx ON public.orders USING btree (at);
+pista: error: 1 statement refused by --refuse-hazard=blocks-reads
+```
+
+`apply` runs nothing, not even the pre-SQL. The error lists the refused statements with their comments.
+
+`plan` and `apply` exit with 3 when they refuse a plan. See [Exit status](../reference/exit-status.md). `apply-from` does not have this option. Use it with `plan --out` instead.
+
+Only the statements that pistachio generates are checked. The pre-SQL and `-- pista:execute` statements are not checked. Drops are not checked either; use `--allow-drop` for them. A change that can fail because of the data, such as `SET NOT NULL` on a column that contains NULL, is not checked.
+
+
 ## In a diff
 
 `pista diff --explain` writes the same comment without a database. A table includes the number of indexes that a rewrite builds again, written as `may be rebuilt` for `may rewrite`, and its number of partitions, but no size. A column type change, and an added column whose default calls a function, are shown as `may rewrite`. `plan` asks the server whether the change is a relabel and whether the function is volatile. `diff` has no server to ask.

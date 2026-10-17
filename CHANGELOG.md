@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Add `--refuse-hazard` to `plan` and `apply`. It refuses a plan that contains a statement of the given kind: `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. The kinds are those of `--explain`. A refused plan exits with 3.
+
 ## [1.86.0] - 2026-10-16
 
 * Add `-- pista:not-null-via-check` and `--not-null-via-check`. They add `NOT NULL` to an existing column through a temporary `CHECK` constraint, so the table scan does not block reads and writes. `apply --with-tx` refuses such a plan. Plan files written by earlier versions are refused.

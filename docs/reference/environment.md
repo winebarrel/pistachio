@@ -43,6 +43,7 @@ These options have no variable:
 | `PISTA_EVALUATE_LITERALS` | `--evaluate-literals` | plan, apply |
 | `PISTA_NO_READ_ONLY` | `--no-read-only` | plan, dump |
 | `PISTA_EXPLAIN` | `--explain` | plan, diff |
+| `PISTA_REFUSE_HAZARD` | `--refuse-hazard` | plan, apply |
 | `PISTA_OUT` | `--out` | plan |
 | `PISTA_CHECK` | `--check` | plan, diff |
 | `PISTA_GIT` | `--git` | diff |
