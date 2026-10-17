@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:refuse-hazard rewrite
+  -- pista:refuse-hazard scan, blocks-writes
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+plan: |
+  -- refused: scan, blocks writes: public.orders
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+refused: 1 statement refused by -- pista:refuse-hazard

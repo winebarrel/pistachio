@@ -48,6 +48,7 @@ DSQL can make these changes only in `CREATE TABLE`, or not at all. `plan` fails 
 - Adding a primary key to an existing table
 - `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`, including those from `-- pista:concurrently`
 - `-- pista:bulk-alter`
+- `-- pista:refuse-hazard`
 
 ## Options you cannot use
 

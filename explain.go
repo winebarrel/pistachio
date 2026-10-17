@@ -139,6 +139,9 @@ type explainer struct {
 	children map[string][]*model.Table
 	// tableAlias maps a table's new name to its current one.
 	tableAlias map[string]string
+	// renamedTo maps a table's current name to its new one, the reverse of
+	// tableAlias.
+	renamedTo map[string]string
 	// columnAlias maps, per new table name, a column's new name to its
 	// current one.
 	columnAlias map[string]map[string]string
@@ -153,7 +156,10 @@ type explainer struct {
 	added map[string]map[string]*addedCheck
 	// offline is set for diff, which has no server: no size is shown, and a
 	// statement only the server can place reads as may rewrite.
-	offline  bool
+	offline bool
+	// refuse holds, per desired table, the kinds -- pista:refuse-hazard
+	// names on it or on a table above it.
+	refuse   map[string]hazardSet
 	stats    map[string]catalog.TableStat
 	types    map[catalog.TypeChange]catalog.TypeChangeInfo
 	volatile map[string]bool
@@ -161,8 +167,9 @@ type explainer struct {
 
 // explainStmts returns the statements with the comment prepended to each one
 // that scans or rewrites a table, when explain is set, and to each one that
-// refuse matches, which it also returns the positions of. Without explain no
-// size is read, and a statement refuse does not match takes no comment.
+// refuse or the -- pista:refuse-hazard directives match, which it also
+// returns the positions of. Without explain no size is read, and a statement
+// nothing refuses takes no comment.
 func (client *Client) explainStmts(
 	ctx context.Context,
 	cat *catalog.Catalog,
@@ -171,8 +178,10 @@ func (client *Client) explainStmts(
 	domains *orderedmap.Map[string, *model.Domain],
 	explain bool,
 	refuse hazardSet,
-) ([]string, []int, error) {
+	directives map[string]hazardSet,
+) ([]string, []int, refusedBy, error) {
 	ex := newExplainer(client.Schemas, current, desired, domains)
+	ex.refuse = directives
 	parsed := parseStmts(stmts)
 
 	var changes []catalog.TypeChange
@@ -202,10 +211,10 @@ func (client *Client) explainStmts(
 	// plan holds nothing that needs it.
 	var err error
 	if ex.types, err = cat.TypeChanges(ctx, changes); err != nil {
-		return nil, nil, err
+		return nil, nil, refusedBy{}, err
 	}
 	if ex.volatile, err = cat.VolatileFunctions(ctx, funcs); err != nil {
-		return nil, nil, err
+		return nil, nil, refusedBy{}, err
 	}
 
 	effects, sized := ex.classifyAll(parsed)
@@ -215,12 +224,12 @@ func (client *Client) explainStmts(
 	// without the flag.
 	if explain && sized {
 		if ex.stats, err = cat.TableStats(ctx); err != nil {
-			return nil, nil, err
+			return nil, nil, refusedBy{}, err
 		}
 	}
 
-	out, refused := ex.annotate(stmts, effects, explain, refuse)
-	return out, refused, nil
+	out, refused, by := ex.annotate(stmts, effects, explain, refuse)
+	return out, refused, by, nil
 }
 
 // explainStmtsOffline is explainStmts without a server, for diff. No size is
@@ -233,7 +242,7 @@ func (client *Client) explainStmtsOffline(
 	ex := newExplainer(client.Schemas, current, desired, domains)
 	ex.offline = true
 	effects, _ := ex.classifyAll(parseStmts(stmts))
-	out, _ := ex.annotate(stmts, effects, true, nil)
+	out, _, _ := ex.annotate(stmts, effects, true, nil)
 	return out
 }
 
@@ -249,6 +258,7 @@ func newExplainer(
 		current:     current,
 		children:    map[string][]*model.Table{},
 		tableAlias:  map[string]string{},
+		renamedTo:   map[string]string{},
 		columnAlias: map[string]map[string]string{},
 		domains:     domains,
 		dropped:     map[string]map[string]bool{},
@@ -262,6 +272,7 @@ func newExplainer(
 	for key, t := range desired.All() {
 		if t.RenameFrom != nil && *t.RenameFrom != key {
 			ex.tableAlias[key] = *t.RenameFrom
+			ex.renamedTo[*t.RenameFrom] = key
 		}
 		for name, col := range t.Columns.All() {
 			if col.RenameFrom != nil && *col.RenameFrom != name {
@@ -273,6 +284,60 @@ func newExplainer(
 		}
 	}
 	return ex
+}
+
+// refuseDirectives gives each desired table the kinds -- pista:refuse-hazard
+// names on it and on every table above it, so a statement on a partition is
+// refused by the directive on its parent.
+func refuseDirectives(desired *orderedmap.Map[string, *model.Table]) map[string]hazardSet {
+	refuse := map[string]hazardSet{}
+	for key, t := range desired.All() {
+		// The parser refuses a PARTITION OF cycle, so the walk ends.
+		var kinds hazardSet
+		for t != nil {
+			kinds = append(kinds, t.RefuseHazard...)
+			if t.PartitionOf == nil {
+				break
+			}
+			t, _ = desired.GetOk(*t.PartitionOf)
+		}
+		if len(kinds) > 0 {
+			refuse[key] = kinds
+		}
+	}
+	return refuse
+}
+
+// refusedByDirective reports whether a -- pista:refuse-hazard on a table the
+// statement acts on matches its effect. A statement that recurses acts on
+// every table under its target too, so their directives count.
+func (ex *explainer) refusedByDirective(eff explainEffect) bool {
+	for _, tg := range eff.targets {
+		if ex.refuseFor(tg.key).matches(eff) {
+			return true
+		}
+		if tg.descendants == 0 {
+			continue
+		}
+		for _, d := range ex.descendants(ex.currentTableByKey(tg.key)) {
+			if ex.refuseFor(d.FQTN()).matches(eff) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// refuseFor returns the kinds the directives give the table a statement
+// names. A target read from the current side, such as a table under a
+// recursing statement or one an ALTER DOMAIN scans, carries the name the
+// table has before a -- pista:renamed-from, so that name is mapped to the
+// desired one when no desired table has it.
+func (ex *explainer) refuseFor(key string) hazardSet {
+	if kinds, ok := ex.refuse[key]; ok {
+		return kinds
+	}
+	return ex.refuse[ex.renamedTo[key]]
 }
 
 func parseStmts(stmts []string) []*pg_query.Node {
@@ -299,26 +364,32 @@ func (ex *explainer) classifyAll(parsed []*pg_query.Node) ([]explainEffect, bool
 }
 
 // annotate prepends each statement's comment, if it has one, and returns the
-// positions of the statements refuse matches. A refused statement's comment
-// starts with "-- refused:" in place of "--", so it still takes one line.
-func (ex *explainer) annotate(stmts []string, effects []explainEffect, explain bool, refuse hazardSet) ([]string, []int) {
+// positions of the statements refuse or a directive matches, and which of the
+// two did. A refused statement's comment starts with "-- refused:" in place
+// of "--", so it still takes one line.
+func (ex *explainer) annotate(stmts []string, effects []explainEffect, explain bool, refuse hazardSet) ([]string, []int, refusedBy) {
 	out := make([]string, len(stmts))
 	var refused []int
+	var by refusedBy
 	for i, sql := range stmts {
 		out[i] = sql
 		line := ex.render(effects[i])
 		if line == "" {
 			continue
 		}
-		if refuse.matches(effects[i]) {
+		byFlag := refuse.matches(effects[i])
+		byDirective := ex.refusedByDirective(effects[i])
+		if byFlag || byDirective {
 			line = "-- refused: " + strings.TrimPrefix(line, "-- ")
 			refused = append(refused, i)
+			by.flag = by.flag || byFlag
+			by.directive = by.directive || byDirective
 		} else if !explain {
 			continue
 		}
 		out[i] = line + "\n" + sql
 	}
-	return out, refused
+	return out, refused, by
 }
 
 // parseOneStmt parses a statement the diff emitted. Anything that does not

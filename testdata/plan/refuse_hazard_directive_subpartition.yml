@@ -1,0 +1,34 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      note text
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE TABLE public.orders_2026 PARTITION OF public.orders
+      FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+      PARTITION BY RANGE (created_at);
+  CREATE TABLE public.orders_2026_h1 PARTITION OF public.orders_2026
+      FOR VALUES FROM ('2026-01-01') TO ('2026-07-01');
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      note text
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  -- pista:refuse-hazard blocks-writes
+  CREATE TABLE public.orders_2026 PARTITION OF public.orders
+      FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+      PARTITION BY RANGE (created_at);
+  CREATE TABLE public.orders_2026_h1 PARTITION OF public.orders_2026
+      FOR VALUES FROM ('2026-01-01') TO ('2026-07-01');
+  CREATE INDEX orders_2025_note_idx ON public.orders_2025 USING btree (note);
+  CREATE INDEX orders_2026_h1_note_idx ON public.orders_2026_h1 USING btree (note);
+plan: |
+  CREATE INDEX orders_2025_note_idx ON public.orders_2025 USING btree (note);
+  -- refused: scan, blocks writes: public.orders_2026_h1
+  CREATE INDEX orders_2026_h1_note_idx ON public.orders_2026_h1 USING btree (note);
+refused: 1 statement refused by -- pista:refuse-hazard

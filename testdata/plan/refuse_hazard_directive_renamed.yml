@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.old_orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.old_orders
+  -- pista:refuse-hazard scan
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.old_orders RENAME TO orders;
+  -- refused: scan, blocks reads and writes: public.orders
+  ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;
+refused: 1 statement refused by -- pista:refuse-hazard

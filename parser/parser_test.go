@@ -3817,3 +3817,44 @@ func TestParseSQL_UnloggedSequence(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, seq.Unlogged)
 }
+
+func TestParseSQL_RefuseHazardDirective(t *testing.T) {
+	sql := `-- pista:renamed-from public.old_users
+-- pista:refuse-hazard rewrite,blocks-reads
+CREATE TABLE public.users (
+    id integer NOT NULL
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	users, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.Equal(t, []string{"rewrite", "blocks-reads"}, users.RefuseHazard)
+	require.NotNil(t, users.RenameFrom)
+
+	posts, ok := result.Tables.GetOk("public.posts")
+	require.True(t, ok)
+	assert.Empty(t, posts.RefuseHazard)
+}
+
+// The directive applies to CREATE TABLE only. Before another statement it is
+// ignored, and it does not reach the CREATE TABLE after it.
+func TestParseSQL_RefuseHazardDirectiveIgnoredOnNonTable(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL);
+-- pista:refuse-hazard rewrite
+CREATE INDEX users_id_idx ON public.users (id);
+CREATE TABLE public.posts (id integer NOT NULL);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	for _, name := range []string{"public.users", "public.posts"} {
+		tbl, ok := result.Tables.GetOk(name)
+		require.True(t, ok)
+		assert.Empty(t, tbl.RefuseHazard, name)
+	}
+}

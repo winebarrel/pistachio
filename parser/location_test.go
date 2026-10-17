@@ -675,3 +675,18 @@ func TestParseSQLSources_StatementWithoutSemicolon(t *testing.T) {
 		assert.NotNil(t, r.Tables.Get("public.a"))
 	})
 }
+
+// An unknown kind is pointed at, not the directive.
+func TestParseSQLFiles_RefuseHazardUnknownKind(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"kind.sql": "CREATE TABLE public.posts (id int);\n-- pista:refuse-hazard scan, sc\nCREATE TABLE public.t (id int);\n",
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `-- pista:refuse-hazard: unknown kind sc (rewrite, scan, blocks-reads or blocks-writes)
+ --> `+paths[0]+`:2:30
+  |
+2 | -- pista:refuse-hazard scan, sc
+  |                              ^`, err.Error())
+}

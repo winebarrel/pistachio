@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public."Orders" (
+      "Id" integer NOT NULL,
+      "Amount" integer
+  );
+desired: |
+  -- pista:refuse-hazard rewrite
+  CREATE TABLE public."Orders" (
+      "Id" integer NOT NULL,
+      "Amount" bigint
+  );
+plan: |
+  -- refused: rewrite, blocks reads and writes: public."Orders"
+  ALTER TABLE public."Orders" ALTER COLUMN "Amount" SET DATA TYPE bigint;
+refused: 1 statement refused by -- pista:refuse-hazard

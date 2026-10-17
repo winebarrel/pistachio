@@ -1,0 +1,30 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      name varchar(10),
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:refuse-hazard rewrite
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount bigint,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+plan: |
+  -- refused: rewrite, blocks reads and writes: public.orders (1 index rebuilt)
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+  ALTER TABLE public.tags ALTER COLUMN name SET DATA TYPE text;
+refused: 1 statement refused by -- pista:refuse-hazard

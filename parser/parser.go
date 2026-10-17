@@ -427,6 +427,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 	bulkAlterDirectives := extractBulkAlterDirectives(sql, result.Stmts)
 	ignoreDirectives := extractIgnoreDirectives(sql, result.Stmts)
 	lintIgnoreDirectives := extractLintIgnoreDirectives(sql, result.Stmts)
+	refuseHazardDirectives := extractRefuseHazardDirectives(sql, result.Stmts)
 	lintIgnores := map[LintTarget][]string{}
 	var lintIgnoreList []LintIgnoreDirective
 	addLintIgnores := func(targets []LintTarget, rules []string) {
@@ -550,6 +551,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			if bulkAlterDirectives[rawStmt.StmtLocation] {
 				table.BulkAlter = true
 			}
+			table.RefuseHazard = refuseHazardDirectives[rawStmt.StmtLocation]
 
 			// Extract column/constraint-level directives from raw SQL
 			rawStmtSQL := stmtRegion(sql, rawStmt)

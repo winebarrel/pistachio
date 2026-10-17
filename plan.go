@@ -133,14 +133,15 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	// no statements is left alone, so the common no-drift run pays for no
 	// catalog read.
 	var refused []int
-	if (options.Explain || len(options.RefuseHazard) > 0) && len(result.Stmts) > 0 {
+	var by refusedBy
+	if (options.Explain || len(options.RefuseHazard) > 0 || len(result.RefuseDirectives) > 0) && len(result.Stmts) > 0 {
 		cat, err := catalog.NewCatalog(conn, client.Schemas)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog: %w", err)
 		}
-		result.Stmts, refused, err = client.explainStmts(
+		result.Stmts, refused, by, err = client.explainStmts(
 			ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains,
-			options.Explain, options.RefuseHazard,
+			options.Explain, options.RefuseHazard, result.RefuseDirectives,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to explain plan: %w", err)
@@ -265,13 +266,8 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		}
 	}
 
-	var refusedErr *HazardRefusedError
-	if len(refused) > 0 {
-		refusedErr = &HazardRefusedError{Count: len(refused), Kinds: options.RefuseHazard}
-	}
-
 	return &PlanResult{
-		Refused:         refusedErr,
+		Refused:         newHazardRefusedError(len(refused), options.RefuseHazard, by, ""),
 		SQL:             strings.Join(stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),

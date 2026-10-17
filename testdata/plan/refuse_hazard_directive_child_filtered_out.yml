@@ -1,0 +1,24 @@
+# The filter leaves out the partition, and a statement on the parent that
+# reaches it is still refused by its directive.
+exclude: [orders_2026]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      amount integer
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.orders_2026 PARTITION OF public.orders
+      FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      amount bigint
+  ) PARTITION BY RANGE (created_at);
+  -- pista:refuse-hazard rewrite
+  CREATE TABLE public.orders_2026 PARTITION OF public.orders
+      FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+plan: |
+  -- refused: rewrite, blocks reads and writes: public.orders (1 partition)
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+refused: 1 statement refused by -- pista:refuse-hazard

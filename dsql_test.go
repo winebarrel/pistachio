@@ -324,3 +324,10 @@ func TestDSQL_IgnoreAsync(t *testing.T) {
 	_, err = postgres.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
 	require.ErrorContains(t, err, "syntax error")
 }
+
+// The -- pista:refuse-hazard directive is refused like --refuse-hazard.
+func TestDSQL_RefuseHazardDirective(t *testing.T) {
+	client := localDSQLClient(t, "")
+	_, err := client.Plan(context.Background(), &pistachio.PlanOptions{Files: []string{writeDSQLSchema(t, "-- pista:refuse-hazard rewrite\n"+dsqlUsers)}})
+	require.EqualError(t, err, "-- pista:refuse-hazard cannot be used with --engine dsql")
+}
