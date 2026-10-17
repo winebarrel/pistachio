@@ -133,6 +133,9 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 `--explain`
 :   Add a comment to each statement that scans or rewrites a table. The comment says what the statement does, what its lock blocks, and the table's row and byte estimate from `pg_class`. The environment variable is `PISTA_EXPLAIN`. See [Explaining a plan](../../guides/explaining-plans.md).
 
+`--refuse-hazard=`*kind*[,...]
+:   Refuse the plan if it contains a statement of one of the given kinds. *kind* is `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. The plan is still printed. A `-- refused:` comment comes before each refused statement, and the exit status is 3. With `--out`, no plan file is written. This option cannot be used with `--engine dsql`. The environment variable is `PISTA_REFUSE_HAZARD`. See [Refusing statements](../../guides/explaining-plans.md#refusing-statements).
+
 `--out=`*file*
 :   Also write the plan to *file*, for [`pista apply-from`](apply-from.md). The plan is fixed when it is written. `apply-from` runs these statements. It checks only that the schema has not changed since and that the server's major version is the same. A `-- pista:execute` check is evaluated now. A check that cannot be evaluated is an error. The environment variable is `PISTA_OUT`. See [Plan files](../../guides/plan-files.md).
 
@@ -141,7 +144,7 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 
 ## Exit status
 
-The exit status is 0 when the plan was printed, 1 on error, and 80 on a usage error. With `--check`, it is 2 when the plan contains executable DDL. A skipped drop alone is not executable DDL, so the exit status is 0.
+The exit status is 0 when the plan was printed, 1 on error, and 80 on a usage error. With `--check`, it is 2 when the plan contains executable DDL. It is 3 when `--refuse-hazard` refuses the plan, even with `--check`. A skipped drop alone is not executable DDL, so the exit status is 0.
 
 ## Environment
 

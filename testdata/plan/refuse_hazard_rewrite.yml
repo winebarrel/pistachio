@@ -1,0 +1,20 @@
+refuse_hazard: [rewrite]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      note text,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount bigint,
+      note text NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+plan: |
+  -- refused: rewrite, blocks reads and writes: public.orders (1 index rebuilt)
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+  ALTER TABLE public.orders ALTER COLUMN note SET NOT NULL;
+refused: 1 statement refused by --refuse-hazard=rewrite

@@ -1,0 +1,27 @@
+refuse_hazard: [rewrite, scan, blocks-reads, blocks-writes]
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer NOT NULL,
+      note varchar(10),
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      note varchar(20),
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_id_idx ON public.items USING btree (id);
+plan: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_id_idx ON public.items USING btree (id);
+  ALTER TABLE public.orders ALTER COLUMN note SET DATA TYPE character varying(20);
+  ALTER TABLE public.orders DROP COLUMN amount;

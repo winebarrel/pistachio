@@ -86,6 +86,13 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 	// plan --check, diff --check and fmt --check report a difference, and lint
 	// a violated rule, as exit code 2 instead of a fatal error. The output has
 	// already been written.
+	// --refuse-hazard reports a refused plan as exit code 3, with the message
+	// an error takes.
+	if _, ok := errors.AsType[*pistachio.HazardRefusedError](err); ok {
+		kctx.Errorf("%s", err)
+		kctx.Exit(3)
+		return
+	}
 	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrDiffChanges) || errors.Is(err, command.ErrFormatDiff) || errors.Is(err, command.ErrLintViolations) {
 		kctx.Exit(2)
 		return

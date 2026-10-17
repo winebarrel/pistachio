@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/dsql"
 	"github.com/winebarrel/pistachio/parser"
 )
@@ -27,6 +28,7 @@ type ApplyOptions struct {
 	NotNullViaCheck          bool     `xor:"not-null-via-check-tx" env:"PISTA_NOT_NULL_VIA_CHECK" help:"Add NOT NULL to existing columns through a temporary CHECK constraint, so the table scan does not block reads and writes. The same as -- pista:not-null-via-check on every column."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
+	RefuseHazard             []string `enum:"rewrite,scan,blocks-reads,blocks-writes" env:"PISTA_REFUSE_HAZARD" placeholder:"KIND" help:"Refuse the plan if it contains a statement of one of these kinds: rewrite, scan, blocks-reads, blocks-writes. The kinds are those of plan --explain. Nothing is run, the refused statements are reported, and the exit code is 3."`
 	ExecOptions
 }
 
@@ -148,6 +150,29 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Classified before applyStmts sets the search_path, as plan does, since
+	// the type names the server resolves were printed under this one.
+	if len(options.RefuseHazard) > 0 && len(result.Stmts) > 0 {
+		cat, err := catalog.NewCatalog(conn, client.Schemas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create catalog: %w", err)
+		}
+		annotated, refused, err := client.explainStmts(
+			ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains,
+			false, options.RefuseHazard,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to explain plan: %w", err)
+		}
+		if len(refused) > 0 {
+			stmts := make([]string, len(refused))
+			for i, n := range refused {
+				stmts[i] = annotated[n]
+			}
+			return nil, &HazardRefusedError{Count: len(refused), Kinds: options.RefuseHazard, Stmts: strings.Join(stmts, "\n")}
+		}
 	}
 
 	applyResult := &ApplyResult{

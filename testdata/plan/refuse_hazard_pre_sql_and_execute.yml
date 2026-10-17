@@ -1,0 +1,20 @@
+refuse_hazard: [blocks-writes]
+pre_sql: CREATE INDEX pre_idx ON public.orders (id);
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      note text
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      note text,
+      memo text
+  );
+  -- pista:execute
+  CREATE INDEX exec_idx ON public.orders USING btree (id);
+plan: |
+  CREATE INDEX pre_idx ON public.orders (id);
+  ALTER TABLE public.orders ADD COLUMN memo text;
+  -- pista:execute
+  CREATE INDEX exec_idx ON public.orders USING btree (id);
