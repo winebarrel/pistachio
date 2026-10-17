@@ -45,6 +45,42 @@ CREATE INDEX CONCURRENTLY users_email_idx ON public.users USING btree (email);
 
 Such a run is not all-or-nothing. A `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index, which you must drop by hand. To run one plan in a transaction despite the opt-ins, add `--disable-index-concurrently`. The directives remain in the files for the next run.
 
+## Adding a key without blocking reads and writes
+
+`ALTER TABLE ... ADD CONSTRAINT ... PRIMARY KEY` and `... UNIQUE` build the key's index while they hold an ACCESS EXCLUSIVE lock, so even reads wait. To avoid that, build the index with `CONCURRENTLY` first, then turn it into the constraint with `USING INDEX`:
+
+```sql
+CREATE TABLE public.users (
+    id bigint NOT NULL,
+    email text NOT NULL
+);
+
+-- pista:concurrently
+CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id);
+ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+
+-- pista:concurrently
+CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
+```
+
+The plan builds the indexes first, then adds the constraints:
+
+```sql
+CREATE UNIQUE INDEX CONCURRENTLY users_pkey ON public.users USING btree (id);
+CREATE UNIQUE INDEX CONCURRENTLY users_email_key ON public.users USING btree (email);
+ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
+```
+
+`CREATE UNIQUE INDEX CONCURRENTLY` reads the table without blocking writes. `ADD CONSTRAINT ... USING INDEX` takes ACCESS EXCLUSIVE but only changes the catalog, so it ends quickly. PostgreSQL renames the index to the constraint's name, so give the two the same name.
+
+After the change is applied, `dump` writes the key as `CONSTRAINT users_pkey PRIMARY KEY (id)` in `CREATE TABLE`. The file can keep either form. Both plan as no change.
+
+PostgreSQL accepts only a unique B-tree index with no expressions, no `WHERE` clause and the default sort order. `CONCURRENTLY` is not available on a partitioned table, so this does not work there.
+
+A primary key needs its columns to be `NOT NULL`. If a column is nullable, `ADD CONSTRAINT ... PRIMARY KEY USING INDEX` sets `NOT NULL` itself and reads every row under ACCESS EXCLUSIVE. Make the column `NOT NULL` in an earlier run with [`-- pista:not-null-via-check`](../reference/directives.md#-pistanot-null-via-check).
+
 ## Bounding lock waits
 
 A DDL statement waits for every transaction that holds a conflicting lock. Every later statement that needs a conflicting lock waits behind it. `lock_timeout` limits that wait, and `--lock-timeout` sets it for the run:
