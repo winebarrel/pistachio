@@ -294,7 +294,7 @@ jobs:
           shopt -s dotglob
           : > "$RUNNER_TEMP/entries"
           for path in *; do
-            sha=$(base64 -w0 "$path" | jq -Rc '{content: ., encoding: "base64"}' |
+            sha=$(base64 -w0 "$path" | jq -Rsc '{content: ., encoding: "base64"}' |
               gh api "repos/$GH_REPO/git/blobs" --input - --jq .sha)
             jq -nc --arg path "$path" --arg sha "$sha" \
               '{path: $path, mode: "100644", type: "blob", sha: $sha}' >> "$RUNNER_TEMP/entries"
