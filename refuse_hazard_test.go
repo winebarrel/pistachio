@@ -62,6 +62,26 @@ func TestPlan_RefuseHazardWritesNoPlanFile(t *testing.T) {
 	assert.FileExists(t, out)
 }
 
+// A plan the directive refuses is not written for apply-from either.
+func TestPlan_RefuseHazardDirectiveWritesNoPlanFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, refuseHazardInit)
+
+	dir := t.TempDir()
+	desiredFile := filepath.Join(dir, "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("-- pista:refuse-hazard scan\n"+refuseHazardDesired), 0o644))
+	out := filepath.Join(dir, "plan.json")
+
+	client := NewClient(&Options{ConnString: testutil.ConnString(), Schemas: []string{"public"}})
+	result, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}, Out: out})
+	require.NoError(t, err)
+	require.NotNil(t, result.Refused)
+	assert.Equal(t, "1 statement refused by -- pista:refuse-hazard", result.Refused.Error())
+	assert.NoFileExists(t, out)
+}
+
 // apply runs nothing when a statement is refused, and names the refused
 // statements in the error, since it writes no plan to show them in.
 func TestApply_RefuseHazard(t *testing.T) {
@@ -103,4 +123,29 @@ ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;`, err.Error())
 	}, &buf)
 	require.NoError(t, err)
 	assert.True(t, result.Applied)
+}
+
+// A -- pista:refuse-hazard on a table refuses apply without the flag.
+func TestApply_RefuseHazardDirective(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, refuseHazardInit)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("-- pista:refuse-hazard scan\n"+refuseHazardDesired), 0o644))
+
+	client := NewClient(&Options{ConnString: testutil.ConnString(), Schemas: []string{"public"}})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	var refused *HazardRefusedError
+	require.ErrorAs(t, err, &refused)
+	assert.Equal(t, `1 statement refused by -- pista:refuse-hazard:
+-- refused: scan, blocks reads and writes: public.orders
+ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;`, err.Error())
+
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'note'`).Scan(&n))
+	assert.Equal(t, 0, n)
 }

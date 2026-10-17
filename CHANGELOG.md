@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.
+
 ## [1.87.0] - 2026-10-17
 
 * Add `--refuse-hazard` to `plan` and `apply`. It refuses a plan that contains a statement of the given kind: `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. The kinds are those of `--explain`. A refused plan exits with 3.

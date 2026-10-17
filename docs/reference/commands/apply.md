@@ -124,7 +124,7 @@ The [general options](index.md#general-options) apply as well.
 :   Compare a string literal with a cast by value, not by text. This applies to the `DEFAULT` of a column or domain, the expression of a generated column, and a `CHECK` constraint on a table or domain. PostgreSQL prints a literal in the output format of its type. For example, `DEFAULT '1 hour'` on an `interval` column is read back as `'01:00:00'::interval`, so without this option every plan writes `SET DEFAULT` for the column. With this option, the literals whose text differs are sent to the server in one query and compared by value. The statements use the text of the desired schema. If a column changes type in the same run, its table is compared by text. The same holds for a domain whose base type changes. The environment variable is `PISTA_EVALUATE_LITERALS`.
 
 `--refuse-hazard=`*kind*[,...]
-:   Refuse the plan if it contains a statement of one of the given kinds. *kind* is `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. Nothing is run. The error lists the refused statements, and the exit status is 3. This option cannot be used with `--engine dsql`. The environment variable is `PISTA_REFUSE_HAZARD`. See [Refusing statements](../../guides/explaining-plans.md#refusing-statements).
+:   Refuse the plan if it contains a statement of one of the given kinds. *kind* is `rewrite`, `scan`, `blocks-reads` or `blocks-writes`. Nothing is run. The error lists the refused statements, and the exit status is 3. This option cannot be used with `--engine dsql`. The environment variable is `PISTA_REFUSE_HAZARD`. The [`-- pista:refuse-hazard`](../directives.md#-pistarefuse-hazard) directive does the same for one table. See [Refusing statements](../../guides/explaining-plans.md#refusing-statements).
 
 ### Execution
 
@@ -160,7 +160,7 @@ The [general options](index.md#general-options) apply as well.
 
 ## Exit status
 
-The exit status is 0 when every statement ran, or when there was nothing to run. It is 1 on error, 3 when `--refuse-hazard` refuses the plan, and 80 on a usage error.
+The exit status is 0 when every statement ran, or when there was nothing to run. It is 1 on error, 3 when `--refuse-hazard` or `-- pista:refuse-hazard` refuses the plan, and 80 on a usage error.
 
 ## Environment
 

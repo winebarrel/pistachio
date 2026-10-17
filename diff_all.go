@@ -489,6 +489,9 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		if len(bulkAlterTables) > 0 {
 			return nil, errors.New("-- pista:bulk-alter cannot be used with --engine dsql")
 		}
+		if hasRefuseDirective(desiredTables) {
+			return nil, errors.New("-- pista:refuse-hazard cannot be used with --engine dsql")
+		}
 		tableDiff.Stmts = dsql.Split(tableDiff.Stmts)
 	}
 	if options.BulkAlter || len(bulkAlterTables) > 0 {

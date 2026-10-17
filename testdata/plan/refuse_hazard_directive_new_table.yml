@@ -1,0 +1,24 @@
+init: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+  -- pista:refuse-hazard rewrite, scan, blocks-reads, blocks-writes
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);
+plan: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders USING btree (amount);

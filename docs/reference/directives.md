@@ -15,6 +15,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | `bulk-alter` | none | `CREATE TABLE` | Merges the table's `ALTER TABLE` actions into one statement. |
 | `ignore` | none | tables, views, enums, domains, composite types, sequences, routines | Leaves the object unmanaged. |
 | `lint-ignore` | rule names (optional; none means every rule), then ` --` and a reason (optional) | tables, columns, indexes, foreign keys | Turns lint rules off for the object. |
+| `refuse-hazard` | kinds (required) | `CREATE TABLE` | Refuses the plan if it contains a statement of one of the kinds on the table. |
 
 ## -- pista:renamed-from
 
@@ -261,3 +262,29 @@ CREATE TABLE public.event_log (
 ```
 
 The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. For a name that no rule of the kinds the directive reaches has, `pista lint` writes a warning to standard error. The exit status does not change.
+
+## -- pista:refuse-hazard
+
+Refuses the plan if it contains a statement of one of the given kinds on the table. The kinds are those of `--refuse-hazard`: `rewrite`, `scan`, `blocks-reads` and `blocks-writes`. Separate several kinds with commas or spaces. See [Refusing statements](../guides/explaining-plans.md#refusing-statements) for what each kind matches.
+
+```sql
+-- pista:refuse-hazard rewrite, blocks-reads
+CREATE TABLE public.orders (
+    id bigint NOT NULL,
+    amount integer,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);
+```
+
+A statement is checked against every table its comment names. Adding a foreign key names both tables, so the directive also covers a foreign key that references the table. The directive on a partitioned table covers its partitions, and the directive on an `INHERITS` parent covers its children. Statements on a table that the plan creates are not refused.
+
+When `--refuse-hazard` is also given, a statement that either of them matches is refused. The error says which one refused the plan.
+
+```sql
+$ pista plan schema.sql
+-- refused: rewrite, blocks reads and writes: public.orders (1 index rebuilt)
+ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+pista: error: 1 statement refused by -- pista:refuse-hazard
+```
+
+An unknown kind is an error. The directive cannot be used with `--engine dsql`. `pista parse` does not write it.

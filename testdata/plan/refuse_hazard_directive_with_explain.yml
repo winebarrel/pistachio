@@ -1,0 +1,25 @@
+explain: true
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.orders SELECT g, g, '2026-01-01' FROM generate_series(1, 3) g;
+  ANALYZE public.orders;
+desired: |
+  -- pista:refuse-hazard blocks-reads
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer NOT NULL,
+      at date,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+plan: |
+  -- refused: scan, blocks reads and writes: public.orders (~3 rows, 8192 bytes, as of {{today}})
+  ALTER TABLE public.orders ALTER COLUMN amount SET NOT NULL;
+  -- scan, blocks writes: public.orders (~3 rows, 8192 bytes, as of {{today}})
+  CREATE INDEX orders_at_idx ON public.orders USING btree (at);
+refused: 1 statement refused by -- pista:refuse-hazard

@@ -18,8 +18,13 @@ type Table struct {
 	// Ignore marks the table as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore     bool    `json:"ignore"`
-	TableSpace *string `json:"table_space"`
+	Ignore bool `json:"ignore"`
+	// RefuseHazard holds the kinds -- pista:refuse-hazard names, which refuse
+	// a plan that does them to this table or to one under it. It is kept out
+	// of the document, as the lint directives are; always nil on the catalog
+	// side.
+	RefuseHazard []string `json:"-"`
+	TableSpace   *string  `json:"table_space"`
 	// StorageParams holds the table's storage parameters, pg_class.reloptions,
 	// keyed by parameter name and ordered by it. A `toast.` prefix names a
 	// parameter of the TOAST relation, which is where pg_dump writes it too.

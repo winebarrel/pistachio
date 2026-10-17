@@ -121,6 +121,8 @@ pista: error: 1 statement refused by --refuse-hazard=blocks-reads
 
 `apply` runs nothing, not even the pre-SQL. The error lists the refused statements with their comments.
 
+To refuse these statements on one table only, write [`-- pista:refuse-hazard`](../reference/directives.md#-pistarefuse-hazard) before its `CREATE TABLE`.
+
 `plan` and `apply` exit with 3 when they refuse a plan. See [Exit status](../reference/exit-status.md). `apply-from` does not have this option. Use it with `plan --out` instead.
 
 Only the statements that pistachio generates are checked. The pre-SQL and `-- pista:execute` statements are not checked. Drops are not checked either; use `--allow-drop` for them. A change that can fail because of the data, such as `SET NOT NULL` on a column that contains NULL, is not checked.

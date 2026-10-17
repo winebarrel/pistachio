@@ -1,0 +1,18 @@
+init: |
+  CREATE DOMAIN public.positive AS integer;
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty public.positive
+  );
+desired: |
+  CREATE DOMAIN public.positive AS integer
+      CONSTRAINT positive_check CHECK (VALUE > 0);
+  -- pista:refuse-hazard scan
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty public.positive
+  );
+plan: |
+  -- refused: scan, blocks writes: public.orders
+  ALTER DOMAIN public.positive ADD CONSTRAINT positive_check CHECK (value > 0);
+refused: 1 statement refused by -- pista:refuse-hazard

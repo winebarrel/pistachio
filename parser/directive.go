@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -42,6 +43,8 @@ var (
 	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
 	// Matches -- pista:lint-ignore and captures what follows it, if anything.
 	lintIgnoreDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore(?:[ \t]+(.*?))?[ \t]*\r?$`)
+	// Matches -- pista:refuse-hazard and captures what follows it, if anything.
+	refuseHazardDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:refuse-hazard(?:[ \t]+(.*?))?[ \t]*\r?$`)
 	// Matches -- pista:ignore with trailing content (invalid usage).
 	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
@@ -59,7 +62,12 @@ var knownDirectives = map[string]bool{
 	"retype-using":       true,
 	"not-null-via-check": true,
 	"lint-ignore":        true,
+	"refuse-hazard":      true,
 }
+
+// RefuseHazardKinds are the kinds -- pista:refuse-hazard takes, the ones
+// --refuse-hazard takes.
+var RefuseHazardKinds = []string{"rewrite", "scan", "blocks-reads", "blocks-writes"}
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
 // and returns an error if any are found.
@@ -114,6 +122,26 @@ func validateDirectives(rawSQL string) error {
 		return &locatedError{msg: "-- pista:ignore does not accept arguments", offset: m[0]}
 	}
 
+	return validateRefuseHazardDirectives(rawSQL)
+}
+
+// validateRefuseHazardDirectives rejects a -- pista:refuse-hazard that names
+// no kind, or one --refuse-hazard does not take.
+func validateRefuseHazardDirectives(rawSQL string) error {
+	for _, m := range refuseHazardDirectivePattern.FindAllStringSubmatchIndex(rawSQL, -1) {
+		if m[2] < 0 || len(splitHazardKinds(rawSQL[m[2]:m[3]])) == 0 {
+			return &locatedError{msg: "-- pista:refuse-hazard requires an argument", offset: m[0]}
+		}
+		arg := rawSQL[m[2]:m[3]]
+		for _, k := range hazardKindPattern.FindAllStringIndex(arg, -1) {
+			if kind := arg[k[0]:k[1]]; !slices.Contains(RefuseHazardKinds, kind) {
+				return &locatedError{
+					msg:    fmt.Sprintf("-- pista:refuse-hazard: unknown kind %s (rewrite, scan, blocks-reads or blocks-writes)", kind),
+					offset: m[2] + k[0],
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -360,6 +388,36 @@ func extractLintIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[i
 	}
 
 	return directives
+}
+
+// extractRefuseHazardDirectives scans each statement's leading comment
+// region for `-- pista:refuse-hazard <kind>...` comments. Every such line
+// counts, and a kind named twice is kept once.
+// Returns a map from StmtLocation to the kinds.
+func extractRefuseHazardDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32][]string {
+	directives := make(map[int32][]string)
+
+	for _, stmt := range stmts {
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
+		for _, m := range refuseHazardDirectivePattern.FindAllStringSubmatch(leading, -1) {
+			for _, kind := range splitHazardKinds(m[1]) {
+				if !slices.Contains(directives[stmt.StmtLocation], kind) {
+					directives[stmt.StmtLocation] = append(directives[stmt.StmtLocation], kind)
+				}
+			}
+		}
+	}
+
+	return directives
+}
+
+// hazardKindPattern matches one kind in the argument of
+// -- pista:refuse-hazard, where commas and spaces separate them.
+var hazardKindPattern = regexp.MustCompile(`[^, \t]+`)
+
+// splitHazardKinds splits the argument of -- pista:refuse-hazard into kinds.
+func splitHazardKinds(s string) []string {
+	return hazardKindPattern.FindAllString(s, -1)
 }
 
 // lintIgnoreReason matches the reason that may follow the rule names of

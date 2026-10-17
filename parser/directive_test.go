@@ -1124,3 +1124,47 @@ CREATE TABLE public.p_def PARTITION OF public.p DEFAULT;`, "public", nil)
 	require.NotNil(t, d.RenameFrom)
 	assert.Equal(t, "public.old_def", *d.RenameFrom)
 }
+
+func TestValidateDirectives_RefuseHazard(t *testing.T) {
+	for _, sql := range []string{
+		"-- pista:refuse-hazard rewrite",
+		"-- pista:refuse-hazard rewrite,scan",
+		"-- pista:refuse-hazard rewrite, scan blocks-reads,blocks-writes",
+		"-- pista:refuse-hazard rewrite\r",
+	} {
+		assert.NoError(t, validateDirectives(sql), sql)
+	}
+}
+
+func TestValidateDirectives_RefuseHazardWithoutArg(t *testing.T) {
+	for _, sql := range []string{
+		"-- pista:refuse-hazard\nCREATE TABLE t (id int);",
+		"-- pista:refuse-hazard   \nCREATE TABLE t (id int);",
+		"-- pista:refuse-hazard\r\nCREATE TABLE t (id int);",
+		"-- pista:refuse-hazard ,\nCREATE TABLE t (id int);",
+	} {
+		err := validateDirectives(sql)
+		require.Error(t, err, sql)
+		assert.Contains(t, err.Error(), "-- pista:refuse-hazard requires an argument")
+	}
+}
+
+func TestValidateDirectives_RefuseHazardUnknownKind(t *testing.T) {
+	err := validateDirectives("-- pista:refuse-hazard rewrite,lock\nCREATE TABLE t (id int);")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pista:refuse-hazard: unknown kind lock (rewrite, scan, blocks-reads or blocks-writes)")
+}
+
+func TestExtractRefuseHazardDirectives(t *testing.T) {
+	sql := `-- pista:refuse-hazard rewrite
+-- pista:refuse-hazard scan, blocks-writes rewrite
+CREATE TABLE public.users (id integer NOT NULL);
+CREATE TABLE public.posts (id integer NOT NULL);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := extractRefuseHazardDirectives(sql, result.Stmts)
+	assert.Equal(t, []string{"rewrite", "scan", "blocks-writes"}, directives[result.Stmts[0].StmtLocation])
+	assert.Empty(t, directives[result.Stmts[1].StmtLocation])
+}
