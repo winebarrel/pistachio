@@ -75,9 +75,37 @@ jobs:
             if [ "$(git rev-parse HEAD:CHANGELOG.md)" = "$text" ]; then
               continue
             fi
+            # GitHub signs a commit made through the API, not one pushed, so
+            # send the merge as a tree over the branch's. A blob main does
+            # not hold, such as the merged CHANGELOG.md, is uploaded first.
+            head=$(git rev-parse "origin/$branch")
+            : > "$RUNNER_TEMP/entries"
+            while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+              read -r oldmode mode _ sha status <<<"$meta"
+              if [ "$status" = D ]; then
+                jq -nc --arg path "$path" --arg mode "${oldmode#:}" \
+                  '{path: $path, mode: $mode, type: "blob", sha: null}' >> "$RUNNER_TEMP/entries"
+                continue
+              fi
+              if [ "$(git rev-parse -q --verify "$main:$path")" != "$sha" ]; then
+                sha=$(git cat-file blob "$sha" | base64 -w0 | jq -Rc '{content: ., encoding: "base64"}' |
+                  gh api "repos/$GH_REPO/git/blobs" --input - --jq .sha)
+              fi
+              jq -nc --arg path "$path" --arg mode "$mode" --arg sha "$sha" \
+                '{path: $path, mode: $mode, type: "blob", sha: $sha}' >> "$RUNNER_TEMP/entries"
+            done < <(git diff --raw -z --no-abbrev --no-renames "$head" HEAD)
+            tree=$(jq -s --arg base "$(git rev-parse "$head^{tree}")" '{base_tree: $base, tree: .}' "$RUNNER_TEMP/entries" |
+              gh api "repos/$GH_REPO/git/trees" --input - --jq .sha)
+            if [ "$tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then
+              echo "::warning::$branch: the tree built through the API differs from the merge; skipped"
+              continue
+            fi
+            commit=$(gh api "repos/$GH_REPO/git/commits" -f message="Merge branch 'main' into $branch" \
+              -f tree="$tree" -f "parents[]=$head" -f "parents[]=$main" --jq .sha)
             # Not forced: a branch that moved since the fetch is left for
             # the next run.
-            git push -q origin "HEAD:refs/heads/$branch" || echo "::warning::$branch: push rejected"
+            gh api -X PATCH "repos/$GH_REPO/git/refs/heads/$branch" -f sha="$commit" -F force=false --silent ||
+              echo "::warning::$branch: update rejected"
           done
         env:
           SLUG: ${{ steps.app-token.outputs.app-slug }}
