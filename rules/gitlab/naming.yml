@@ -1,12 +1,12 @@
-# The names that the GitLab constraint naming convention gives:
+# The GitLab constraint naming convention:
 # https://docs.gitlab.com/development/database/constraint_naming_convention/
 #
-# An object declared without a name is skipped. To require a name, use the
+# Objects without a name in the file are skipped. To require names, use the
 # named-* rules in rules/pgwiki/naming.yml.
 rules:
   - name: pk-name
     on: table
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     assert: >-
       table.constraints.values().all(c, c.type != "primary_key" || c.auto_named
         || c.name == "pk_" + table.name)
@@ -14,17 +14,17 @@ rules:
 
   - name: unique-name
     on: table
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     assert: >-
       table.constraints.values().all(c, c.type != "unique" || c.auto_named
         || c.name == "unique_" + table.name + "_" + c.columns.join("_and_"))
     message: name each unique constraint unique_<table>_<columns>
 
-  # The parser does not record the columns of a check constraint, so only the
-  # prefix is checked.
+  # The parser does not record the columns of a check constraint, so this
+  # checks only the prefix.
   - name: check-name
     on: table
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     assert: >-
       table.constraints.values().all(c, c.type != "check" || c.auto_named
         || c.name.startsWith("check_" + table.name + "_"))
@@ -32,7 +32,7 @@ rules:
 
   - name: exclusion-name
     on: table
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     assert: >-
       table.constraints.values().all(c, c.type != "exclusion" || c.auto_named
         || c.name.startsWith("excl_" + table.name + "_"))
@@ -40,17 +40,17 @@ rules:
 
   - name: fk-name
     on: foreign_key
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     when: '!fk.auto_named'
     assert: >-
       fk.name == "fk_" + table.name + "_" + fk.columns.join("_and_") + "_" + fk.ref_table
     message: name the foreign key fk_<table>_<columns>_<referenced table>
 
   # An index on an expression is skipped. A partial index can add the columns
-  # of its WHERE clause, so its name only has to start with the key columns.
+  # of its WHERE clause after the key columns.
   - name: index-name
     on: index
-    description: A prefix shows the kind of the object and sorts the names by kind.
+    description: The prefix shows the kind of object.
     when: '!index.auto_named && !index.columns.exists(c, c == null)'
     let:
       - name: expected
@@ -61,7 +61,7 @@ rules:
 
   - name: lowercase-index-name
     on: index
-    description: An index name is all lowercase.
+    description: Index names are lowercase.
     when: '!index.auto_named'
     assert: index.name == index.name.lowerAscii()
     message: the index name has an uppercase letter

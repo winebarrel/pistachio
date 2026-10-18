@@ -21,15 +21,15 @@ Each line has the file, line and column of the object, the object, the rule name
 
 ## Using the standard rules
 
-The repository has two sets of rules in [`rules/`](https://github.com/winebarrel/pistachio/tree/main/rules), one in each directory:
+The repository has two sets of rules in [`rules/`](https://github.com/winebarrel/pistachio/tree/main/rules):
 
 [`rules/pgwiki/`](https://github.com/winebarrel/pistachio/tree/main/rules/pgwiki)
-:   Rules on keys, indexes, types and names. The type rules follow the PostgreSQL wiki page [Don't Do This](https://wiki.postgresql.org/wiki/Don't_Do_This).
+:   Rules for keys, indexes, types and names. The type rules follow the PostgreSQL wiki page [Don't Do This](https://wiki.postgresql.org/wiki/Don't_Do_This).
 
 [`rules/gitlab/`](https://github.com/winebarrel/pistachio/tree/main/rules/gitlab)
-:   Rules that follow the [GitLab database guidelines](https://docs.gitlab.com/development/database/): the names of constraints and indexes, foreign keys, and the types of text and enum columns.
+:   Rules from the [GitLab database guidelines](https://docs.gitlab.com/development/database/), for names, foreign keys and types.
 
-The two sets can be used together. No rule name appears in both, but some file names do, so copy each set into a directory of its own.
+You can use both sets. Their rule names do not overlap, but some file names do, so copy each set into its own directory.
 
 `rules/pgwiki/` has these rules:
 
@@ -59,21 +59,21 @@ The two sets can be used together. No rule name appears in both, but some file n
 | | `check-name` | A check constraint name starts with `check_<table>_`. |
 | | `exclusion-name` | An exclusion constraint name starts with `excl_<table>_`. |
 | | `fk-name` | A foreign key is named `fk_<table>_<column>[_and_<column>]*_<referenced table>`. |
-| | `index-name` | An index is named `index_<table>_on_<column>[_and_<column>]*`. A partial index can add more `_and_<column>` for its `WHERE` clause. An index on an expression is skipped. |
-| | `lowercase-index-name` | An index name has no uppercase letter. |
-| `foreign_keys.yml` | `fk-bigint` | The columns of a foreign key are `bigint`. |
-| | `fk-on-delete` | A foreign key has an `ON DELETE` action other than `NO ACTION`. |
-| | `id-column-needs-fk` | A column whose name ends in `_id` is in a foreign key. |
-| `types.yml` | `text-needs-limit` | A `text` column has a check constraint that contains `char_length(<column>) <=`. An array and a domain are skipped. |
-| | `no-enum-type` | No column is of an enum type, or an array or a domain of one. |
+| | `index-name` | An index is named `index_<table>_on_<column>[_and_<column>]*`. A partial index can add `_and_<column>` for its `WHERE` clause. An index on an expression is skipped. |
+| | `lowercase-index-name` | An index name is lowercase. |
+| `foreign_keys.yml` | `fk-bigint` | Foreign key columns are `bigint`. |
+| | `fk-on-delete` | A foreign key has `ON DELETE` other than `NO ACTION`. |
+| | `id-column-needs-fk` | A column whose name ends in `_id` has a foreign key. |
+| `types.yml` | `text-needs-limit` | A `text` column has a check constraint with `char_length(<column>) <=`. Arrays and domains are skipped. |
+| | `no-enum-type` | No column uses an enum type. |
 
-The naming rules in `rules/gitlab/` skip an object declared without a name. To require a name, use the `named-*` rules in `rules/pgwiki/naming.yml`. The `README.md` in each directory lists the parts of its source that have no rule.
+The naming rules in `rules/gitlab/` skip objects that have no name in the file. To require names, use the `named-*` rules in `rules/pgwiki/naming.yml`. `rules/gitlab/README.md` lists the parts of the guidelines that the rules do not check.
 
 To use them:
 
 1. Copy the files you want into a directory of your repository, such as `lint/`. Download them from GitHub, or copy them from a clone of pistachio.
 2. Delete the rules you do not want, and change the others to fit your schema.
-3. Run `pista lint -r lint/ schema/*.sql`, locally and in CI. To use both sets, copy them into two directories and name both, as in `pista lint -r lint/pgwiki/,lint/gitlab/ schema/*.sql`.
+3. Run `pista lint -r lint/ schema/*.sql`, locally and in CI. To use both sets, pass both directories: `pista lint -r lint/pgwiki/,lint/gitlab/ schema/*.sql`.
 
 pistachio does not read rules from a URL. Your copy changes only when you change it, so a new release of pistachio never makes your check fail.
 

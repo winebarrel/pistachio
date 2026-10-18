@@ -1,27 +1,26 @@
-# The foreign key rules of the GitLab database guidelines:
+# The GitLab foreign key guidelines:
 # https://docs.gitlab.com/development/database/foreign_keys/
 #
-# An index on the columns of a foreign key is checked by fk-needs-index in
+# For an index on each foreign key, use fk-needs-index in
 # rules/pgwiki/keys.yml.
 rules:
   - name: fk-bigint
     on: foreign_key
-    description: A referenced table can outgrow integer even when its key is integer today.
+    description: integer runs out at about 2.1 billion rows.
     assert: >-
       fk.columns.all(n, table.columns.exists(c, c.name == n && c.base_type == "bigint"))
     message: use bigint for the columns of the foreign key
 
-  # The parser does not tell an omitted ON DELETE from ON DELETE NO ACTION,
-  # so this rule refuses both.
+  # The parser reads an omitted ON DELETE as NO ACTION, so this rejects both.
   - name: fk-on-delete
     on: foreign_key
-    description: Each foreign key says what happens to its rows when the referenced row is deleted.
+    description: Say what happens to the rows when the referenced row is deleted.
     assert: fk.on_delete != "no action"
     message: write ON DELETE other than NO ACTION
 
   - name: id-column-needs-fk
     on: column
-    description: A column whose name ends in _id refers to a row of another table.
+    description: A column whose name ends in _id refers to another table.
     when: column.name.endsWith("_id")
     assert: table.foreign_keys.values().exists(f, column.name in f.columns)
     message: no foreign key has the column
