@@ -281,6 +281,13 @@ CREATE TABLE public.reservations (
   CONSTRAINT pk_reservations PRIMARY KEY (id),
   CONSTRAINT excl_reservations_s_e_no_overlap EXCLUDE USING gist (tstzrange(s, e) WITH &&),
   CONSTRAINT reservations_overlap EXCLUDE USING gist (tstzrange(s, e) WITH &&)
+);
+CREATE TABLE public.tokens (id uuid NOT NULL, CONSTRAINT pk_tokens PRIMARY KEY (id));
+CREATE TABLE public.sessions (
+  id bigint NOT NULL,
+  token_id uuid NOT NULL,
+  CONSTRAINT pk_sessions PRIMARY KEY (id),
+  CONSTRAINT fk_sessions_token_id_tokens FOREIGN KEY (token_id) REFERENCES public.tokens (id) ON DELETE CASCADE
 );`), []string{"public"})
 	require.NoError(t, err)
 

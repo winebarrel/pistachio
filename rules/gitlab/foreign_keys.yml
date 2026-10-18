@@ -8,7 +8,8 @@ rules:
     on: foreign_key
     description: integer runs out at about 2.1 billion rows.
     assert: >-
-      fk.columns.all(n, table.columns.exists(c, c.name == n && c.base_type == "bigint"))
+      !fk.columns.exists(n, table.columns.exists(c, c.name == n
+        && c.base_type in ["smallint", "integer"]))
     message: use bigint for the columns of the foreign key
 
   # The parser reads an omitted ON DELETE as NO ACTION, so this rejects both.

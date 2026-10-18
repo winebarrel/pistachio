@@ -61,7 +61,7 @@ You can use both sets. Their rule names do not overlap, but some file names do, 
 | | `fk-name` | A foreign key is named `fk_<table>_<column>[_and_<column>]*_<referenced table>`. |
 | | `index-name` | An index is named `index_<table>_on_<column>[_and_<column>]*`. A partial index can add `_and_<column>` for its `WHERE` clause. An index on an expression is skipped. |
 | | `lowercase-index-name` | An index name is lowercase. |
-| `foreign_keys.yml` | `fk-bigint` | Foreign key columns are `bigint`. |
+| `foreign_keys.yml` | `fk-bigint` | No foreign key column is `smallint` or `integer`. |
 | | `fk-on-delete` | A foreign key has `ON DELETE` other than `NO ACTION`. |
 | | `id-column-needs-fk` | A column whose name ends in `_id` has a foreign key. |
 | `types.yml` | `text-needs-limit` | A `text` column has a check constraint with `char_length(<column>) <=`. Arrays and domains are skipped. |

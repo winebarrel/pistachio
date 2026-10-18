@@ -2,7 +2,8 @@
 # https://docs.gitlab.com/development/database/strings_and_the_text_data_type/
 # https://docs.gitlab.com/development/database/creating_enums/
 rules:
-  # Arrays and domains are skipped.
+  # Arrays and domains are skipped. A column name that needs quotes is
+  # reported even with a limit.
   - name: text-needs-limit
     on: column
     description: Every text column has a length limit.
