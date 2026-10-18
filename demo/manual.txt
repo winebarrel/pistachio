@@ -15,6 +15,8 @@ Try the following:
   pista plan  desired.sql     # ...should now print "No changes"
   pista dump                  # dump the current schema
   pista lint  desired.sql     # check against the lint rules
+  pista lint  -r rules/gitlab desired.sql
+                              # check against the gitlab rules
   pista fmt   desired.sql     # format the file in place
   psql                        # poke around the DB
 
@@ -30,8 +32,8 @@ to permit:
 Files in this directory (/demo):
   current.sql   - already loaded into 'demo'
   desired.sql   - edit me, then re-run 'pista plan'
-  rules/        - lint rules that 'pista lint' reads by default
-                  ($PISTA_LINT_RULES): pgwiki/ and gitlab/
+  rules/        - lint rules: 'pista lint' reads pgwiki/ by default
+                  ($PISTA_LINT_RULES), and gitlab/ with -r
 
 Exit with Ctrl-D.
 ================================================================
