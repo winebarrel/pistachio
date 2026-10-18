@@ -2,10 +2,6 @@
 
 # Changelog
 
-## [Unreleased]
-
-* The standard lint rules move from `rules/` to `rules/pgwiki/`. New rules in `rules/gitlab/` follow the GitLab database guidelines for names, foreign keys and types.
-
 ## [1.88.0] - 2026-10-18
 
 * Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.
