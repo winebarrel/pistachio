@@ -48,9 +48,9 @@ func run(t *testing.T, rules, sql string) []string {
 	return lines
 }
 
-// The standard rules shipped in the repository, run over a schema that breaks
+// The pgwiki rules in the repository, run over a schema that breaks
 // each of them, and that holds the cases each must leave alone.
-func TestStandardRules(t *testing.T) {
+func TestPgwikiRules(t *testing.T) {
 	linter, err := lint.Load([]string{filepath.Join("..", "rules", "pgwiki")}, &bytes.Buffer{})
 	require.NoError(t, err)
 
@@ -114,7 +114,7 @@ CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"publ
 
 // The naming rules that require a name are commented out in naming.yml. This
 // removes the comment marks and checks them.
-func TestStandardRules_Named(t *testing.T) {
+func TestPgwikiRules_Named(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "rules", "pgwiki", "naming.yml"))
 	require.NoError(t, err)
 	var lines []string
@@ -160,7 +160,7 @@ CREATE INDEX t_b_idx ON public.t (b);`), []string{"public"})
 // The index rules compare the method, keys, INCLUDE columns and WHERE clause,
 // so an operator class, a collation, a sort order or a WHERE clause makes two
 // indexes different.
-func TestStandardRules_Indexes(t *testing.T) {
+func TestPgwikiRules_Indexes(t *testing.T) {
 	linter, err := lint.Load([]string{filepath.Join("..", "rules", "pgwiki", "indexes.yml")}, &bytes.Buffer{})
 	require.NoError(t, err)
 
