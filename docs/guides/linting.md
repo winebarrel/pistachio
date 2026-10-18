@@ -1,6 +1,6 @@
 # Linting schema files
 
-`pista lint` checks the objects in schema files against rules that you write. pistachio has no built-in rules, but the repository has a set of standard rules that you can copy. This page shows how to run the check, how to use the standard rules, how to write a rule, and how to turn a rule off for one object. [`pista lint`](../reference/commands/lint.md) lists the options.
+`pista lint` checks the objects in schema files against rules that you write. pistachio has no built-in rules, but the repository has rules in `rules/` that you can copy. This page shows how to run the check, how to use those rules, how to write a rule, and how to turn a rule off for one object. [`pista lint`](../reference/commands/lint.md) lists the options.
 
 
 ## Running the check
@@ -19,7 +19,7 @@ schema/posts.sql:9:5: foreign key posts_user_fkey on public.posts: fk-needs-inde
 Each line has the file, line and column of the object, the object, the rule name and the rule's message. The exit status is 2 when a line is printed and 0 when none is, so the command can fail a CI job.
 
 
-## Using the standard rules
+## Using the rules in the repository
 
 The repository has two sets of rules in [`rules/`](https://github.com/winebarrel/pistachio/tree/main/rules):
 

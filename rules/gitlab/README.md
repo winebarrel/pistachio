@@ -1,4 +1,4 @@
-# Standard lint rules: gitlab
+# gitlab lint rules
 
 These are rules for [`pista lint`](https://winebarrel.github.io/pistachio/reference/commands/lint/). pistachio does not load them by itself. Copy the files you want into your repository and change them there.
 
