@@ -51,7 +51,7 @@ func run(t *testing.T, rules, sql string) []string {
 // The standard rules shipped in the repository, run over a schema that breaks
 // each of them, and that holds the cases each must leave alone.
 func TestStandardRules(t *testing.T) {
-	linter, err := lint.Load([]string{filepath.Join("..", "rules")}, &bytes.Buffer{})
+	linter, err := lint.Load([]string{filepath.Join("..", "rules", "pgwiki")}, &bytes.Buffer{})
 	require.NoError(t, err)
 
 	violations, err := linter.Run(parse(t, `
@@ -115,7 +115,7 @@ CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"publ
 // The naming rules that require a name are commented out in naming.yml. This
 // removes the comment marks and checks them.
 func TestStandardRules_Named(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "rules", "naming.yml"))
+	data, err := os.ReadFile(filepath.Join("..", "rules", "pgwiki", "naming.yml"))
 	require.NoError(t, err)
 	var lines []string
 	for line := range strings.Lines(string(data)) {
@@ -161,7 +161,7 @@ CREATE INDEX t_b_idx ON public.t (b);`), []string{"public"})
 // so an operator class, a collation, a sort order or a WHERE clause makes two
 // indexes different.
 func TestStandardRules_Indexes(t *testing.T) {
-	linter, err := lint.Load([]string{filepath.Join("..", "rules", "indexes.yml")}, &bytes.Buffer{})
+	linter, err := lint.Load([]string{filepath.Join("..", "rules", "pgwiki", "indexes.yml")}, &bytes.Buffer{})
 	require.NoError(t, err)
 
 	violations, err := linter.Run(parse(t, `
@@ -233,6 +233,76 @@ CREATE INDEX r_a_gist_idx ON public.r USING gist (a);`), []string{"public"})
 		// shorter one. A partial one does not, and neither does one whose
 		// uniqueness or INCLUDE differs from an index with the same keys.
 		"schema.sql:34:1: index public.r_c_idx: redundant-index: another index starts with the same columns",
+	}, got)
+}
+
+// The rules from the GitLab database guidelines, run over a schema that breaks
+// each of them, and that holds the cases each must leave alone.
+func TestGitLabRules(t *testing.T) {
+	linter, err := lint.Load([]string{filepath.Join("..", "rules", "gitlab")}, &bytes.Buffer{})
+	require.NoError(t, err)
+
+	violations, err := linter.Run(parse(t, `
+CREATE TYPE public.mood AS ENUM ('a', 'b');
+CREATE TABLE public.groups (id bigint PRIMARY KEY);
+CREATE TABLE public.users (id bigint NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE TABLE public.projects (
+  id bigint NOT NULL,
+  group_id bigint NOT NULL,
+  owner_id integer,
+  creator_id bigint,
+  external_id bigint,
+  name text NOT NULL,
+  description text,
+  title text,
+  notes text[],
+  mood public.mood,
+  moods public.mood[],
+  CONSTRAINT pk_projects PRIMARY KEY (id),
+  CONSTRAINT unique_projects_group_id_and_name UNIQUE (group_id, name),
+  CONSTRAINT projects_name_key UNIQUE (name),
+  CONSTRAINT check_projects_name_length CHECK (char_length(name) <= 255),
+  CONSTRAINT projects_description_check CHECK (char_length(description) <= 1000),
+  CONSTRAINT fk_projects_group_id_groups FOREIGN KEY (group_id) REFERENCES public.groups (id) ON DELETE CASCADE,
+  CONSTRAINT projects_owner_fkey FOREIGN KEY (owner_id) REFERENCES public.users (id),
+  FOREIGN KEY (creator_id) REFERENCES public.users (id) ON DELETE SET NULL
+);
+CREATE INDEX index_projects_on_group_id ON public.projects (group_id);
+CREATE INDEX index_projects_on_owner_id_and_creator_id ON public.projects (owner_id, creator_id);
+CREATE INDEX index_projects_on_creator_id_and_name ON public.projects (creator_id) WHERE name IS NOT NULL;
+CREATE INDEX index_projects_on_creator_id_x ON public.projects (creator_id) WHERE name IS NULL;
+CREATE INDEX projects_title_idx ON public.projects (title);
+CREATE INDEX "Index_projects_on_lower_name" ON public.projects (lower(name));
+CREATE INDEX ON public.projects (external_id);
+CREATE TABLE public.reservations (
+  id bigint NOT NULL,
+  s timestamptz,
+  e timestamptz,
+  CONSTRAINT pk_reservations PRIMARY KEY (id),
+  CONSTRAINT excl_reservations_s_e_no_overlap EXCLUDE USING gist (tstzrange(s, e) WITH &&),
+  CONSTRAINT reservations_overlap EXCLUDE USING gist (tstzrange(s, e) WITH &&)
+);`), []string{"public"})
+	require.NoError(t, err)
+
+	var got []string
+	for _, v := range violations {
+		got = append(got, v.String())
+	}
+	assert.Equal(t, []string{
+		"schema.sql:4:1: table public.users: pk-name: name the primary key pk_<table>",
+		"schema.sql:5:1: table public.projects: unique-name: name each unique constraint unique_<table>_<columns>",
+		"schema.sql:5:1: table public.projects: check-name: name each check constraint check_<table>_<columns>",
+		"schema.sql:10:3: column public.projects.external_id: id-column-needs-fk: no foreign key has the column",
+		"schema.sql:13:3: column public.projects.title: text-needs-limit: add a check constraint on char_length of the column",
+		"schema.sql:15:3: column public.projects.mood: no-enum-type: use smallint instead of an enum type",
+		"schema.sql:16:3: column public.projects.moods: no-enum-type: use smallint instead of an enum type",
+		"schema.sql:29:1: index public.index_projects_on_creator_id_x: index-name: name the index index_<table>_on_<columns>",
+		"schema.sql:30:1: index public.projects_title_idx: index-name: name the index index_<table>_on_<columns>",
+		`schema.sql:31:1: index public."Index_projects_on_lower_name": lowercase-index-name: the index name has an uppercase letter`,
+		"schema.sql:23:3: foreign key projects_owner_fkey on public.projects: fk-bigint: use bigint for the columns of the foreign key",
+		"schema.sql:23:3: foreign key projects_owner_fkey on public.projects: fk-on-delete: write ON DELETE other than NO ACTION",
+		"schema.sql:23:3: foreign key projects_owner_fkey on public.projects: fk-name: name the foreign key fk_<table>_<columns>_<referenced table>",
+		"schema.sql:33:1: table public.reservations: exclusion-name: name each exclusion constraint excl_<table>_<columns>",
 	}, got)
 }
 

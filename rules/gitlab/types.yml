@@ -1,0 +1,19 @@
+# The type rules of the GitLab database guidelines:
+# https://docs.gitlab.com/development/database/strings_and_the_text_data_type/
+# https://docs.gitlab.com/development/database/creating_enums/
+rules:
+  # An array and a domain over text are skipped.
+  - name: text-needs-limit
+    on: column
+    description: Every text column has a limit on its length.
+    when: column.type == "text"
+    assert: >-
+      table.constraints.values().exists(c, c.type == "check"
+        && c.definition.contains("char_length(" + column.name + ") <="))
+    message: add a check constraint on char_length of the column
+
+  - name: no-enum-type
+    on: column
+    description: An enum is stored as smallint, so adding a value needs no DDL.
+    assert: '!(column.base_type in doc.enums)'
+    message: use smallint instead of an enum type
