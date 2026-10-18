@@ -31,7 +31,7 @@ Files in this directory (/demo):
   current.sql   - already loaded into 'demo'
   desired.sql   - edit me, then re-run 'pista plan'
   rules/        - lint rules that 'pista lint' reads by default
-                  ($PISTA_LINT_RULES)
+                  ($PISTA_LINT_RULES): pgwiki/ and gitlab/
 
 Exit with Ctrl-D.
 ================================================================

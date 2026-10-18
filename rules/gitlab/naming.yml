@@ -1,0 +1,67 @@
+# The GitLab constraint naming convention:
+# https://docs.gitlab.com/development/database/constraint_naming_convention/
+#
+# Objects without a name in the file are skipped. To require names, use the
+# named-* rules in rules/pgwiki/naming.yml.
+rules:
+  - name: pk-name
+    on: table
+    description: The prefix shows the kind of object.
+    assert: >-
+      table.constraints.values().all(c, c.type != "primary_key" || c.auto_named
+        || c.name == "pk_" + table.name)
+    message: name the primary key pk_<table>
+
+  - name: unique-name
+    on: table
+    description: The prefix shows the kind of object.
+    assert: >-
+      table.constraints.values().all(c, c.type != "unique" || c.auto_named
+        || c.name == "unique_" + table.name + "_" + c.columns.join("_and_"))
+    message: name each unique constraint unique_<table>_<columns>
+
+  # The parser does not record the columns of a check constraint, so this
+  # checks only the prefix.
+  - name: check-name
+    on: table
+    description: The prefix shows the kind of object.
+    assert: >-
+      table.constraints.values().all(c, c.type != "check" || c.auto_named
+        || c.name.startsWith("check_" + table.name + "_"))
+    message: name each check constraint check_<table>_<columns>
+
+  - name: exclusion-name
+    on: table
+    description: The prefix shows the kind of object.
+    assert: >-
+      table.constraints.values().all(c, c.type != "exclusion" || c.auto_named
+        || c.name.startsWith("excl_" + table.name + "_"))
+    message: name each exclusion constraint excl_<table>_<columns>
+
+  - name: fk-name
+    on: foreign_key
+    description: The prefix shows the kind of object.
+    when: '!fk.auto_named'
+    assert: >-
+      fk.name == "fk_" + table.name + "_" + fk.columns.join("_and_") + "_" + fk.ref_table
+    message: name the foreign key fk_<table>_<columns>_<referenced table>
+
+  # An index on an expression is skipped. A partial index can add the columns
+  # of its WHERE clause after the key columns.
+  - name: index-name
+    on: index
+    description: The prefix shows the kind of object.
+    when: '!index.auto_named && !index.columns.exists(c, c == null)'
+    let:
+      - name: expected
+        expr: '"index_" + table.name + "_on_" + index.columns.join("_and_")'
+    assert: >-
+      index.name == expected || (index.partial && index.name.startsWith(expected + "_and_"))
+    message: name the index index_<table>_on_<columns>
+
+  - name: lowercase-index-name
+    on: index
+    description: Index names are lowercase.
+    when: '!index.auto_named'
+    assert: index.name == index.name.lowerAscii()
+    message: the index name has an uppercase letter

@@ -1,6 +1,8 @@
-# Standard lint rules
+# Standard lint rules: pgwiki
 
 These are rules for [`pista lint`](https://winebarrel.github.io/pistachio/reference/commands/lint/). pistachio does not load them by itself. Copy the files you want into your repository and change them there.
+
+The type rules in `types.yml` follow the PostgreSQL wiki page [Don't Do This](https://wiki.postgresql.org/wiki/Don't_Do_This). The other rules have no published source. Each rule's `description` gives its reason.
 
 | File | Rule | Checks |
 |---|---|---|
@@ -37,5 +39,7 @@ To skip one object, write `-- pista:lint-ignore <rule>` before it:
 -- pista:lint-ignore require-primary-key
 CREATE TABLE public.event_log (body text NOT NULL);
 ```
+
+You can use these rules with those in [`../gitlab/`](../gitlab/). The rule names do not overlap.
 
 [Linting schema files](https://winebarrel.github.io/pistachio/guides/linting/) describes the rule format.
