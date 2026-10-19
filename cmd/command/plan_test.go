@@ -275,8 +275,8 @@ func TestPlan_Run_CheckWithDiff(t *testing.T) {
 }
 
 func TestPlan_Run_RefuseHazard(t *testing.T) {
-	// A plan --refuse-hazard refuses is still written, and the refusal wins
-	// over --check, so main exits with 3 rather than 2.
+	// A plan --refuse-hazard refuses is still written, and the refusal is
+	// returned rather than ErrPlanDiff under --check.
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
