@@ -67,7 +67,9 @@ See [Renaming objects](../guides/renaming.md) for column rename caveats.
 
 ## -- pista:retype-using
 
-Gives the `USING` expression for a column type change. The expression computes the new column value from the old one. pistachio adds it to `ALTER COLUMN ... SET DATA TYPE` without changing it. Write the directive inside `CREATE TABLE`, on the line before the column.
+Gives the `USING` expression for a column type change. The expression computes the new column value from the old one. pistachio adds it to `ALTER COLUMN ... SET DATA TYPE`. Write the directive inside `CREATE TABLE`, on the line before the column.
+
+pistachio parses the expression and writes it in its own form, so `code::integer` becomes `code::int`. If the argument is not one expression, the parse fails.
 
 Without a `USING` expression, PostgreSQL converts the values with an assignment cast. If the two types have no implicit or assignment cast between them, the type change fails. `text` to an enum is an example.
 

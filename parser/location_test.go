@@ -429,6 +429,21 @@ func TestParseSQLFiles_BackfillErrorLocation(t *testing.T) {
   |     ^`, err.Error())
 }
 
+// A -- pista:retype-using error points at the column it is written before.
+func TestParseSQLFiles_RetypeUsingErrorLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": "CREATE TABLE public.items (\n    id integer NOT NULL,\n    -- pista:retype-using code::integer, ADD COLUMN x int\n    code integer\n);\n",
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `-- pista:retype-using: column public.items.code: code::integer, ADD COLUMN x int is not a single expression
+ --> `+paths[0]+`:4:5
+  |
+4 |     code integer
+  |     ^`, err.Error())
+}
+
 // Parsing a string names no file, so the warning reads as it did before
 // positions were added.
 func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {

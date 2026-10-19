@@ -17,4 +17,4 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 plan: |
-  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100) USING code::character varying(100);
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100) USING code::varchar(100);

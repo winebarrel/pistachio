@@ -14,4 +14,4 @@ desired: |
 plan: |
   ALTER TABLE public.t RENAME COLUMN old_flag TO flag;
   ALTER TABLE public.t ALTER COLUMN flag SET DATA TYPE boolean USING flag <> 0;
-  ALTER TABLE public.t ALTER COLUMN "Code" SET DATA TYPE integer USING "Code"::integer;
+  ALTER TABLE public.t ALTER COLUMN "Code" SET DATA TYPE integer USING "Code"::int;

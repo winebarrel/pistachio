@@ -10,5 +10,5 @@ desired: |
 plan: |
   ALTER TABLE public.t
     ALTER COLUMN status DROP DEFAULT,
-    ALTER COLUMN status SET DATA TYPE character(1) USING status::character(1),
+    ALTER COLUMN status SET DATA TYPE character(1) USING status::char(1),
     ALTER COLUMN status SET DEFAULT 'a';
