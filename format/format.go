@@ -191,6 +191,18 @@ func nextCode(toks []*token, i, hi int) int {
 	return hi
 }
 
+// findKeyword returns the index of the first token in [lo, hi) that is the
+// keyword kw and not a comment, or hi when there is none.
+func findKeyword(toks []*token, lo, hi int, kw string) int {
+	for i := lo; i < hi; i++ {
+		if !toks[i].isComment() && upper(toks[i]) == kw {
+			return i
+		}
+	}
+
+	return hi
+}
+
 func upper(t *token) string {
 	return strings.ToUpper(t.orig)
 }
@@ -358,12 +370,7 @@ func listOpen(toks []*token, lo, hi int, node *pg_query.Node) (int, bool) {
 // child written as PARTITION OF has none, and neither has a typed table, so
 // the name has to be walked rather than assumed.
 func tableListOpen(toks []*token, lo, hi int) (int, bool) {
-	i := lo
-	for ; i < hi; i++ {
-		if !toks[i].isComment() && upper(toks[i]) == "TABLE" {
-			break
-		}
-	}
+	i := findKeyword(toks, lo, hi, "TABLE")
 	if i == hi {
 		return 0, false
 	}
@@ -395,12 +402,7 @@ func tableListOpen(toks []*token, lo, hi int) (int, bool) {
 
 // typeListOpen finds the parenthesis after AS, or after AS ENUM.
 func typeListOpen(toks []*token, lo, hi int) (int, bool) {
-	i := lo
-	for ; i < hi; i++ {
-		if !toks[i].isComment() && upper(toks[i]) == "AS" {
-			break
-		}
-	}
+	i := findKeyword(toks, lo, hi, "AS")
 	if i == hi {
 		return 0, false
 	}
