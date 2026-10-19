@@ -180,8 +180,10 @@ func createTableLikeError(cs *pg_query.CreateStmt, fqtn string, offset int32) er
 // must be NOT NULL, and it must not have a value of its own for those rows: a
 // default, a generated expression or an identity.
 func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[string]string) error {
-	for colName, value := range backfill {
-		col, ok := table.Columns.GetOk(colName)
+	// The columns go in the table's order, so the error names the same
+	// column on every run.
+	for colName, col := range table.Columns.All() {
+		value, ok := backfill[colName]
 		if !ok {
 			continue
 		}
@@ -190,6 +192,8 @@ func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[str
 		switch {
 		case col.Identity.IsIdentityColumn():
 			problem = " is an identity column"
+		case col.Generated.IsGeneratedColumn():
+			problem = " is a generated column"
 		case col.Default != nil:
 			problem = " has a default"
 		case !col.NotNull:

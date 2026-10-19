@@ -402,7 +402,7 @@ func TestParseSQL_BackfillError(t *testing.T) {
 	}{
 		{"nullable", "note text", "-- pista:backfill: column public.t.note is not NOT NULL"},
 		{"default", "note text DEFAULT 'x' NOT NULL", "-- pista:backfill: column public.t.note has a default"},
-		{"generated", "note text GENERATED ALWAYS AS ('x') STORED NOT NULL", "-- pista:backfill: column public.t.note has a default"},
+		{"generated", "note text GENERATED ALWAYS AS ('x') STORED NOT NULL", "-- pista:backfill: column public.t.note is a generated column"},
 		{"identity", "note integer GENERATED ALWAYS AS IDENTITY", "-- pista:backfill: column public.t.note is an identity column"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -410,6 +410,26 @@ func TestParseSQL_BackfillError(t *testing.T) {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.msg)
 		})
+	}
+}
+
+// With several invalid columns, the error names the first one the table
+// defines, so it is the same on every run.
+func TestParseSQL_BackfillErrorFirstColumn(t *testing.T) {
+	sql := `CREATE TABLE public.t (
+    -- pista:backfill 1
+    a text,
+    -- pista:backfill 1
+    b text,
+    -- pista:backfill 1
+    c text,
+    -- pista:backfill 1
+    d text
+);`
+	for range 20 {
+		_, err := parseSQLWithPublicSchema(sql)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-- pista:backfill: column public.t.a is not NOT NULL")
 	}
 }
 
