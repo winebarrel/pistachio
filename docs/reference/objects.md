@@ -182,7 +182,7 @@ pistachio matches columns by name. It does not compare their order. A new column
 
 | Change | DDL |
 |---|---|
-| Added | `ALTER TABLE ... ADD COLUMN`, with its default, identity, generated expression and `NOT NULL`, then `SET STORAGE` / `SET COMPRESSION` |
+| Added | `ALTER TABLE ... ADD COLUMN`, with its default, identity, generated expression and `NOT NULL`, then `SET STORAGE` / `SET COMPRESSION`. See also [`-- pista:backfill`](directives.md#-pistabackfill). |
 | Removed | `ALTER TABLE ... DROP COLUMN`, requires `--allow-drop column` |
 | Type or collation | `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE` |
 | Default | `SET DEFAULT` or `DROP DEFAULT` |

@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_on date NOT NULL
+  ) PARTITION BY RANGE (created_on);
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  INSERT INTO public.events VALUES (1, '2026-10-20');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_on date NOT NULL,
+      -- pista:backfill 'unknown'
+      kind text NOT NULL
+  ) PARTITION BY RANGE (created_on);
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_on date NOT NULL,
+      kind text NOT NULL
+  )
+  PARTITION BY RANGE (created_on);
+
+  -- public.events_2026
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');

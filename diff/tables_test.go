@@ -2968,6 +2968,56 @@ func TestDiffTables_notNullViaCheck(t *testing.T) {
 	assert.Equal(t, map[string]bool{"ALTER TABLE public.users ALTER COLUMN email SET NOT NULL;": true}, result.StandaloneStmts)
 }
 
+func TestDiffColumns_backfill(t *testing.T) {
+	fill := "''"
+
+	t.Run("new column", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Column]()
+		current.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+		desired := orderedmap.New[string, *model.Column]()
+		desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+		desired.Set("note", &model.Column{Name: "note", TypeName: "text", NotNull: true, Backfill: &fill})
+
+		stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ADD COLUMN note text DEFAULT '' NOT NULL;",
+			"ALTER TABLE public.users ALTER COLUMN note DROP DEFAULT;",
+		}, stmts)
+	})
+
+	// The directive does nothing to a column that exists, so it can stay in
+	// the file after the apply.
+	t.Run("existing column", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Column]()
+		current.Set("note", &model.Column{Name: "note", TypeName: "text", NotNull: true})
+		desired := orderedmap.New[string, *model.Column]()
+		desired.Set("note", &model.Column{Name: "note", TypeName: "text", NotNull: true, Backfill: &fill})
+
+		stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, stmts)
+	})
+}
+
+func TestDiffTables_backfill(t *testing.T) {
+	fill := "0"
+	current := orderedmap.New[string, *model.Table]()
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("public.users", ct)
+	desired := orderedmap.New[string, *model.Table]()
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Columns.Set("n", &model.Column{Name: "n", TypeName: "integer", NotNull: true, Backfill: &fill})
+	desired.Set("public.users", dt)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"ALTER TABLE public.users ALTER COLUMN n DROP DEFAULT;": true}, result.StandaloneStmts)
+	assert.False(t, result.HasNotNullViaCheck)
+}
+
 func TestTableRetyped(t *testing.T) {
 	current := newTable("public", "users")
 	current.Columns.Set("code", &model.Column{Name: "code", TypeName: "integer"})

@@ -66,6 +66,10 @@ type Column struct {
 	// --not-null-via-check. Only the desired side sets it, and it only shapes
 	// the statements that add NOT NULL to an existing column.
 	NotNullViaCheck bool `json:"-"`
+	// Backfill is the value that -- pista:backfill gives the rows a new
+	// NOT NULL column is added to. Only the desired side sets it, and it only
+	// shapes ADD COLUMN.
+	Backfill *string `json:"-"`
 	// SerialSequence is the schema-qualified name of the sequence that the
 	// column owns and takes its default from. Only the catalog sets it; nil
 	// otherwise. The type name is a serial type only when the sequence has

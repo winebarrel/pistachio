@@ -9,6 +9,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers | Renames the object instead of dropping and creating it. |
 | `retype-using` | expression (required) | columns | Gives the `USING` expression of a column type change. |
 | `not-null-via-check` | none | columns | Adds `NOT NULL` to an existing column through a `CHECK` constraint. |
+| `backfill` | value (required) | columns | Sets the value of the existing rows when a `NOT NULL` column is added. |
 | `execute` | check SQL (optional) | any statement | Runs non-managed SQL after the managed DDL. |
 | `execute-first` | check SQL (optional) | any statement | Runs non-managed SQL before the managed DDL. |
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
@@ -124,6 +125,36 @@ If a row holds NULL, `VALIDATE CONSTRAINT` fails and the `CHECK` stays as `NOT V
 The statements must run outside a transaction. In a transaction, the lock that `ADD CONSTRAINT` takes is held until the end, and `VALIDATE CONSTRAINT` blocks reads and writes too. So `apply --with-tx` refuses the plan, and `apply --try-tx` runs it without a transaction. `--bulk-alter` keeps `SET NOT NULL` in a statement of its own.
 
 `--not-null-via-check` does the same for every column. The directive does nothing when the column is new or already `NOT NULL`, so you can leave it in the file.
+
+## -- pista:backfill
+
+Sets the value of the existing rows when a new `NOT NULL` column is added. Write the directive inside `CREATE TABLE`, on the line before the column.
+
+On a table with rows, `ADD COLUMN ... NOT NULL` without a default fails, because the new column is NULL in those rows. With the directive, pistachio adds the column with the value as its default and then drops the default.
+
+```sql
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pista:backfill ''
+    note text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+```
+
+If `note` is a new column, the plan is:
+
+```sql
+ALTER TABLE public.users ADD COLUMN note text DEFAULT '' NOT NULL;
+ALTER TABLE public.users ALTER COLUMN note DROP DEFAULT;
+```
+
+The value is one SQL expression. pistachio writes it the way it writes a column default, so `CAST('x' AS text)` becomes `'x'::text`. If the value is not one expression, the parse fails.
+
+A constant does not rewrite the table. A volatile expression such as `clock_timestamp()` does. `--bulk-alter` does not merge `DROP DEFAULT` with `ADD COLUMN`.
+
+The column must be `NOT NULL`. It must not have a default, a generated expression or an identity. Otherwise the parse fails.
+
+If the column already exists or the table is new, the directive does nothing, so you can leave it in the file.
 
 ## -- pista:execute
 

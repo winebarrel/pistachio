@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      note text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:backfill ''
+      note text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""

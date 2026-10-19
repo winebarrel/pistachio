@@ -238,12 +238,12 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			if len(tableResult.ViaCheckSetNotNull) > 0 {
 				result.HasNotNullViaCheck = true
+			}
+			for _, s := range slices.Concat(tableResult.ViaCheckSetNotNull, tableResult.BackfillDropDefault) {
 				if result.StandaloneStmts == nil {
 					result.StandaloneStmts = map[string]bool{}
 				}
-				for _, s := range tableResult.ViaCheckSetNotNull {
-					result.StandaloneStmts[s] = true
-				}
+				result.StandaloneStmts[s] = true
 			}
 		}
 	}
@@ -420,6 +420,9 @@ type tableDiffResult struct {
 	DisallowedDropStmts   []string
 	HasConcurrently       bool
 	ViaCheckSetNotNull    []string
+	// BackfillDropDefault lists the DROP DEFAULT statements of
+	// -- pista:backfill, which --bulk-alter must not merge.
+	BackfillDropDefault []string
 }
 
 // diffTable diffs one table. columns are the ones its indexes are compared
@@ -477,6 +480,14 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	colStmts, notNullDrops, colDropStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
+	}
+	for _, col := range desired.Columns.All() {
+		if col.Backfill == nil {
+			continue
+		}
+		if s := backfillDropDefaultSQL(fqtn, col); slices.Contains(colStmts, s) {
+			result.BackfillDropDefault = append(result.BackfillDropDefault, s)
+		}
 	}
 
 	// The CHECK constraints that -- pista:not-null-via-check adds belong to
@@ -630,7 +641,13 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	// Add new columns
 	for name, col := range desired.All() {
 		if _, ok := current.GetOk(name); !ok {
-			stmts = append(stmts, addColumnSQL(fqtn, col))
+			if col.Backfill != nil {
+				filled := *col
+				filled.Default = col.Backfill
+				stmts = append(stmts, addColumnSQL(fqtn, &filled), backfillDropDefaultSQL(fqtn, col))
+			} else {
+				stmts = append(stmts, addColumnSQL(fqtn, col))
+			}
 			stmts = append(stmts, columnStorageSQL(fqtn, nil, col, false)...)
 		}
 	}
@@ -701,6 +718,14 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	}
 
 	return stmts, notNullDrops, dropStmts, disallowed, nil
+}
+
+// backfillDropDefaultSQL drops the default that ADD COLUMN takes from
+// -- pista:backfill. The rows that exist keep the value. --bulk-alter must
+// not merge it with the ADD COLUMN: PostgreSQL runs DROP DEFAULT first and
+// does not find the column.
+func backfillDropDefaultSQL(fqtn string, col *model.Column) string {
+	return "ALTER TABLE " + fqtn + " ALTER COLUMN " + model.Ident(col.Name) + " DROP DEFAULT;"
 }
 
 func addColumnSQL(fqtn string, col *model.Column) string {

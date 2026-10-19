@@ -297,6 +297,134 @@ func TestValidateDirectives_NotNullViaCheckWithArgs(t *testing.T) {
 	assert.Contains(t, err.Error(), "-- pista:not-null-via-check does not accept arguments")
 }
 
+func TestExtractInlineDirectives_Backfill(t *testing.T) {
+	t.Run("column", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    id integer NOT NULL,
+    -- pista:backfill ''
+    "Note" text NOT NULL,
+    name text NOT NULL
+);`
+		assert.Equal(t, map[string]string{"Note": "''"}, extractInlineDirectives(sql).Backfill)
+	})
+
+	t.Run("with renamed-from", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    -- pista:renamed-from old_n
+    -- pista:backfill 0
+    n integer NOT NULL
+);`
+		dirs := extractInlineDirectives(sql)
+		assert.Equal(t, map[string]string{"n": "0"}, dirs.Backfill)
+		assert.Equal(t, map[string]string{"n": "old_n"}, dirs.Columns)
+	})
+
+	t.Run("constraint is not a column", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    id integer,
+    -- pista:backfill 0
+    CONSTRAINT t_pkey PRIMARY KEY (id)
+);`
+		assert.Empty(t, extractInlineDirectives(sql).Backfill)
+	})
+}
+
+func TestParseSQL_Backfill(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`CREATE TABLE public.t (
+    id integer NOT NULL,
+    -- pista:backfill 'none'
+    note text NOT NULL
+);`)
+	require.NoError(t, err)
+	table := result.Tables.Get("public.t")
+	require.NotNil(t, table.Columns.Get("note").Backfill)
+	assert.Equal(t, "'none'", *table.Columns.Get("note").Backfill)
+	assert.Nil(t, table.Columns.Get("id").Backfill)
+}
+
+// The value is read as an expression and written back the way a column
+// DEFAULT is.
+func TestParseSQL_BackfillValue(t *testing.T) {
+	for _, tt := range []struct {
+		value string
+		want  string
+	}{
+		{"0", "0"},
+		{"CAST('x' AS text)", "'x'::text"},
+		{"0 -- note", "0"},
+		{"now() AT TIME ZONE 'UTC'", "(now() AT TIME ZONE 'UTC')"},
+	} {
+		t.Run(tt.value, func(t *testing.T) {
+			result, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\n    -- pista:backfill " + tt.value + "\n    v text NOT NULL\n);")
+			require.NoError(t, err)
+			got := result.Tables.Get("public.t").Columns.Get("v").Backfill
+			require.NotNil(t, got)
+			assert.Equal(t, tt.want, *got)
+		})
+	}
+}
+
+func TestParseSQL_BackfillValueError(t *testing.T) {
+	for _, tt := range []struct {
+		value string
+		msg   string
+	}{
+		{"0, 1", "-- pista:backfill: column public.t.v: 0, 1 is not a single expression"},
+		{"0 FROM t", "-- pista:backfill: column public.t.v: 0 FROM t is not a single expression"},
+		{"0 AS x", "-- pista:backfill: column public.t.v: 0 AS x is not a single expression"},
+		{"0; DROP TABLE t", "-- pista:backfill: column public.t.v: 0; DROP TABLE t is not a single expression"},
+		{"0 NULL", "-- pista:backfill: column public.t.v: 0 NULL is not a single expression"},
+	} {
+		t.Run(tt.value, func(t *testing.T) {
+			_, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\n    -- pista:backfill " + tt.value + "\n    v text NOT NULL\n);")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.msg)
+		})
+	}
+}
+
+// A directive before an element that is not a column is ignored.
+func TestParseSQL_BackfillBeforeTableConstraint(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`CREATE TABLE public.t (
+    id integer,
+    -- pista:backfill 0
+    PRIMARY KEY (id)
+);`)
+	require.NoError(t, err)
+	assert.Nil(t, result.Tables.Get("public.t").Columns.Get("id").Backfill)
+}
+
+func TestParseSQL_BackfillError(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		col  string
+		msg  string
+	}{
+		{"nullable", "note text", "-- pista:backfill: column public.t.note is not NOT NULL"},
+		{"default", "note text DEFAULT 'x' NOT NULL", "-- pista:backfill: column public.t.note has a default"},
+		{"generated", "note text GENERATED ALWAYS AS ('x') STORED NOT NULL", "-- pista:backfill: column public.t.note has a default"},
+		{"identity", "note integer GENERATED ALWAYS AS IDENTITY", "-- pista:backfill: column public.t.note is an identity column"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\n    id integer NOT NULL,\n    -- pista:backfill 1\n    " + tt.col + "\n);")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.msg)
+		})
+	}
+}
+
+func TestValidateDirectives_BackfillWithoutArg(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TABLE t (\n  -- pista:backfill\n  id int NOT NULL\n);",
+		"CREATE TABLE t (\n  -- pista:backfill   \n  id int NOT NULL\n);",
+		"CREATE TABLE t (\n  -- pista:backfill\r\n  id int NOT NULL\n);",
+	} {
+		err := validateDirectives(sql)
+		require.Error(t, err, sql)
+		assert.Contains(t, err.Error(), "-- pista:backfill requires an argument")
+	}
+}
+
 func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))

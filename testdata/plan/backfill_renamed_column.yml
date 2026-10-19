@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      memo text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from memo
+      -- pista:backfill ''
+      note text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users RENAME COLUMN memo TO note;
