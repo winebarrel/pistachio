@@ -6,6 +6,8 @@
 
 * `dump` no longer writes a serial column widened to `bigint` as `bigserial` while its sequence is still `integer`. It now writes the sequence and the `nextval()` default.
 
+* `dump --omit-schema` now drops the schema from an index on a table, or in a schema, named after a keyword such as `position`. `--schema-map` now also maps a schema named after such a keyword.
+
 * An inline directive followed by a `/* ... */` comment before its column or constraint now applies to that element. Before, the directive was ignored.
 
 * A trigger whose `REFERENCING` clause names `NEW TABLE` before `OLD TABLE` no longer plans a `CREATE OR REPLACE TRIGGER` on every run.
