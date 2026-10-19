@@ -65,11 +65,13 @@ func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model
 			AND d.deptype IS DISTINCT FROM 'i'
 			-- The sequence of a column that catalog/columns.go reads as a
 			-- serial: an integer column takes its default from it, and it
-			-- has the default name and the default options for its type.
+			-- has the default name, the column's type and the default
+			-- options for that type.
 			AND NOT COALESCE(
 				a.attidentity = ''
 				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
 				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+				AND s.seqtypid = a.atttypid
 				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
 				AND s.seqmax = CASE s.seqtypid
 					WHEN 'int2'::regtype THEN 32767

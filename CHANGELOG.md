@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `dump` no longer writes a serial column widened to `bigint` as `bigserial` while its sequence is still `integer`. It now writes the sequence and the `nextval()` default.
+
 ## [1.88.0] - 2026-10-18
 
 * Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.
