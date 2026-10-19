@@ -90,16 +90,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.ForeignKeys = fks
 		}
-		if copied.Indexes.Len() > 0 {
-			idxs := orderedmap.New[string, *model.Index]()
-			for _, idx := range copied.Indexes.CollectValues() {
-				idxCopied := *idx
-				idxCopied.Schema = ""
-				idxCopied.Definition = stripRelationSchemaPrefix(idx.Definition, fqtn, tableName)
-				idxs.Set(idx.Name, &idxCopied)
-			}
-			copied.Indexes = idxs
-		}
+		copied.Indexes = stripIndexSchemas(copied.Indexes, fqtn, tableName)
 		if copied.Policies != nil && copied.Policies.Len() > 0 {
 			policies := orderedmap.New[string, *model.Policy]()
 			for _, p := range copied.Policies.CollectValues() {
@@ -128,20 +119,30 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 		fqvn := v.FQVN()
 		viewName := model.Ident(v.Name)
 		copied.Schema = ""
-		if copied.Indexes != nil && copied.Indexes.Len() > 0 {
-			idxs := orderedmap.New[string, *model.Index]()
-			for _, idx := range copied.Indexes.CollectValues() {
-				idxCopied := *idx
-				idxCopied.Schema = ""
-				idxCopied.Definition = stripRelationSchemaPrefix(idx.Definition, fqvn, viewName)
-				idxs.Set(idx.Name, &idxCopied)
-			}
-			copied.Indexes = idxs
-		}
+		copied.Indexes = stripIndexSchemas(copied.Indexes, fqvn, viewName)
 		copied.Triggers = stripTriggerSchemas(copied.Triggers, fqvn, viewName)
 		views.Set(viewName, &copied)
 	}
 	return views
+}
+
+// stripIndexSchemas drops the schema from a relation's indexes, for
+// --omit-schema.
+func stripIndexSchemas(
+	indexes *orderedmap.Map[string, *model.Index],
+	fqrn, relName string,
+) *orderedmap.Map[string, *model.Index] {
+	if indexes == nil || indexes.Len() == 0 {
+		return indexes
+	}
+	out := orderedmap.New[string, *model.Index]()
+	for _, idx := range indexes.CollectValues() {
+		copied := *idx
+		copied.Schema = ""
+		copied.Definition = stripRelationSchemaPrefix(idx.Definition, fqrn, relName)
+		out.Set(idx.Name, &copied)
+	}
+	return out
 }
 
 // stripTriggerSchemas drops the schema from a relation's triggers, for
