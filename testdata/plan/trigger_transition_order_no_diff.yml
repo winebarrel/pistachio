@@ -1,0 +1,20 @@
+# The file names NEW TABLE before OLD TABLE. pg_get_triggerdef writes OLD
+# first, which is the same trigger.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_batch AFTER UPDATE ON public.events
+      REFERENCING NEW TABLE AS after_rows OLD TABLE AS before_rows
+      FOR EACH STATEMENT EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_batch AFTER UPDATE ON public.events
+      REFERENCING NEW TABLE AS after_rows OLD TABLE AS before_rows
+      FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+plan: ""
