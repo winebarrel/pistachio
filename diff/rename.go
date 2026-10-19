@@ -670,10 +670,9 @@ func renameColumnKeys(cols *orderedmap.Map[string, *model.Column], renames map[s
 	out := orderedmap.New[string, *model.Column]()
 	for name, col := range cols.All() {
 		if newName, ok := renames[name]; ok {
-			out.Set(newName, col)
-		} else {
-			out.Set(name, col)
+			name = newName
 		}
+		out.Set(name, col)
 	}
 	return out
 }
