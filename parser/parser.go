@@ -1963,18 +1963,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 }
 
 func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) (*model.Domain, error) {
-	schema := defaultSchema
-	name := ""
-
-	for i, n := range ds.Domainname {
-		if s := n.GetString_(); s != nil {
-			if i == len(ds.Domainname)-1 {
-				name = s.Sval
-			} else {
-				schema = s.Sval
-			}
-		}
-	}
+	schema, name := splitTypeName(ds.Domainname, defaultSchema)
 
 	// Parse the base type
 	baseType := ""
@@ -2059,17 +2048,7 @@ func parseAlterDomainAddCheck(
 		return false, nil
 	}
 
-	schema := defaultSchema
-	name := ""
-	for i, n := range ads.TypeName {
-		if s := n.GetString_(); s != nil {
-			if i == len(ads.TypeName)-1 {
-				name = s.Sval
-			} else {
-				schema = s.Sval
-			}
-		}
-	}
+	schema, name := splitTypeName(ads.TypeName, defaultSchema)
 	fqdn := model.Ident(schema, name)
 	d, ok := domains.GetOk(fqdn)
 	if !ok {
@@ -2172,18 +2151,7 @@ func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap
 }
 
 func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
-	schema := defaultSchema
-	name := ""
-
-	for i, n := range es.TypeName {
-		if s := n.GetString_(); s != nil {
-			if i == len(es.TypeName)-1 {
-				name = s.Sval
-			} else {
-				schema = s.Sval
-			}
-		}
-	}
+	schema, name := splitTypeName(es.TypeName, defaultSchema)
 
 	var values []string
 	for _, v := range es.Vals {
@@ -2617,6 +2585,22 @@ func commentPtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// splitTypeName returns the schema and name of a type name, taking the last
+// String node as the name and the one before it as the schema.
+func splitTypeName(names []*pg_query.Node, defaultSchema string) (schema, name string) {
+	schema = defaultSchema
+	for i, n := range names {
+		if s := n.GetString_(); s != nil {
+			if i == len(names)-1 {
+				name = s.Sval
+			} else {
+				schema = s.Sval
+			}
+		}
+	}
+	return schema, name
 }
 
 // schemaName splits a one- or two-part object name into its schema and name,
