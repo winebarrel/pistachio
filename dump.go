@@ -56,9 +56,17 @@ func (r *DumpResult) tableSQL(sql string) string {
 
 // stripRelationSchemaPrefix removes the schema qualification from the relation
 // an index or a trigger targets, for --omit-schema. Both definitions read
-// "... ON <schema>.<rel> ...".
-func stripRelationSchemaPrefix(definition, fqrn, relName string) string {
-	return strings.ReplaceAll(definition, " ON "+fqrn+" ", " ON "+relName+" ")
+// "... ON <schema>.<rel> ...". PostgreSQL quotes a schema or a relation named
+// after a col_name keyword, "position", which model.Ident leaves bare, so that
+// form is matched too.
+func stripRelationSchemaPrefix(definition, schema, name string) string {
+	relName := model.Ident(name)
+	for _, s := range []string{model.Ident(schema), `"` + schema + `"`} {
+		for _, rel := range []string{relName, `"` + name + `"`} {
+			definition = strings.ReplaceAll(definition, " ON "+s+"."+rel+" ", " ON "+relName+" ")
+		}
+	}
+	return definition
 }
 
 func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
@@ -71,7 +79,6 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 	tables := orderedmap.New[string, *model.Table]()
 	for _, t := range r.Tables.CollectValues() {
 		copied := *t
-		fqtn := t.FQTN()
 		tableName := model.Ident(t.Name)
 		copied.Schema = ""
 		// Strip the schema only when the parent is in the one being dumped.
@@ -90,7 +97,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.ForeignKeys = fks
 		}
-		copied.Indexes = stripIndexSchemas(copied.Indexes, fqtn, tableName)
+		copied.Indexes = stripIndexSchemas(copied.Indexes, t.Schema, t.Name)
 		if copied.Policies != nil && copied.Policies.Len() > 0 {
 			policies := orderedmap.New[string, *model.Policy]()
 			for _, p := range copied.Policies.CollectValues() {
@@ -100,7 +107,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.Policies = policies
 		}
-		copied.Triggers = stripTriggerSchemas(copied.Triggers, fqtn, tableName)
+		copied.Triggers = stripTriggerSchemas(copied.Triggers, t.Schema, t.Name)
 		tables.Set(tableName, &copied)
 	}
 	return tables
@@ -116,11 +123,10 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 	views := orderedmap.New[string, *model.View]()
 	for _, v := range r.Views.CollectValues() {
 		copied := *v
-		fqvn := v.FQVN()
 		viewName := model.Ident(v.Name)
 		copied.Schema = ""
-		copied.Indexes = stripIndexSchemas(copied.Indexes, fqvn, viewName)
-		copied.Triggers = stripTriggerSchemas(copied.Triggers, fqvn, viewName)
+		copied.Indexes = stripIndexSchemas(copied.Indexes, v.Schema, v.Name)
+		copied.Triggers = stripTriggerSchemas(copied.Triggers, v.Schema, v.Name)
 		views.Set(viewName, &copied)
 	}
 	return views
@@ -130,7 +136,7 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 // --omit-schema.
 func stripIndexSchemas(
 	indexes *orderedmap.Map[string, *model.Index],
-	fqrn, relName string,
+	schema, name string,
 ) *orderedmap.Map[string, *model.Index] {
 	if indexes == nil || indexes.Len() == 0 {
 		return indexes
@@ -139,7 +145,7 @@ func stripIndexSchemas(
 	for _, idx := range indexes.CollectValues() {
 		copied := *idx
 		copied.Schema = ""
-		copied.Definition = stripRelationSchemaPrefix(idx.Definition, fqrn, relName)
+		copied.Definition = stripRelationSchemaPrefix(idx.Definition, schema, name)
 		out.Set(idx.Name, &copied)
 	}
 	return out
@@ -150,7 +156,7 @@ func stripIndexSchemas(
 // function it calls, which may sit outside the schema being dumped.
 func stripTriggerSchemas(
 	triggers *orderedmap.Map[string, *model.Trigger],
-	fqrn, relName string,
+	schema, name string,
 ) *orderedmap.Map[string, *model.Trigger] {
 	if triggers == nil || triggers.Len() == 0 {
 		return triggers
@@ -159,7 +165,7 @@ func stripTriggerSchemas(
 	for _, trg := range triggers.CollectValues() {
 		copied := *trg
 		copied.Schema = ""
-		copied.Definition = stripRelationSchemaPrefix(trg.Definition, fqrn, relName)
+		copied.Definition = stripRelationSchemaPrefix(trg.Definition, schema, name)
 		out.Set(trg.Name, &copied)
 	}
 	return out

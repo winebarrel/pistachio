@@ -948,3 +948,14 @@ func TestDumpResult_Document_MultipleSchemas(t *testing.T) {
 	doc := result.Document()
 	assert.ElementsMatch(t, []string{"public.users", "other.items"}, doc.Tables.CollectKeys())
 }
+
+// PostgreSQL quotes a schema or a relation named after a col_name keyword,
+// which model.Ident leaves bare. Both forms are stripped.
+func TestStripRelationSchemaPrefix_Keyword(t *testing.T) {
+	assert.Equal(t,
+		"CREATE INDEX i ON t USING btree (a)",
+		stripRelationSchemaPrefix(`CREATE INDEX i ON "time".t USING btree (a)`, "time", "t"))
+	assert.Equal(t,
+		"CREATE INDEX i ON position USING btree (a)",
+		stripRelationSchemaPrefix(`CREATE INDEX i ON "time"."position" USING btree (a)`, "time", "position"))
+}
