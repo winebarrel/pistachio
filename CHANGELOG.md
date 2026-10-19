@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* An inline directive followed by a `/* ... */` comment before its column or constraint now applies to that element. Before, the directive was ignored.
+
 ## [1.88.0] - 2026-10-18
 
 * Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.
