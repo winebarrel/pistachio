@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:backfill ''
+      note text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+error: "-- pista:backfill: column public.users.note is not NOT NULL"

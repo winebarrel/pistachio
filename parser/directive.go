@@ -26,6 +26,9 @@ var (
 	retypeUsingDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:retype-using[ \t]+(.+?)[ \t]*\r?$`)
 	// Matches -- pista:retype-using with no expression (invalid usage).
 	retypeUsingWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:retype-using[ \t]*\r?$`)
+	backfillDirectivePattern     = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:backfill[ \t]+(.+?)[ \t]*\r?$`)
+	// Matches -- pista:backfill with no value (invalid usage).
+	backfillWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:backfill[ \t]*\r?$`)
 	// execute-first shares a prefix with execute. The execute pattern accepts
 	// only whitespace or end-of-line after the name, so an execute-first
 	// comment never matches it.
@@ -61,6 +64,7 @@ var knownDirectives = map[string]bool{
 	"ignore":             true,
 	"retype-using":       true,
 	"not-null-via-check": true,
+	"backfill":           true,
 	"lint-ignore":        true,
 	"refuse-hazard":      true,
 }
@@ -104,6 +108,10 @@ func validateDirectives(rawSQL string) error {
 
 	if m := retypeUsingWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
 		return &locatedError{msg: "-- pista:retype-using requires an argument", offset: m[0]}
+	}
+
+	if m := backfillWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:backfill requires an argument", offset: m[0]}
 	}
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
@@ -571,19 +579,21 @@ type inlineDirectives struct {
 	Constraints     map[string]string // new constraint name -> old constraint name
 	RetypeUsing     map[string]string // column name -> USING expression
 	NotNullViaCheck map[string]bool   // column name -> -- pista:not-null-via-check
+	Backfill        map[string]string // column name -> -- pista:backfill value
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
-// `-- pista:renamed-from <old_name>`, `-- pista:retype-using <expression>` and
-// `-- pista:not-null-via-check` directives that appear on lines immediately
-// before column or constraint definitions. retype-using and
-// not-null-via-check apply to a column only.
+// `-- pista:renamed-from <old_name>`, `-- pista:retype-using <expression>`,
+// `-- pista:not-null-via-check` and `-- pista:backfill <value>` directives
+// that appear on lines immediately before column or constraint definitions.
+// retype-using, not-null-via-check and backfill apply to a column only.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{
 		Columns:         make(map[string]string),
 		Constraints:     make(map[string]string),
 		RetypeUsing:     make(map[string]string),
 		NotNullViaCheck: make(map[string]bool),
+		Backfill:        make(map[string]string),
 	}
 
 	// Every directive needs this text, and most statements hold none.
@@ -599,7 +609,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	body := rawCreateTableSQL[parenIdx:]
 	lines := strings.Split(body, "\n")
 
-	var pendingRename, pendingRetype string
+	var pendingRename, pendingRetype, pendingBackfill string
 	var pendingNotNull bool
 	for _, line := range lines {
 		// A leading comma belongs to the previous element, so the name that
@@ -620,6 +630,10 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingNotNull = true
 			continue
 		}
+		if m := backfillDirectivePattern.FindStringSubmatch(line); m != nil {
+			pendingBackfill = m[1]
+			continue
+		}
 		// Read by extractInlineLintIgnores.
 		if lintIgnoreDirectivePattern.MatchString(line) {
 			continue
@@ -629,7 +643,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		if pendingRename != "" || pendingRetype != "" || pendingNotNull {
+		if pendingRename != "" || pendingRetype != "" || pendingNotNull || pendingBackfill != "" {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
@@ -647,12 +661,16 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 					if pendingNotNull {
 						result.NotNullViaCheck[colName] = true
 					}
+					if pendingBackfill != "" {
+						result.Backfill[colName] = pendingBackfill
+					}
 				}
 			}
 		}
 		pendingRename = ""
 		pendingRetype = ""
 		pendingNotNull = false
+		pendingBackfill = ""
 	}
 
 	return result

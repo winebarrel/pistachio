@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:backfill 0
+      "Score" integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users ADD COLUMN "Score" integer DEFAULT 0 NOT NULL;
+  ALTER TABLE public.users ALTER COLUMN "Score" DROP DEFAULT;

@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Add `-- pista:backfill <value>`. It sets the value of the existing rows when a `NOT NULL` column is added, so `ADD COLUMN` does not fail on a table with rows.
+
 ## [1.88.1] - 2026-10-19
 
 * `dump` no longer writes a serial column widened to `bigint` as `bigserial` while its sequence is still `integer`. It now writes the sequence and the `nextval()` default.

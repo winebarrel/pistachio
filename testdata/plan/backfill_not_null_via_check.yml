@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:not-null-via-check
+      -- pista:backfill ''
+      note text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users ADD COLUMN note text DEFAULT '' NOT NULL;
+  ALTER TABLE public.users ALTER COLUMN note DROP DEFAULT;

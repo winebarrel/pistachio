@@ -175,6 +175,72 @@ func createTableLikeError(cs *pg_query.CreateStmt, fqtn string, offset int32) er
 	return nil
 }
 
+// applyBackfill sets the -- pista:backfill values on the table's columns. The
+// value fills the rows that exist when the column is added, so the column
+// must be NOT NULL, and it must not have a value of its own for those rows: a
+// default, a generated expression or an identity.
+func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[string]string) error {
+	// The columns go in the table's order, so the error names the same
+	// column on every run.
+	for colName, col := range table.Columns.All() {
+		value, ok := backfill[colName]
+		if !ok {
+			continue
+		}
+		var problem string
+		expr, ok := parseBackfillValue(value)
+		switch {
+		case col.Identity.IsIdentityColumn():
+			problem = " is an identity column"
+		case col.Generated.IsGeneratedColumn():
+			problem = " is a generated column"
+		case col.Default != nil:
+			problem = " has a default"
+		case !col.NotNull:
+			problem = " is not NOT NULL"
+		case !ok:
+			problem = ": " + value + " is not a single expression"
+		}
+		if problem != "" {
+			var offset int32
+			for _, elt := range cs.TableElts {
+				if cd := elt.GetColumnDef(); cd != nil && cd.Colname == colName {
+					offset = cd.Location
+				}
+			}
+			return &locatedError{msg: "-- pista:backfill: column " + table.FQTN() + "." + model.Ident(colName) + problem, offset: int(offset)}
+		}
+		col.Backfill = &expr
+	}
+	return nil
+}
+
+// parseBackfillValue reads a -- pista:backfill value as one expression and
+// writes it back the way a column DEFAULT is written. The value goes into
+// ADD COLUMN, so text after the expression, such as a comment or another
+// clause, would change the statement. It reports false when the value is not
+// one expression alone.
+func parseBackfillValue(value string) (string, bool) {
+	result, err := pg_query.Parse("SELECT " + value)
+	if err != nil || len(result.Stmts) != 1 {
+		return "", false
+	}
+	targets := result.Stmts[0].Stmt.GetSelectStmt().GetTargetList()
+	if len(targets) != 1 {
+		return "", false
+	}
+	expr, err := deparseExpr(targets[0].GetResTarget().Val)
+	if err != nil {
+		return "", false
+	}
+	// Anything else in the SELECT, such as an alias or a FROM clause, makes
+	// the statement differ from one that holds the expression alone.
+	if sql, err := pg_query.Deparse(result); err != nil || sql != "SELECT "+expr {
+		return "", false
+	}
+	return parenthesizeDefault(expr), true
+}
+
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
 // the model: constraints (parseAlterTableConstraints), the row-level security
 // toggles (applyAlterTableRLS), the trigger states
@@ -570,6 +636,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if col, ok := table.Columns.GetOk(colName); ok {
 					col.NotNullViaCheck = true
 				}
+			}
+			if err := applyBackfill(node.GetCreateStmt(), table, inlineDirectives.Backfill); err != nil {
+				return nil, err
 			}
 			for conName, oldName := range inlineDirectives.Constraints {
 				if con, ok := table.Constraints.GetOk(conName); ok {

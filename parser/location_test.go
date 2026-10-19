@@ -414,6 +414,21 @@ func TestParseSQLFiles_CreateTableLikeErrorLocation(t *testing.T) {
   | ^`, err.Error())
 }
 
+// A -- pista:backfill error points at the column it is written before.
+func TestParseSQLFiles_BackfillErrorLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": "CREATE TABLE public.items (\n    id integer NOT NULL,\n    -- pista:backfill ''\n    note text\n);\n",
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `-- pista:backfill: column public.items.note is not NOT NULL
+ --> `+paths[0]+`:4:5
+  |
+4 |     note text
+  |     ^`, err.Error())
+}
+
 // Parsing a string names no file, so the warning reads as it did before
 // positions were added.
 func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
