@@ -59,6 +59,21 @@ func TestPlan_MissingDesiredFileWithoutDatabase(t *testing.T) {
 	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
+// --engine dsql reads the files on a path of its own, to strip ASYNC.
+func TestPlan_MissingDesiredFileWithoutDatabase_DSQL(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.sql")
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: unreachableConnStr,
+		Schemas:    []string{"public"},
+		Engine:     pistachio.EngineDSQL,
+	})
+
+	_, err := client.Plan(context.Background(), &pistachio.PlanOptions{Files: []string{missing}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read SQL file")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
+}
+
 func TestPlan_MissingPreSQLFileWithoutDatabase(t *testing.T) {
 	desired := writeTempFile(t, "desired.sql", "CREATE TABLE public.items (id integer);\n")
 	missing := filepath.Join(t.TempDir(), "pre.sql")

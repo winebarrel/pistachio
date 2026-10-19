@@ -274,6 +274,46 @@ func TestPlan_Run_CheckWithDiff(t *testing.T) {
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 }
 
+func TestPlan_Run_RefuseHazard(t *testing.T) {
+	// A plan --refuse-hazard refuses is still written, and the refusal is
+	// returned rather than ErrPlanDiff under --check.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.orders (
+    id integer NOT NULL,
+    amount integer,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.orders (
+    id integer NOT NULL,
+    amount bigint,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	options := pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	}
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{
+		Options:      options,
+		RefuseHazard: []string{"rewrite"},
+		Files:        []string{desiredFile},
+		Check:        true,
+	}
+	err := cmd.Run(ctx, &buf)
+	var refused *pistachio.HazardRefusedError
+	require.ErrorAs(t, err, &refused)
+	assert.Equal(t, "1 statement refused by --refuse-hazard=rewrite", err.Error())
+	assert.Contains(t, buf.String(), "-- refused: rewrite")
+	assert.Contains(t, buf.String(), "ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;")
+}
+
 func TestPlan_Run_CheckNoChanges(t *testing.T) {
 	// --check returns nil when the schema is already in the desired state.
 	ctx := context.Background()
