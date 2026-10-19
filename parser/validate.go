@@ -156,21 +156,26 @@ func collectColumnRefsInIndexDef(def string) []string {
 		return nil
 	}
 	var refs []string
-	collect := func(params []*pg_query.Node) {
-		for _, p := range params {
-			ie := p.GetIndexElem()
-			if ie == nil {
-				continue
-			}
-			if ie.Name != "" {
-				refs = append(refs, ie.Name)
-			}
-			refs = append(refs, walkExprColumnRefs(ie.Expr)...)
-		}
-	}
-	collect(is.IndexParams)
-	collect(is.IndexIncludingParams)
+	refs = append(refs, indexElemRefs(is.IndexParams)...)
+	refs = append(refs, indexElemRefs(is.IndexIncludingParams)...)
 	refs = append(refs, walkExprColumnRefs(is.WhereClause)...)
+	return refs
+}
+
+// indexElemRefs returns the column names the IndexElem nodes in nodes
+// reference, by name or in their expressions, skipping any other node.
+func indexElemRefs(nodes []*pg_query.Node) []string {
+	var refs []string
+	for _, n := range nodes {
+		ie := n.GetIndexElem()
+		if ie == nil {
+			continue
+		}
+		if ie.Name != "" {
+			refs = append(refs, ie.Name)
+		}
+		refs = append(refs, walkExprColumnRefs(ie.Expr)...)
+	}
 	return refs
 }
 
@@ -194,20 +199,7 @@ func collectColumnRefsInConstraintDef(def string) []string {
 	collectStringList(con.Including)
 	refs = append(refs, walkExprColumnRefs(con.RawExpr)...)
 	for _, ex := range con.Exclusions {
-		list := ex.GetList()
-		if list == nil {
-			continue
-		}
-		for _, item := range list.Items {
-			ie := item.GetIndexElem()
-			if ie == nil {
-				continue
-			}
-			if ie.Name != "" {
-				refs = append(refs, ie.Name)
-			}
-			refs = append(refs, walkExprColumnRefs(ie.Expr)...)
-		}
+		refs = append(refs, indexElemRefs(ex.GetList().GetItems())...)
 	}
 	return refs
 }
