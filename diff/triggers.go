@@ -3,6 +3,7 @@ package diff
 import (
 	"fmt"
 	"maps"
+	"slices"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -271,6 +272,18 @@ func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
 	if ct.WhenClause != nil {
 		ct.WhenClause = normalizeCheckExpr(ct.WhenClause)
 	}
+	// pg_get_triggerdef writes OLD TABLE before NEW TABLE.
+	slices.SortStableFunc(ct.TransitionRels, func(a, b *pg_query.Node) int {
+		aNew, bNew := a.GetTriggerTransition().GetIsNew(), b.GetTriggerTransition().GetIsNew()
+		switch {
+		case aNew == bNew:
+			return 0
+		case aNew:
+			return 1
+		default:
+			return -1
+		}
+	})
 	return result, nil
 }
 
