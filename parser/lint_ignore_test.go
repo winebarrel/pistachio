@@ -277,6 +277,23 @@ CREATE TABLE public.t (
 	}, got)
 }
 
+// A block comment before the element does not hide it.
+func TestLintIgnore_BlockComment(t *testing.T) {
+	got := parseLintIgnores(t, `
+CREATE TABLE public.t (
+    -- pista:lint-ignore r1
+    /* own line */
+    a int,
+    -- pista:lint-ignore r2
+    /* same line */ b int
+);`)
+
+	assert.Equal(t, map[parser.LintTarget][]string{
+		{Kind: parser.LintColumn, Table: "public.t", Name: "a"}: {"r1"},
+		{Kind: parser.LintColumn, Table: "public.t", Name: "b"}: {"r2"},
+	}, got)
+}
+
 // A reason may follow the names after " --". It is not a rule name.
 func TestLintIgnore_Reason(t *testing.T) {
 	got := parseLintIgnores(t, `

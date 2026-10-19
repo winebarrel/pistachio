@@ -605,6 +605,8 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		// A leading comma belongs to the previous element, so the name that
 		// follows it is the one the directive renames.
 		trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ","))
+		// A block comment before the element is not the element.
+		trimmed = strings.TrimSpace(trimmed[findLeadingCommentEnd(trimmed):])
 
 		if m := renameDirectivePattern.FindStringSubmatch(line); m != nil {
 			pendingRename = normalizeUnqualifiedDirective(m[1])
@@ -684,6 +686,7 @@ func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]
 		}
 		// The opening parenthesis and a leading comma belong to no element.
 		trimmed := strings.TrimLeft(line, " \t(,")
+		trimmed = trimmed[findLeadingCommentEnd(trimmed):]
 		if strings.TrimSpace(trimmed) == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}

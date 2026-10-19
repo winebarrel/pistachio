@@ -192,6 +192,28 @@ func TestExtractInlineDirectives_LeadingComma(t *testing.T) {
 	assert.Equal(t, map[string]string{"new_c": "old_c"}, dirs.Constraints)
 }
 
+// A block comment before the element does not hide it.
+func TestExtractInlineDirectives_BlockComment(t *testing.T) {
+	sql := `CREATE TABLE public.t (
+    -- pista:renamed-from old_a
+    /* own line */
+    a text,
+    -- pista:renamed-from old_b
+    /* same line */ b text,
+    -- pista:retype-using c::bigint
+    -- pista:not-null-via-check
+    /* c */
+    c bigint NOT NULL,
+    -- pista:renamed-from old_con
+    /* constraint */ CONSTRAINT new_con CHECK (c > 0)
+);`
+	dirs := extractInlineDirectives(sql)
+	assert.Equal(t, map[string]string{"a": "old_a", "b": "old_b"}, dirs.Columns)
+	assert.Equal(t, map[string]string{"c": "c::bigint"}, dirs.RetypeUsing)
+	assert.Equal(t, map[string]bool{"c": true}, dirs.NotNullViaCheck)
+	assert.Equal(t, map[string]string{"new_con": "old_con"}, dirs.Constraints)
+}
+
 func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
 	t.Run("column", func(t *testing.T) {
 		sql := `CREATE TABLE public.items (
