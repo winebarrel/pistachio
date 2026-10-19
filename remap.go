@@ -22,7 +22,7 @@ import (
 // All inputs come from canonical SQL, pg_get_*def output from the catalog or
 // pg_query deparse output from the parser, so an identifier that requires
 // quoting is already wrapped in double quotes and only the model.Ident form is
-// matched. An unquoted fallback, the raw `a.b.` for a schema literally named
+// matched, plus the quoted form of a name model.Ident leaves bare. An unquoted fallback, the raw `a.b.` for a schema literally named
 // `a.b`, would collide with a three-part reference `a.b.col`.
 type defReplacer struct {
 	re      *regexp.Regexp
@@ -40,6 +40,11 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 		ident := model.Ident(from)
 		froms = append(froms, ident)
 		r.to[ident] = model.Ident(to)
+		// PostgreSQL quotes a col_name keyword, "time", which model.Ident
+		// leaves bare.
+		if ident == from {
+			r.to[`"`+from+`"`] = model.Ident(to)
+		}
 	}
 	slices.SortFunc(froms, func(a, b string) int {
 		return len(b) - len(a)

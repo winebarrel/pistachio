@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `dump --omit-schema` now drops the schema from an index on a table named after a keyword such as `position`. `--schema-map` now also maps a schema named after such a keyword.
+
 ## [1.88.0] - 2026-10-18
 
 * Add `-- pista:refuse-hazard`. Written before `CREATE TABLE`, it does what `--refuse-hazard` does, for that table and its partitions or `INHERITS` children only.

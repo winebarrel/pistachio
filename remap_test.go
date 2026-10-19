@@ -51,6 +51,15 @@ func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 	assert.Equal(t, `x."Users".col`, replacer.Replace(`x."Users".col`))
 }
 
+// PostgreSQL quotes a schema named after a col_name keyword, which
+// model.Ident leaves bare. The replacer matches both forms.
+func TestBuildDefReplacer_KeywordSchema(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"time": "public"})
+
+	assert.Equal(t, "public.t", replacer.Replace(`"time".t`))
+	assert.Equal(t, "public.t", replacer.Replace("time.t"))
+}
+
 // TestBuildDefReplacer_PreservesThreePartReference guards against the trap
 // where adding an unquoted-form pair (e.g. `a.b.` for a schema literally
 // named `a.b`) would silently rewrite a legitimate three-part column

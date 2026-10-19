@@ -1,0 +1,17 @@
+# --omit-schema drops the schema from an index and a trigger on a table named
+# after a col_name keyword, which pg_get_indexdef and pg_get_triggerdef quote.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public."position" (id integer NOT NULL, name text);
+  CREATE INDEX position_name_idx ON public."position" USING btree (name);
+  CREATE TRIGGER position_stamp BEFORE INSERT ON public."position" FOR EACH ROW EXECUTE FUNCTION public.stamp();
+omit_schema: true
+dump: |
+  -- position
+  CREATE TABLE position (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE INDEX position_name_idx ON position USING btree (name);
+
+  CREATE TRIGGER position_stamp BEFORE INSERT ON position FOR EACH ROW EXECUTE FUNCTION stamp();
