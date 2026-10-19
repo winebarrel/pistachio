@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.t (
+      id integer,
+      old_a text,
+      old_b text
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer,
+      -- pista:renamed-from old_a
+      /* own line */
+      a text,
+      -- pista:renamed-from old_b
+      /* same line */ b text
+  );
+plan: |
+  ALTER TABLE public.t RENAME COLUMN old_a TO a;
+  ALTER TABLE public.t RENAME COLUMN old_b TO b;
