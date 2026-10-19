@@ -564,22 +564,26 @@ func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, er
 	if err != nil {
 		return "", err
 	}
-	rewriteIndexElems := func(params []*pg_query.Node) {
-		for _, p := range params {
-			ie := p.GetIndexElem()
-			if ie == nil {
-				continue
-			}
-			if newName, ok := renames[ie.Name]; ok {
-				ie.Name = newName
-			}
-			rewriteColumnRefsInExpr(ie.Expr, renames)
-		}
-	}
-	rewriteIndexElems(is.IndexParams)
-	rewriteIndexElems(is.IndexIncludingParams)
+	rewriteIndexElems(is.IndexParams, renames)
+	rewriteIndexElems(is.IndexIncludingParams, renames)
 	rewriteColumnRefsInExpr(is.WhereClause, renames)
 	return pg_query.Deparse(result)
+}
+
+// rewriteIndexElems renames the columns of the IndexElem nodes in nodes and
+// rewrites the column references in their expressions, skipping any other
+// node.
+func rewriteIndexElems(nodes []*pg_query.Node, renames map[string]string) {
+	for _, n := range nodes {
+		ie := n.GetIndexElem()
+		if ie == nil {
+			continue
+		}
+		if newName, ok := renames[ie.Name]; ok {
+			ie.Name = newName
+		}
+		rewriteColumnRefsInExpr(ie.Expr, renames)
+	}
 }
 
 // rewriteColumnsInConstraintDef returns a new constraint definition fragment
@@ -613,20 +617,7 @@ func rewriteColumnsInConstraintDef(def string, renames map[string]string) (strin
 	// EXCLUDE constraints encode each (column, operator) pair as a List node
 	// with an IndexElem followed by an operator. Walk the IndexElem side.
 	for _, ex := range con.Exclusions {
-		list := ex.GetList()
-		if list == nil {
-			continue
-		}
-		for _, item := range list.Items {
-			ie := item.GetIndexElem()
-			if ie == nil {
-				continue
-			}
-			if newName, ok := renames[ie.Name]; ok {
-				ie.Name = newName
-			}
-			rewriteColumnRefsInExpr(ie.Expr, renames)
-		}
+		rewriteIndexElems(ex.GetList().GetItems(), renames)
 	}
 
 	return pgast.DeparseConstraintDef(result)
