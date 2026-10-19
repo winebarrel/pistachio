@@ -256,7 +256,9 @@ func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTri
 // The EXECUTE FUNCTION name goes through lastNamePart, since pg_get_triggerdef
 // omits the schema once the function's schema is on the search_path. The WHEN
 // expression goes through the normalization constraint CHECK bodies use, since
-// pg_get_triggerdef adds casts there the way pg_get_constraintdef does.
+// pg_get_triggerdef adds casts there the way pg_get_constraintdef does. The
+// REFERENCING transition tables are put OLD TABLE first, the order
+// pg_get_triggerdef writes them in whatever order the file gives.
 //
 // It returns the whole result so the caller can deparse it back.
 func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
@@ -272,7 +274,6 @@ func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
 	if ct.WhenClause != nil {
 		ct.WhenClause = normalizeCheckExpr(ct.WhenClause)
 	}
-	// pg_get_triggerdef writes OLD TABLE before NEW TABLE.
 	slices.SortStableFunc(ct.TransitionRels, func(a, b *pg_query.Node) int {
 		aNew, bNew := a.GetTriggerTransition().GetIsNew(), b.GetTriggerTransition().GetIsNew()
 		switch {
