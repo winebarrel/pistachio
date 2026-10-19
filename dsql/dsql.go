@@ -154,20 +154,11 @@ func splitAddColumnDefault(stmt, table string, col *pg_query.ColumnDef) ([]strin
 // splitAddUnique writes the unique index and the constraint that takes it
 // over, both under the constraint's name.
 func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) []string {
-	params := make([]*pg_query.Node, 0, len(con.Keys))
-	for _, k := range con.Keys {
-		params = append(params, indexElem(k.GetString_().Sval))
-	}
-	including := make([]*pg_query.Node, 0, len(con.Including))
-	for _, k := range con.Including {
-		including = append(including, indexElem(k.GetString_().Sval))
-	}
-
 	index := deparse(&pg_query.Node{Node: &pg_query.Node_IndexStmt{IndexStmt: &pg_query.IndexStmt{
 		Idxname:              con.Conname,
 		Relation:             rel,
-		IndexParams:          params,
-		IndexIncludingParams: including,
+		IndexParams:          indexElems(con.Keys),
+		IndexIncludingParams: indexElems(con.Including),
 		Options:              con.Options,
 		Unique:               true,
 		NullsNotDistinct:     con.NullsNotDistinct,
@@ -189,6 +180,14 @@ func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) []string {
 	}}})
 
 	return []string{index + ";", constraint + ";"}
+}
+
+func indexElems(names []*pg_query.Node) []*pg_query.Node {
+	elems := make([]*pg_query.Node, 0, len(names))
+	for _, n := range names {
+		elems = append(elems, indexElem(n.GetString_().Sval))
+	}
+	return elems
 }
 
 func indexElem(name string) *pg_query.Node {

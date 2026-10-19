@@ -967,12 +967,7 @@ func collationFromClause(cc *pg_query.CollateClause) *string {
 		return nil
 	}
 
-	var parts []string
-	for _, n := range cc.Collname {
-		if str := n.GetString_(); str != nil {
-			parts = append(parts, str.Sval)
-		}
-	}
+	parts := stringVals(cc.Collname)
 	if len(parts) == 0 || parts[len(parts)-1] == "default" {
 		return nil
 	}
@@ -1454,13 +1449,7 @@ func indexElemNode(name string) *pg_query.Node {
 
 // fkAttrCols returns the local-side columns of a foreign key, in order.
 func fkAttrCols(con *pg_query.Constraint) []string {
-	var cols []string
-	for _, attr := range con.FkAttrs {
-		if s := attr.GetString_(); s != nil {
-			cols = append(cols, s.Sval)
-		}
-	}
-	return cols
+	return stringVals(con.FkAttrs)
 }
 
 // checkExprCols returns the single column a CHECK expression references, or nil
@@ -1664,12 +1653,7 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 		return nil, fmt.Errorf("failed to deparse constraint %s: %w", con.Conname, err)
 	}
 
-	var columns []string
-	for _, k := range con.Keys {
-		if s := k.GetString_(); s != nil {
-			columns = append(columns, s.Sval)
-		}
-	}
+	columns := stringVals(con.Keys)
 
 	return &model.Constraint{
 		Name:       con.Conname,
@@ -2140,12 +2124,7 @@ func parseCommentOnDomainConstraint(cs *pg_query.CommentStmt, defaultSchema stri
 // findDomain returns the domain a type name names, or nil when the file does
 // not define it.
 func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) *model.Domain {
-	var names []string
-	for _, n := range tn.Names {
-		if s := n.GetString_(); s != nil {
-			names = append(names, s.Sval)
-		}
-	}
+	names := stringVals(tn.Names)
 	schema, domainName := schemaName(names, defaultSchema)
 	return domains.Get(model.Ident(schema, domainName))
 }
@@ -2153,12 +2132,7 @@ func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap
 func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
 	schema, name := splitTypeName(es.TypeName, defaultSchema)
 
-	var values []string
-	for _, v := range es.Vals {
-		if s := v.GetString_(); s != nil {
-			values = append(values, s.Sval)
-		}
-	}
+	values := stringVals(es.Vals)
 
 	return &model.Enum{
 		Schema: schema,
@@ -2408,12 +2382,7 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	if list == nil {
 		return nil, nil
 	}
-	var names []string
-	for _, item := range list.Items {
-		if s := item.GetString_(); s != nil {
-			names = append(names, s.Sval)
-		}
-	}
+	names := stringVals(list.Items)
 	if len(names) < 2 {
 		return nil, nil
 	}
@@ -2449,12 +2418,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 		return
 	}
 
-	var names []string
-	for _, item := range items {
-		if s := item.GetString_(); s != nil {
-			names = append(names, s.Sval)
-		}
-	}
+	names := stringVals(items)
 
 	switch cs.Objtype {
 	case pg_query.ObjectType_OBJECT_TABLE:
@@ -2603,6 +2567,18 @@ func splitTypeName(names []*pg_query.Node, defaultSchema string) (schema, name s
 	return schema, name
 }
 
+// stringVals returns the values of the String nodes in nodes, in order,
+// skipping any other node.
+func stringVals(nodes []*pg_query.Node) []string {
+	var vals []string
+	for _, n := range nodes {
+		if s := n.GetString_(); s != nil {
+			vals = append(vals, s.Sval)
+		}
+	}
+	return vals
+}
+
 // schemaName splits a one- or two-part object name into its schema and name,
 // taking def as the schema when the name is unqualified.
 func schemaName(names []string, def string) (schema, name string) {
@@ -2637,12 +2613,7 @@ func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *o
 	if tn == nil {
 		return
 	}
-	var names []string
-	for _, n := range tn.Names {
-		if s := n.GetString_(); s != nil {
-			names = append(names, s.Sval)
-		}
-	}
+	names := stringVals(tn.Names)
 	if len(names) == 0 {
 		return
 	}

@@ -635,15 +635,16 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 					result.Constraints[conName] = pendingRename
 				}
 			} else {
-				colName := extractColumnName(trimmed)
-				if colName != "" && pendingRename != "" {
-					result.Columns[colName] = pendingRename
-				}
-				if colName != "" && pendingRetype != "" {
-					result.RetypeUsing[colName] = pendingRetype
-				}
-				if colName != "" && pendingNotNull {
-					result.NotNullViaCheck[colName] = true
+				if colName := extractColumnName(trimmed); colName != "" {
+					if pendingRename != "" {
+						result.Columns[colName] = pendingRename
+					}
+					if pendingRetype != "" {
+						result.RetypeUsing[colName] = pendingRetype
+					}
+					if pendingNotNull {
+						result.NotNullViaCheck[colName] = true
+					}
 				}
 			}
 		}

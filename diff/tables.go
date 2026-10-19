@@ -68,12 +68,7 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, ori
 	}
 	var cols []RetypedColumn
 	for name, desiredCol := range desired.Columns.All() {
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
 			cols = append(cols, RetypedColumn{
 				Name:    fqtn + "." + model.Ident(name),
@@ -92,17 +87,23 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, ori
 // TYPE.
 func tableRetyped(fqtn string, current, desired *model.Table) bool {
 	for name, desiredCol := range desired.Columns.All() {
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
 			return true
 		}
 	}
 	return false
+}
+
+// currentColumnName returns the name the desired column has on the current
+// table: the rename source when the current table has it, otherwise name.
+func currentColumnName(current *model.Table, name string, desiredCol *model.Column) string {
+	if desiredCol.RenameFrom != nil {
+		if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+			return *desiredCol.RenameFrom
+		}
+	}
+	return name
 }
 
 // descendants lists the partitions and INHERITS children of the table, at
@@ -483,12 +484,9 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	viaCheckStmts, viaCheckSetNotNull, viaCheckNames := notNullViaCheckSQL(fqtn, current, desired)
 	if len(viaCheckNames) > 0 {
 		clone := *current
-		clone.Constraints = orderedmap.New[string, *model.Constraint]()
-		for name, con := range current.Constraints.All() {
-			if !viaCheckNames[name] {
-				clone.Constraints.Set(name, con)
-			}
-		}
+		clone.Constraints = current.Constraints.Filter(func(name string, _ *model.Constraint) bool {
+			return !viaCheckNames[name]
+		})
 		current = &clone
 	}
 	result.ViaCheckSetNotNull = viaCheckSetNotNull
@@ -539,15 +537,15 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
+	idxResult, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
-	result.Stmts = append(result.Stmts, idxResult2.Stmts...)
+	result.Stmts = append(result.Stmts, idxResult.Stmts...)
 	result.Stmts = append(result.Stmts, usingIndexStmts...)
-	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult2.PartitionedStmts...)
-	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult2.DisallowedDropStmts...)
-	if idxResult2.HasConcurrently {
+	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult.PartitionedStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult.DisallowedDropStmts...)
+	if idxResult.HasConcurrently {
 		result.HasConcurrently = true
 	}
 
@@ -883,12 +881,7 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 		if !desiredCol.NotNullViaCheck || !desiredCol.NotNull || desiredCol.Identity.IsIdentityColumn() {
 			continue
 		}
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		currentCol, ok := current.Columns.GetOk(currentName)
 		if !ok {
 			continue
