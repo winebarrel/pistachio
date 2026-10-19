@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `dump --omit-schema` now drops the schema from an index on a table named after a keyword such as `position`. `--schema-map` now also maps a schema named after such a keyword.
+* `dump --omit-schema` now drops the schema from an index on a table, or in a schema, named after a keyword such as `position`. `--schema-map` now also maps a schema named after such a keyword.
 
 * A trigger whose `REFERENCING` clause names `NEW TABLE` before `OLD TABLE` no longer plans a `CREATE OR REPLACE TRIGGER` on every run.
 

@@ -22,8 +22,9 @@ import (
 // All inputs come from canonical SQL, pg_get_*def output from the catalog or
 // pg_query deparse output from the parser, so an identifier that requires
 // quoting is already wrapped in double quotes and only the model.Ident form is
-// matched, plus the quoted form of a name model.Ident leaves bare. An unquoted fallback, the raw `a.b.` for a schema literally named
-// `a.b`, would collide with a three-part reference `a.b.col`.
+// matched, plus the quoted form of a name model.Ident leaves bare. An unquoted
+// fallback, the raw `a.b.` for a schema literally named `a.b`, would collide
+// with a three-part reference `a.b.col`.
 type defReplacer struct {
 	re      *regexp.Regexp
 	to      map[string]string

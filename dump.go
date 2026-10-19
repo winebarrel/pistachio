@@ -56,13 +56,15 @@ func (r *DumpResult) tableSQL(sql string) string {
 
 // stripRelationSchemaPrefix removes the schema qualification from the relation
 // an index or a trigger targets, for --omit-schema. Both definitions read
-// "... ON <schema>.<rel> ...". PostgreSQL quotes a relation named after a
-// col_name keyword, "position", which model.Ident leaves bare, so that form is
-// matched too.
+// "... ON <schema>.<rel> ...". PostgreSQL quotes a schema or a relation named
+// after a col_name keyword, "position", which model.Ident leaves bare, so that
+// form is matched too.
 func stripRelationSchemaPrefix(definition, schema, name string) string {
 	relName := model.Ident(name)
-	for _, rel := range []string{relName, `"` + name + `"`} {
-		definition = strings.ReplaceAll(definition, " ON "+model.Ident(schema)+"."+rel+" ", " ON "+relName+" ")
+	for _, s := range []string{model.Ident(schema), `"` + schema + `"`} {
+		for _, rel := range []string{relName, `"` + name + `"`} {
+			definition = strings.ReplaceAll(definition, " ON "+s+"."+rel+" ", " ON "+relName+" ")
+		}
 	}
 	return definition
 }
