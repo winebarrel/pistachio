@@ -76,6 +76,31 @@ func TestDiffTriggers_NoChangeAcrossRenderings(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+// pg_get_triggerdef writes OLD TABLE before NEW TABLE whatever order the file
+// gives them, so the order is not a change.
+func TestDiffTriggers_NoChangeAcrossTransitionOrder(t *testing.T) {
+	cur := triggers(newTrigger("events_batch",
+		"CREATE TRIGGER events_batch AFTER UPDATE ON public.events REFERENCING OLD TABLE AS before_rows NEW TABLE AS after_rows FOR EACH STATEMENT EXECUTE FUNCTION stamp()"))
+	des := triggers(newTrigger("events_batch",
+		"CREATE TRIGGER events_batch AFTER UPDATE ON public.events REFERENCING NEW TABLE AS after_rows OLD TABLE AS before_rows FOR EACH STATEMENT EXECUTE FUNCTION stamp()"))
+	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+// The names still count: swapping them between OLD and NEW is a change.
+func TestDiffTriggers_TransitionNamesSwapped(t *testing.T) {
+	cur := triggers(newTrigger("events_batch",
+		"CREATE TRIGGER events_batch AFTER UPDATE ON public.events REFERENCING OLD TABLE AS before_rows NEW TABLE AS after_rows FOR EACH STATEMENT EXECUTE FUNCTION stamp()"))
+	des := triggers(newTrigger("events_batch",
+		"CREATE TRIGGER events_batch AFTER UPDATE ON public.events REFERENCING NEW TABLE AS before_rows OLD TABLE AS after_rows FOR EACH STATEMENT EXECUTE FUNCTION stamp()"))
+	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"CREATE OR REPLACE TRIGGER events_batch AFTER UPDATE ON public.events REFERENCING NEW TABLE before_rows OLD TABLE after_rows EXECUTE FUNCTION stamp();",
+	}, stmts)
+}
+
 // pg_get_triggerdef casts a string literal in the WHEN expression the way
 // pg_get_constraintdef casts one in a CHECK body, and writes = ANY (ARRAY[...])
 // where the file says IN. Neither is a change.
