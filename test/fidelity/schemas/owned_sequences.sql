@@ -36,3 +36,10 @@ CREATE TABLE public.orders (
 );
 
 ALTER SEQUENCE public.orders_id_seq OWNED BY public.orders.id;
+
+-- A serial column widened to bigint keeps its integer sequence.
+CREATE TABLE public.events (
+    id serial NOT NULL
+);
+
+ALTER TABLE public.events ALTER COLUMN id SET DATA TYPE bigint;

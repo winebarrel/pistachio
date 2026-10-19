@@ -1,4 +1,4 @@
-recorded_at: 2026-10-11T11:32:20Z
+recorded_at: 2026-10-19T05:01:29Z
 server_version: "16.15"
 exchanges:
   - query: SELECT sys.dsql_major_version()
@@ -539,11 +539,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -1096,11 +1098,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -1222,14 +1226,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -1960,11 +1965,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -2063,14 +2070,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -2801,11 +2809,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -2936,14 +2946,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -3678,11 +3689,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -3783,14 +3796,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -4525,11 +4539,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -4630,14 +4646,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -5372,11 +5389,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -5475,14 +5494,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -6217,11 +6237,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -6413,14 +6435,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -7155,11 +7178,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -7258,14 +7283,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -8000,11 +8026,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -8200,14 +8228,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -8942,11 +8971,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -9085,14 +9116,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -9834,11 +9866,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -9938,14 +9972,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -10687,11 +10722,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -10797,14 +10834,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -11545,11 +11583,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -11649,14 +11689,15 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name and
-      			-- the default options for its type. Any other column that takes
-      			-- its default from a sequence it owns keeps its own type and
-      			-- default, and catalog/sequences.go reads the sequence, so that
-      			-- dump writes its name and options.
+      			-- A serial type only while the sequence has the default name, the
+      			-- column's type and the default options for that type. Any other
+      			-- column that takes its default from a sequence it owns keeps its
+      			-- own type and default, and catalog/sequences.go reads the
+      			-- sequence, so that dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND sq.seqtypid = a.atttypid
       				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
       				AND sq.seqmax = CASE sq.seqtypid
       					WHEN 'int2'::regtype THEN 32767
@@ -12397,11 +12438,13 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name and the default options for its type.
+      			-- has the default name, the column's type and the default
+      			-- options for that type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND s.seqtypid = a.atttypid
       				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
       				AND s.seqmax = CASE s.seqtypid
       					WHEN 'int2'::regtype THEN 32767

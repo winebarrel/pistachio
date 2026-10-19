@@ -24,14 +24,15 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			-- column the child redeclares is local and inherited at once, and
 			-- stays.
 			a.attislocal,
-			-- A serial type only while the sequence has the default name and
-			-- the default options for its type. Any other column that takes
-			-- its default from a sequence it owns keeps its own type and
-			-- default, and catalog/sequences.go reads the sequence, so that
-			-- dump writes its name and options.
+			-- A serial type only while the sequence has the default name, the
+			-- column's type and the default options for that type. Any other
+			-- column that takes its default from a sequence it owns keeps its
+			-- own type and default, and catalog/sequences.go reads the
+			-- sequence, so that dump writes its name and options.
 			CASE
 				WHEN s.is_serial
 				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+				AND sq.seqtypid = a.atttypid
 				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
 				AND sq.seqmax = CASE sq.seqtypid
 					WHEN 'int2'::regtype THEN 32767
