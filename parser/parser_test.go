@@ -1144,6 +1144,26 @@ func TestParseSQL_RetypeUsingValueCRLF(t *testing.T) {
 	assert.Equal(t, new("code::int"), result.Tables.Get("public.t").Columns.Get("code").RetypeUsing)
 }
 
+// With several invalid columns, the error names the first one the table
+// defines, so it is the same on every run.
+func TestParseSQL_RetypeUsingValueErrorFirstColumn(t *testing.T) {
+	sql := `CREATE TABLE public.t (
+    -- pista:retype-using a, b
+    a integer,
+    -- pista:retype-using b, c
+    b integer,
+    -- pista:retype-using c, d
+    c integer,
+    -- pista:retype-using d, a
+    d integer
+);`
+	for range 20 {
+		_, err := parseSQLWithPublicSchema(sql)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-- pista:retype-using: column public.t.a: a, b is not a single expression")
+	}
+}
+
 func TestParseSQL_RetypeUsingValueError(t *testing.T) {
 	for _, expr := range []string{
 		"code, id",

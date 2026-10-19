@@ -632,17 +632,21 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 					col.RenameFrom = &oldName
 				}
 			}
-			for colName, value := range inlineDirectives.RetypeUsing {
-				if col, ok := table.Columns.GetOk(colName); ok {
-					expr, ok := parseDirectiveExpr(value)
-					if !ok {
-						return nil, &locatedError{
-							msg:    "-- pista:retype-using: column " + table.FQTN() + "." + model.Ident(colName) + ": " + value + " is not a single expression",
-							offset: int(columnDefLocation(node.GetCreateStmt(), colName)),
-						}
-					}
-					col.RetypeUsing = &expr
+			// The columns go in the table's order, so the error names the
+			// same column on every run.
+			for colName, col := range table.Columns.All() {
+				value, ok := inlineDirectives.RetypeUsing[colName]
+				if !ok {
+					continue
 				}
+				expr, ok := parseDirectiveExpr(value)
+				if !ok {
+					return nil, &locatedError{
+						msg:    "-- pista:retype-using: column " + table.FQTN() + "." + model.Ident(colName) + ": " + value + " is not a single expression",
+						offset: int(columnDefLocation(node.GetCreateStmt(), colName)),
+					}
+				}
+				col.RetypeUsing = &expr
 			}
 			for colName := range inlineDirectives.NotNullViaCheck {
 				if col, ok := table.Columns.GetOk(colName); ok {
