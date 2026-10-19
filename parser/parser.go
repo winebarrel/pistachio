@@ -188,7 +188,7 @@ func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[str
 			continue
 		}
 		var problem string
-		expr, ok := parseBackfillValue(value)
+		expr, ok := parseDirectiveExpr(value)
 		switch {
 		case col.Identity.IsIdentityColumn():
 			problem = " is an identity column"
@@ -202,25 +202,20 @@ func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[str
 			problem = ": " + value + " is not a single expression"
 		}
 		if problem != "" {
-			var offset int32
-			for _, elt := range cs.TableElts {
-				if cd := elt.GetColumnDef(); cd != nil && cd.Colname == colName {
-					offset = cd.Location
-				}
-			}
-			return &locatedError{msg: "-- pista:backfill: column " + table.FQTN() + "." + model.Ident(colName) + problem, offset: int(offset)}
+			return &locatedError{msg: "-- pista:backfill: column " + table.FQTN() + "." + model.Ident(colName) + problem, offset: int(columnDefLocation(cs, colName))}
 		}
-		col.Backfill = &expr
+		filled := parenthesizeDefault(expr)
+		col.Backfill = &filled
 	}
 	return nil
 }
 
-// parseBackfillValue reads a -- pista:backfill value as one expression and
-// writes it back the way a column DEFAULT is written. The value goes into
-// ADD COLUMN, so text after the expression, such as a comment or another
-// clause, would change the statement. It reports false when the value is not
-// one expression alone.
-func parseBackfillValue(value string) (string, bool) {
+// parseDirectiveExpr reads the expression argument of a column directive and
+// writes it back as deparseExpr does. The argument goes into the statement
+// that the plan writes, so text after the expression, such as a comment or
+// another clause, would change that statement. It reports false when the
+// argument is not one expression alone.
+func parseDirectiveExpr(value string) (string, bool) {
 	result, err := pg_query.Parse("SELECT " + value)
 	if err != nil || len(result.Stmts) != 1 {
 		return "", false
@@ -229,16 +224,26 @@ func parseBackfillValue(value string) (string, bool) {
 	if len(targets) != 1 {
 		return "", false
 	}
-	expr, err := deparseExpr(targets[0].GetResTarget().Val)
-	if err != nil {
-		return "", false
-	}
+	expr, exprErr := deparseExpr(targets[0].GetResTarget().Val)
 	// Anything else in the SELECT, such as an alias or a FROM clause, makes
 	// the statement differ from one that holds the expression alone.
-	if sql, err := pg_query.Deparse(result); err != nil || sql != "SELECT "+expr {
+	sql, err := pg_query.Deparse(result)
+	if exprErr != nil || err != nil || sql != "SELECT "+expr {
 		return "", false
 	}
-	return parenthesizeDefault(expr), true
+	return expr, true
+}
+
+// columnDefLocation returns the offset of the column's definition in the
+// CREATE TABLE.
+func columnDefLocation(cs *pg_query.CreateStmt, name string) int32 {
+	var loc int32
+	for _, elt := range cs.TableElts {
+		if cd := elt.GetColumnDef(); cd != nil && cd.Colname == name {
+			loc = cd.Location
+		}
+	}
+	return loc
 }
 
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
@@ -627,8 +632,15 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 					col.RenameFrom = &oldName
 				}
 			}
-			for colName, expr := range inlineDirectives.RetypeUsing {
+			for colName, value := range inlineDirectives.RetypeUsing {
 				if col, ok := table.Columns.GetOk(colName); ok {
+					expr, ok := parseDirectiveExpr(value)
+					if !ok {
+						return nil, &locatedError{
+							msg:    "-- pista:retype-using: column " + table.FQTN() + "." + model.Ident(colName) + ": " + value + " is not a single expression",
+							offset: int(columnDefLocation(node.GetCreateStmt(), colName)),
+						}
+					}
 					col.RetypeUsing = &expr
 				}
 			}

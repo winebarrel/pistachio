@@ -18,4 +18,4 @@ desired: |
   );
 plan: |
   -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
-  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100) USING code::character varying(10);
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100) USING code::varchar(10);

@@ -1,0 +1,12 @@
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      code text
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      -- pista:retype-using code::integer, ADD COLUMN x integer
+      code integer
+  );
+error: "-- pista:retype-using: column public.t.code: code::integer, ADD COLUMN x integer is not a single expression"

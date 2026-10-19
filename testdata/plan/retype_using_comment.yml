@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      code text
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      -- pista:retype-using code::integer -- text to integer
+      code integer
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN code SET DATA TYPE integer USING code::int;

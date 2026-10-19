@@ -19,6 +19,6 @@ desired: |
   );
 plan: |
   ALTER SEQUENCE public.t_seq_seq AS bigint;
-  ALTER TABLE public.t ALTER COLUMN code SET DATA TYPE integer USING code::integer;
+  ALTER TABLE public.t ALTER COLUMN code SET DATA TYPE integer USING code::int;
   ALTER TABLE public.t ALTER COLUMN flag SET DATA TYPE boolean USING flag <> 0;
   ALTER TABLE public.t ALTER COLUMN seq SET DATA TYPE bigint USING seq::bigint;

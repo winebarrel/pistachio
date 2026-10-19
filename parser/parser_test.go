@@ -1117,6 +1117,49 @@ func TestParseSQL_RetypeUsing(t *testing.T) {
 	assert.Equal(t, new("status::public.item_status"), table.Columns.Get("status").RetypeUsing)
 }
 
+// The expression is read and written back, so a trailing comment cannot
+// comment out the end of SET DATA TYPE.
+func TestParseSQL_RetypeUsingValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want string
+	}{
+		{"CAST(code AS integer)", "code::int"},
+		{"code::integer -- cast", "code::int"},
+		{"old_flag <> 0", "old_flag <> 0"},
+		{"code || '--'", "code || '--'"},
+		{`"Code"::integer`, `"Code"::int`},
+	} {
+		t.Run(tt.expr, func(t *testing.T) {
+			result, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\n    -- pista:retype-using " + tt.expr + "\n    code integer\n);")
+			require.NoError(t, err)
+			assert.Equal(t, new(tt.want), result.Tables.Get("public.t").Columns.Get("code").RetypeUsing)
+		})
+	}
+}
+
+func TestParseSQL_RetypeUsingValueCRLF(t *testing.T) {
+	result, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\r\n    -- pista:retype-using code::integer\r\n    code integer\r\n);")
+	require.NoError(t, err)
+	assert.Equal(t, new("code::int"), result.Tables.Get("public.t").Columns.Get("code").RetypeUsing)
+}
+
+func TestParseSQL_RetypeUsingValueError(t *testing.T) {
+	for _, expr := range []string{
+		"code, id",
+		"code::integer, ADD COLUMN x int",
+		"code::integer FROM t",
+		"code::integer AS x",
+		"code::integer; DROP TABLE t",
+	} {
+		t.Run(expr, func(t *testing.T) {
+			_, err := parseSQLWithPublicSchema("CREATE TABLE public.t (\n    -- pista:retype-using " + expr + "\n    code integer\n);")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "-- pista:retype-using: column public.t.code: "+expr+" is not a single expression")
+		})
+	}
+}
+
 func TestParseSQL_InlineForeignKey(t *testing.T) {
 	sql := `CREATE TABLE public.groups (
     id integer NOT NULL,
