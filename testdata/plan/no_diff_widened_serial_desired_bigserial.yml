@@ -1,0 +1,12 @@
+# A desired schema written by an earlier dump has bigserial for a serial
+# column widened to bigint. It plans clean against the widened column.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+  ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE bigint;
+desired: |
+  CREATE TABLE public.t (
+      id bigserial NOT NULL
+  );
+plan: ""
