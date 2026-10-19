@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.89.0] - 2026-10-20
 
 * Add `-- pista:backfill <value>`. It sets the value of the existing rows when a `NOT NULL` column is added, so `ADD COLUMN` does not fail on a table with rows.
 
