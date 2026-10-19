@@ -539,15 +539,15 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
+	idxResult, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
-	result.Stmts = append(result.Stmts, idxResult2.Stmts...)
+	result.Stmts = append(result.Stmts, idxResult.Stmts...)
 	result.Stmts = append(result.Stmts, usingIndexStmts...)
-	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult2.PartitionedStmts...)
-	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult2.DisallowedDropStmts...)
-	if idxResult2.HasConcurrently {
+	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult.PartitionedStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult.DisallowedDropStmts...)
+	if idxResult.HasConcurrently {
 		result.HasConcurrently = true
 	}
 
