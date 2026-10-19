@@ -483,12 +483,9 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	viaCheckStmts, viaCheckSetNotNull, viaCheckNames := notNullViaCheckSQL(fqtn, current, desired)
 	if len(viaCheckNames) > 0 {
 		clone := *current
-		clone.Constraints = orderedmap.New[string, *model.Constraint]()
-		for name, con := range current.Constraints.All() {
-			if !viaCheckNames[name] {
-				clone.Constraints.Set(name, con)
-			}
-		}
+		clone.Constraints = current.Constraints.Filter(func(name string, _ *model.Constraint) bool {
+			return !viaCheckNames[name]
+		})
 		current = &clone
 	}
 	result.ViaCheckSetNotNull = viaCheckSetNotNull
