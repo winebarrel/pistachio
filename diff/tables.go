@@ -68,12 +68,7 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, ori
 	}
 	var cols []RetypedColumn
 	for name, desiredCol := range desired.Columns.All() {
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
 			cols = append(cols, RetypedColumn{
 				Name:    fqtn + "." + model.Ident(name),
@@ -92,17 +87,23 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, ori
 // TYPE.
 func tableRetyped(fqtn string, current, desired *model.Table) bool {
 	for name, desiredCol := range desired.Columns.All() {
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
 			return true
 		}
 	}
 	return false
+}
+
+// currentColumnName returns the name the desired column has on the current
+// table: the rename source when the current table has it, otherwise name.
+func currentColumnName(current *model.Table, name string, desiredCol *model.Column) string {
+	if desiredCol.RenameFrom != nil {
+		if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+			return *desiredCol.RenameFrom
+		}
+	}
+	return name
 }
 
 // descendants lists the partitions and INHERITS children of the table, at
@@ -883,12 +884,7 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 		if !desiredCol.NotNullViaCheck || !desiredCol.NotNull || desiredCol.Identity.IsIdentityColumn() {
 			continue
 		}
-		currentName := name
-		if desiredCol.RenameFrom != nil {
-			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
-				currentName = *desiredCol.RenameFrom
-			}
-		}
+		currentName := currentColumnName(current, name, desiredCol)
 		currentCol, ok := current.Columns.GetOk(currentName)
 		if !ok {
 			continue
