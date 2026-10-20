@@ -91,7 +91,7 @@ jobs:
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
           ACTOR: ${{ github.actor }}
       - id: app-token
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.3.0
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
