@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Build with Go 1.27.3. It no longer trusts the compromised eMudhra intermediate certificates (CVE-2026-111943) when pista connects to PostgreSQL over TLS. Building from source now requires Go 1.27.3.
+
 ## [1.89.0] - 2026-10-20
 
 * Add `-- pista:backfill <value>`. It sets the value of the existing rows when a `NOT NULL` column is added, so `ADD COLUMN` does not fail on a table with rows.
