@@ -226,8 +226,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			if err != nil {
 				return nil, err
 			}
-			// The FK drops run before the table rename, so they name the table
-			// as it is before the rename.
+			// FK drops run before the rename, so they use the old table name.
 			if currentKey != k {
 				for i, s := range tableResult.FKDropStmts {
 					if rest, ok := strings.CutPrefix(s, "ALTER TABLE "+k+" "); ok {

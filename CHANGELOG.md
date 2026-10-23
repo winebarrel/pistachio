@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* Renaming a table with `-- pista:renamed-from` no longer fails at apply when a foreign key on the table is dropped in the same plan, as happens to a key that references the table itself. The `DROP CONSTRAINT` now names the table before the rename.
+* Renaming a table that has a foreign key to itself no longer fails at apply. The plan dropped the key under the new table name before the rename.
 
 ## [1.89.1] - 2026-10-21
 
