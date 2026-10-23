@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.users (
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      id integer
+  );
+desired: |
+  CREATE TABLE public.users (
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      id integer
+  );
+plan: ""

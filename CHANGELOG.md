@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A table-level `PRIMARY KEY` written before its columns in `CREATE TABLE` now makes them `NOT NULL`. Before, the plan dropped `NOT NULL` from them, which PostgreSQL refuses.
+
 ## [1.89.1] - 2026-10-21
 
 * Build with Go 1.27.3. It no longer trusts the compromised eMudhra intermediate certificates (CVE-2026-111943) when pista connects to PostgreSQL over TLS. Building from source now requires Go 1.27.3.
