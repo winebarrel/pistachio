@@ -1034,10 +1034,15 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint, table.FQTN(), con.Location); err != nil {
 						return nil, err
 					}
-					applyPrimaryKeyNotNull(table, constraint)
 				}
 			}
 		}
+	}
+
+	// The primary key can come before its columns, so mark them NOT NULL
+	// after all elements are read.
+	for con := range table.Constraints.Values() {
+		applyPrimaryKeyNotNull(table, con)
 	}
 
 	return table, nil
