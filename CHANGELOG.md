@@ -6,6 +6,8 @@
 
 * `plan` no longer drops `NOT NULL` from primary key columns when `PRIMARY KEY` comes before them in `CREATE TABLE`. PostgreSQL refused that statement.
 
+* Renaming a table that has a foreign key to itself no longer fails at apply. The plan dropped the key under the new table name before the rename.
+
 ## [1.89.1] - 2026-10-21
 
 * Build with Go 1.27.3. It no longer trusts the compromised eMudhra intermediate certificates (CVE-2026-111943) when pista connects to PostgreSQL over TLS. Building from source now requires Go 1.27.3.
