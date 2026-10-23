@@ -1039,8 +1039,8 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 		}
 	}
 
-	// A table constraint can come before the columns it names, so the
-	// primary key columns are marked once every element is read.
+	// The primary key can come before its columns, so mark them NOT NULL
+	// after all elements are read.
 	for con := range table.Constraints.Values() {
 		applyPrimaryKeyNotNull(table, con)
 	}

@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A table-level `PRIMARY KEY` written before its columns in `CREATE TABLE` now makes them `NOT NULL`. Before, the plan dropped `NOT NULL` from them, which PostgreSQL refuses.
+* `plan` no longer drops `NOT NULL` from primary key columns when `PRIMARY KEY` comes before them in `CREATE TABLE`. PostgreSQL refused that statement.
 
 ## [1.89.1] - 2026-10-21
 
