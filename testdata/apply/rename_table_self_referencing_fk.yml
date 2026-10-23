@@ -1,0 +1,34 @@
+init: |
+  CREATE TABLE public.cat (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.cat ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.cat(id);
+desired: |
+  -- pista:renamed-from public.cat
+  CREATE TABLE public.category (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.category ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.category(id);
+applied: |
+  -- public.category
+  CREATE TABLE public.category (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.category ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES category(id);
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.category
+  CREATE TABLE public.category (
+      id integer CONSTRAINT cat_id_not_null NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.category ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES category(id);

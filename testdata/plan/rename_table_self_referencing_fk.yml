@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.cat (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.cat ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.cat(id);
+desired: |
+  -- pista:renamed-from public.cat
+  CREATE TABLE public.category (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT cat_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.category ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.category(id);
+plan: |
+  ALTER TABLE public.cat DROP CONSTRAINT cat_parent_fkey;
+  ALTER TABLE public.cat RENAME TO category;
+  ALTER TABLE ONLY public.category ADD CONSTRAINT cat_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.category (id);
