@@ -4,9 +4,9 @@
 
 ## [1.89.2] - 2026-10-23
 
-* `plan` no longer drops `NOT NULL` from primary key columns when `PRIMARY KEY` comes before them in `CREATE TABLE`. PostgreSQL refused that statement.
+* `plan` no longer drops `NOT NULL` from a primary key column when the `PRIMARY KEY` is written before the column, as in `CREATE TABLE t (PRIMARY KEY (id), id int)`.
 
-* Renaming a table that has a foreign key to itself no longer fails at apply. The plan dropped the key under the new table name before the rename.
+* `apply` no longer fails when a table with a foreign key to itself is renamed with `-- pista:renamed-from`. The plan ran `ALTER TABLE <new name> DROP CONSTRAINT` before `RENAME TO`, when the new name did not exist yet.
 
 ## [1.89.1] - 2026-10-21
 
