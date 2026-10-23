@@ -1,0 +1,17 @@
+# New enum values that hold a single quote are added in place, with the quote
+# doubled in the label and in the neighbor it is placed against.
+init: |
+  CREATE TYPE public.label AS ENUM ('a', 'c''d');
+desired: |
+  CREATE TYPE public.label AS ENUM ('it''s', 'a', 'b''c', 'c''d');
+applied_sql: |
+  ALTER TYPE public.label ADD VALUE 'it''s' BEFORE 'a';
+  ALTER TYPE public.label ADD VALUE 'b''c' AFTER 'a';
+applied: |
+  -- public.label
+  CREATE TYPE public.label AS ENUM (
+      'it''s',
+      'a',
+      'b''c',
+      'c''d'
+  );

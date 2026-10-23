@@ -1,0 +1,13 @@
+# A descending smallint sequence that cycles. Every bound is negative.
+init: |
+  CREATE SEQUENCE public.countdown AS smallint INCREMENT BY -1 MINVALUE -100 MAXVALUE -1 START WITH -1 CYCLE;
+dump: |
+  -- public.countdown
+  CREATE SEQUENCE public.countdown
+      AS smallint
+      START WITH -1
+      INCREMENT BY -1
+      MINVALUE -100
+      MAXVALUE -1
+      CACHE 1
+      CYCLE;
