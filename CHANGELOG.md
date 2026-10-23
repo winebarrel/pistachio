@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.89.2] - 2026-10-23
 
 * `plan` no longer drops `NOT NULL` from primary key columns when `PRIMARY KEY` comes before them in `CREATE TABLE`. PostgreSQL refused that statement.
 
