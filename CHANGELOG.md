@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Renaming a table with `-- pista:renamed-from` no longer fails at apply when a foreign key on the table is dropped in the same plan, as happens to a key that references the table itself. The `DROP CONSTRAINT` now names the table before the rename.
+
 ## [1.89.1] - 2026-10-21
 
 * Build with Go 1.27.3. It no longer trusts the compromised eMudhra intermediate certificates (CVE-2026-111943) when pista connects to PostgreSQL over TLS. Building from source now requires Go 1.27.3.
