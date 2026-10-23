@@ -314,10 +314,7 @@ func FormatExecuteStmtWithNote(es *ExecuteStmt, note string) string {
 // if it does not already contain a schema. Quoted identifiers containing
 // dots (e.g. `"a.b"`) are treated as a single identifier.
 func qualifyRenameFrom(value, defaultSchema string) string {
-	parts := model.SplitQualifiedName(value)
-	for i, p := range parts {
-		parts[i] = model.UnquoteIdent(p)
-	}
+	parts := model.UnquoteQualifiedName(value)
 	if len(parts) >= 2 {
 		return model.Ident(parts...)
 	}
