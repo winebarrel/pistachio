@@ -6,7 +6,7 @@
 
 * `plan` no longer drops `NOT NULL` from a primary key column when the `PRIMARY KEY` is written before the column, as in `CREATE TABLE t (PRIMARY KEY (id), id int)`.
 
-* `apply` no longer fails when a table with a foreign key to itself is renamed with `-- pista:renamed-from`. The plan ran `ALTER TABLE <new name> DROP CONSTRAINT` before `RENAME TO`, when the new name did not exist yet.
+* `apply` no longer fails when a table with a foreign key to itself is renamed with `-- pista:renamed-from`.
 
 ## [1.89.1] - 2026-10-21
 
