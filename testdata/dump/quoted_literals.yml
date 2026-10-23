@@ -1,0 +1,29 @@
+# Enum labels, a default and comments that hold a quote, a space, a
+# backslash or a newline. dump writes each as a standard string literal.
+init: |
+  CREATE TYPE public.label AS ENUM ('it''s', 'two words', 'Upper', 'back\slash');
+  CREATE TABLE public.notes (
+      id integer NOT NULL,
+      body text DEFAULT 'it''s',
+      CONSTRAINT notes_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.notes IS 'it''s a "note"';
+  COMMENT ON COLUMN public.notes.body IS E'first line\nsecond line';
+dump: |
+  -- public.label
+  CREATE TYPE public.label AS ENUM (
+      'it''s',
+      'two words',
+      'Upper',
+      'back\slash'
+  );
+
+  -- public.notes
+  CREATE TABLE public.notes (
+      id integer NOT NULL,
+      body text DEFAULT 'it''s'::text,
+      CONSTRAINT notes_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.notes IS 'it''s a "note"';
+  COMMENT ON COLUMN public.notes.body IS 'first line
+  second line';

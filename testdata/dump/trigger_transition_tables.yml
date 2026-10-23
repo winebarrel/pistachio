@@ -1,0 +1,19 @@
+# Statement-level triggers with transition tables. pg_get_triggerdef writes
+# OLD TABLE before NEW TABLE whatever order the CREATE TRIGGER used.
+init: |
+  CREATE FUNCTION public.audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER items_inserted AFTER INSERT ON public.items REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.audit();
+  CREATE TRIGGER items_updated AFTER UPDATE ON public.items REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.audit();
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER items_inserted AFTER INSERT ON items REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION audit();
+  CREATE TRIGGER items_updated AFTER UPDATE ON items REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION audit();

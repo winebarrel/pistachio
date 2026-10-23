@@ -1,0 +1,28 @@
+# A foreign key added NOT VALID. pg_get_constraintdef writes NOT VALID, and
+# dump keeps the key in an ALTER TABLE after the table.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) NOT VALID;
+dump: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
