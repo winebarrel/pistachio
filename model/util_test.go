@@ -365,6 +365,25 @@ func TestSplitQualifiedName(t *testing.T) {
 	}
 }
 
+func TestUnquoteQualifiedName(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected []string
+	}{
+		{"Users", []string{"users"}},
+		{"public.users", []string{"public", "users"}},
+		{`public."my.coll"`, []string{"public", "my.coll"}},
+		{`"My Schema"."Old Name"`, []string{"My Schema", "Old Name"}},
+		{"", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, UnquoteQualifiedName(tt.name))
+		})
+	}
+}
+
 func TestUnquoteIdent(t *testing.T) {
 	tests := []struct {
 		name     string

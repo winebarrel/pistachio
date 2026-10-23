@@ -116,6 +116,17 @@ func SplitQualifiedName(s string) []string {
 	return parts
 }
 
+// UnquoteQualifiedName splits a qualified name with SplitQualifiedName and
+// unquotes each part with UnquoteIdent: `public."My.Coll"` -> [`public`,
+// `My.Coll`].
+func UnquoteQualifiedName(s string) []string {
+	parts := SplitQualifiedName(s)
+	for i, p := range parts {
+		parts[i] = UnquoteIdent(p)
+	}
+	return parts
+}
+
 // UnquoteIdent is the inverse of quoteIdent: it strips the surrounding double
 // quotes and unescapes doubled ones. An unquoted identifier is folded to lower
 // case, the way PostgreSQL reads it.

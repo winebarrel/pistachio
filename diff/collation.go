@@ -12,8 +12,8 @@ func equalCollation(a, b *string) bool {
 		return a == b
 	}
 
-	pa := splitCollation(*a)
-	pb := splitCollation(*b)
+	pa := model.UnquoteQualifiedName(*a)
+	pb := model.UnquoteQualifiedName(*b)
 	if len(pa) == 0 || len(pb) == 0 {
 		return *a == *b
 	}
@@ -25,12 +25,4 @@ func equalCollation(a, b *string) bool {
 		return pa[len(pa)-2] == pb[len(pb)-2]
 	}
 	return true
-}
-
-func splitCollation(s string) []string {
-	parts := model.SplitQualifiedName(s)
-	for i, p := range parts {
-		parts[i] = model.UnquoteIdent(p)
-	}
-	return parts
 }
