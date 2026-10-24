@@ -1008,36 +1008,6 @@ Workaround: write `integer[]`, which is what `pista dump` emits.
 
 Origin: review of the column type canonicalization, 2026-09-08.
 
-## A subscripted ARRAY constructor loses its parentheses
-
-PostgreSQL needs parentheses to subscript an array constructor, and
-`pg_get_expr` writes the expression back that way. A column that is declared
-`DEFAULT (ARRAY[1,2,3])[1]` reads out of the catalog as
-`(ARRAY[1, 2, 3])[1]`. The desired side runs the expression through
-libpg_query's deparse. The deparse drops the pair and returns
-`ARRAY[1, 2, 3][1]`. The two never compare equal. So the column is
-redefaulted on every plan, and the statement that the plan emits is a syntax
-error:
-
-```
-ALTER TABLE public.t ALTER COLUMN e SET DEFAULT (ARRAY[1, 2, 3][1]);
-```
-
-A `pista dump` round trip is broken, not only drifting. So this is not
-`Priority: low`.
-
-The deparse drops the pair only for an `A_ArrayExpr` under an
-`A_Indirection`. `(c).x`, `(ROW(1,2)).f1`, `(f(x)).a`, `(a[1])[2]` and
-`(x::int[])[1]` all keep their parentheses. Closing this means putting the
-pair back around a constructor that the deparse subscripts, on each path that
-renders an expression. A column default, a CHECK constraint, an index
-expression and a policy qualifier reach the deparse separately.
-
-An array constructor is a constant, so `(ARRAY[1,2,3])[1]` is a longer way
-to write `1`. No sample schema declares one.
-
-Origin: review of the `ARRAY[...]` layout fix, 2026-09-15.
-
 ## Perpetual drift on a default operator class or collation written out
 
 Priority: low.

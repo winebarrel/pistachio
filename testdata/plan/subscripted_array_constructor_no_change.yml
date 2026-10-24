@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.t (
+      a integer DEFAULT (ARRAY[1, 2, 3])[1],
+      b integer[],
+      CONSTRAINT t_check CHECK (a <> (ARRAY[1, 2, 3])[2])
+  );
+  CREATE INDEX t_idx ON public.t ((b[1] + (ARRAY[1, 2, 3])[1]));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (a = (ARRAY[1, 2, 3])[3]);
+desired: |
+  CREATE TABLE public.t (
+      a integer DEFAULT (ARRAY[1, 2, 3])[1],
+      b integer[],
+      CONSTRAINT t_check CHECK (a <> (ARRAY[1, 2, 3])[2])
+  );
+  CREATE INDEX t_idx ON public.t ((b[1] + (ARRAY[1, 2, 3])[1]));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (a = (ARRAY[1, 2, 3])[3]);
+plan: ""
