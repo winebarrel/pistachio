@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Parse desired files with the PostgreSQL 18 grammar (pg_query_go v18). Syntax added in PostgreSQL 18, such as `NOT ENFORCED` and `WITHOUT OVERLAPS`, no longer fails the parse.
+
+* A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
+
 ## [1.89.2] - 2026-10-23
 
 * `plan` no longer drops `NOT NULL` from a primary key column when the `PRIMARY KEY` is written before the column, as in `CREATE TABLE t (PRIMARY KEY (id), id int)`.

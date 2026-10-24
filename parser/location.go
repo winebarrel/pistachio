@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
-	pgparser "github.com/pganalyze/pg_query_go/v6/parser"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
+	pgparser "github.com/pganalyze/pg_query_go/v18/parser"
 )
 
 // stmtRegion returns the raw text of a statement, the blank lines and comments

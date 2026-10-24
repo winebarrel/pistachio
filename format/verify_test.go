@@ -3,7 +3,7 @@ package format
 import (
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
