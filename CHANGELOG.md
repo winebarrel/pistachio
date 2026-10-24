@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Parse desired files with the PostgreSQL 18 grammar (pg_query_go v18). Syntax added in PostgreSQL 18, such as `NOT ENFORCED` and `WITHOUT OVERLAPS`, no longer fails the parse.
+
+* A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
+
 ## [1.90.3] - 2026-11-24
 
 * `CREATE TABLE ... OF type_name` is an error in a desired file. The table used to be read with no columns, so it was created empty, or every column of an existing table was planned to be dropped.

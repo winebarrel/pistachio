@@ -3,7 +3,7 @@ package pgast_test
 import (
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/internal/pgast"
@@ -32,6 +32,32 @@ func TestDeparseConstraintDef_RoundTrip(t *testing.T) {
 	got, err := pgast.DeparseConstraintDef(result)
 	require.NoError(t, err)
 	assert.Equal(t, "UNIQUE (email)", got)
+}
+
+func TestParse_LeadingCommentsBelongToStatement(t *testing.T) {
+	sql := "-- a\nSELECT 1;\n\n-- b\nSELECT 2 /* c */ ;\n/* d */ SELECT 3"
+	result, err := pgast.Parse(sql)
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 3)
+
+	var got []string
+	for _, stmt := range result.Stmts {
+		end := stmt.StmtLocation + stmt.StmtLen
+		if stmt.StmtLen == 0 {
+			end = int32(len(sql))
+		}
+		got = append(got, sql[stmt.StmtLocation:end])
+	}
+	assert.Equal(t, []string{
+		"-- a\nSELECT 1",
+		"\n\n-- b\nSELECT 2 /* c */ ",
+		"\n/* d */ SELECT 3",
+	}, got)
+}
+
+func TestParse_Error(t *testing.T) {
+	_, err := pgast.Parse("SELEC 1")
+	require.Error(t, err)
 }
 
 func TestWalkExprColumnRefs_CollectsAndMutates(t *testing.T) {
@@ -262,10 +288,9 @@ func TestDeparseConstraintDef_NotAConstraintResult(t *testing.T) {
 func TestParseTreeVersion(t *testing.T) {
 	stmt := parseStmt(t, "SELECT 1")
 
-	// Deparse refuses a hand-built tree that leaves Version unset.
-	_, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "version mismatch")
+	result, err := pg_query.Parse("SELECT 1")
+	require.NoError(t, err)
+	assert.Equal(t, result.Version, pgast.ParseTreeVersion)
 
 	out, err := pg_query.Deparse(&pg_query.ParseResult{
 		Version: pgast.ParseTreeVersion,
