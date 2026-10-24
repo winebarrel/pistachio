@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 )
 
 // sqlstateLockNotAvailable is the SQLSTATE of a statement that waited for a

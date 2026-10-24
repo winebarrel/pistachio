@@ -6,7 +6,7 @@
 set -euo pipefail
 
 out=model/testdata/keywords.txt
-mod=github.com/pganalyze/pg_query_go/v6
+mod=github.com/pganalyze/pg_query_go/v18
 dir=$(go list -m -f '{{.Dir}}' "$mod")
 kwlist="$dir/parser/include/postgres/parser/kwlist.h"
 

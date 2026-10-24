@@ -198,9 +198,9 @@ name alone:
 Neither transition needs new syntax. A `RENAME CONSTRAINT` after the
 `SET NOT NULL` gives the first transition the desired name. A
 `RENAME CONSTRAINT` to the name that PostgreSQL would choose covers the second.
-Reading PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col` in
-a desired file waits on the parser: `pg_query_go` v6 embeds PostgreSQL 17.7 and
-has no 18 release.
+PG18's NOT NULL table constraint, as in
+`ALTER TABLE ... ADD CONSTRAINT name NOT NULL col`, is an error in a desired
+file. The model keeps NOT NULL on the column.
 
 A second limitation: the catalog treats a NOT NULL name as no name only when
 it equals the name PostgreSQL gives an unnamed one, `<table>_<column>_not_null`,

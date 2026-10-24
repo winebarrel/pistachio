@@ -105,7 +105,7 @@ An index, a constraint and a foreign key have `auto_named`. It is `true` when th
 
 `parse` looks up an unqualified domain name in the first schema of `--schemas`, then in `public`. `dump --json` looks in each schema of `--schemas`, then in `public`.
 
-If an index or foreign key definition cannot be parsed, its added fields are empty. This happens with syntax that PostgreSQL 18 added, such as a foreign key with `NOT ENFORCED`, because pistachio parses SQL with the PostgreSQL 17 grammar.
+If an index or foreign key definition cannot be parsed, its added fields are empty.
 
 Directives appear as fields. `-- pista:renamed-from` becomes `rename_from`, and `-- pista:ignore` becomes `"ignore": true`. On an enum value, the rename is written in the enum's `value_rename_from`, keyed by the new value and sorted by it. `values` remains in the order in which the file writes them.
 
