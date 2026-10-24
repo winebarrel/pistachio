@@ -12,7 +12,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
@@ -476,7 +476,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
 	}
@@ -1181,9 +1181,12 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				}
 			}
 		case pg_query.ConstrType_CONSTR_GENERATED:
-			// pg_query reports GeneratedWhen="a" (ALWAYS) for STORED generated
-			// columns. PostgreSQL only supports STORED at this time, so any
-			// CONSTR_GENERATED implies stored. Map to the catalog form ('s').
+			// PostgreSQL 18 adds VIRTUAL, which is also what a column that
+			// names neither kind gets. Only STORED is read; the catalog form
+			// is 's'.
+			if con.GeneratedKind == "v" {
+				return nil, &locatedError{msg: "column " + cd.Colname + ": a VIRTUAL generated column is not supported", offset: int(con.Location)}
+			}
 			col.Generated = model.ColumnGenerated('s')
 			if con.RawExpr != nil {
 				def, err := deparseExpr(con.RawExpr)
@@ -1710,6 +1713,12 @@ func supportsConstraintAttrs(con *pg_query.Constraint) bool {
 }
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
+	// PostgreSQL 18 accepts NOT NULL as a table constraint. The model keeps
+	// NOT NULL on the column, so reading it here would lose it.
+	if con.Contype == pg_query.ConstrType_CONSTR_NOTNULL {
+		return nil, &locatedError{msg: "table " + tableName + ": a NOT NULL table constraint is not supported (write NOT NULL on the column)", offset: int(con.Location)}
+	}
+
 	if con.Conname == "" {
 		if con.Indexname != "" {
 			// ADD UNIQUE USING INDEX without CONSTRAINT: PostgreSQL names

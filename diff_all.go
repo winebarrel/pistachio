@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"

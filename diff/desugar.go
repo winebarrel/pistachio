@@ -1,7 +1,7 @@
 package diff
 
 import (
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"google.golang.org/protobuf/proto"
 )
 
