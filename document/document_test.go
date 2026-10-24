@@ -320,8 +320,7 @@ func TestNew_Empty(t *testing.T) {
 }
 
 // A definition that pg_query cannot read leaves the added fields empty rather
-// than failing the document. PostgreSQL 18 writes such definitions, and the
-// parser reads the PostgreSQL 17 grammar.
+// than failing the document.
 func TestNew_UnreadableDefinition(t *testing.T) {
 	table := &model.Table{Schema: "public", Name: "t"}
 	table.Indexes = newIndexes(
@@ -329,7 +328,6 @@ func TestNew_UnreadableDefinition(t *testing.T) {
 		&model.Index{Schema: "public", Name: "i_select", Table: "t", Definition: "SELECT 1"},
 	)
 	table.ForeignKeys = newForeignKeys(
-		&model.ForeignKey{Name: "f_not_enforced", Definition: "FOREIGN KEY (a) REFERENCES public.u(b) NOT ENFORCED"},
 		&model.ForeignKey{Name: "f_check", Definition: "CHECK (a > 0)"},
 		&model.ForeignKey{Name: "f_two", Definition: "CHECK (a > 0), ADD COLUMN b integer"},
 	)

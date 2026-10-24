@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/kong v1.16.1
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/pganalyze/pg_query_go/v6 v6.2.5
+	github.com/pganalyze/pg_query_go/v18 v18.0.0-20261001001140-51b79d2d7669
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/stretchr/testify v1.12.1
 	github.com/winebarrel/orderedmap/v2 v2.3.0

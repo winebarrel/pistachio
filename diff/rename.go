@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
@@ -806,9 +806,9 @@ func rewriteColumnsInExprPtr(expr *string, renames map[string]string) *string {
 // generated expression cannot be altered in place. A plain DEFAULT is left
 // alone: it cannot reference a column, so a rename never reaches it.
 //
-// STORED is the only kind the desired side reaches today, since pg_query does
-// not parse PostgreSQL 18's VIRTUAL yet. The test is on the column being
-// generated at all, so a virtual one needs nothing here once it does.
+// STORED is the only kind the desired side reaches today, since the parser
+// rejects PostgreSQL 18's VIRTUAL. The test is on the column being generated
+// at all, so a virtual one needs nothing here once it is read.
 func rewriteColumnRefsInGenerated(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
 	out := orderedmap.New[string, *model.Column]()
 	for name, col := range cols.All() {
