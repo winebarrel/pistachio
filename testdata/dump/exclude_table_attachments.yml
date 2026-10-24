@@ -1,0 +1,29 @@
+# An excluded table takes its comments, indexes, triggers and policies out of
+# the dump with it, so the dump does not refer to a table it does not create.
+exclude: [invoice_events]
+init: |
+  CREATE FUNCTION public.touch_event() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.invoices (
+      id integer NOT NULL,
+      CONSTRAINT invoices_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.invoice_events (
+      id integer NOT NULL,
+      kind text,
+      CONSTRAINT invoice_events_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.invoice_events IS 'events';
+  COMMENT ON COLUMN public.invoice_events.kind IS 'event kind';
+  CREATE INDEX invoice_events_kind_idx ON public.invoice_events (kind);
+  COMMENT ON INDEX public.invoice_events_kind_idx IS 'by kind';
+  CREATE TRIGGER invoice_events_touch BEFORE INSERT ON public.invoice_events
+      FOR EACH ROW EXECUTE FUNCTION public.touch_event();
+  ALTER TABLE public.invoice_events ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY invoice_events_read ON public.invoice_events FOR SELECT USING (true);
+dump: |
+  -- public.invoices
+  CREATE TABLE public.invoices (
+      id integer NOT NULL,
+      CONSTRAINT invoices_pkey PRIMARY KEY (id)
+  );
