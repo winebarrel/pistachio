@@ -63,9 +63,9 @@ func TestTables(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, tables.Len())
 
-		_, ok := tables.GetOk("public.users")
+		ok := tables.Has("public.users")
 		assert.True(t, ok)
-		_, ok = tables.GetOk("public.posts")
+		ok = tables.Has("public.posts")
 		assert.True(t, ok)
 	})
 

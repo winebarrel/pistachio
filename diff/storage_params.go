@@ -60,7 +60,7 @@ func storageParamChanges(current, desired *orderedmap.Map[string, string]) (set,
 		}
 	}
 	for name := range currentParams.Keys() {
-		if _, ok := desiredParams.GetOk(name); !ok {
+		if !desiredParams.Has(name) {
 			reset = append(reset, name)
 		}
 	}

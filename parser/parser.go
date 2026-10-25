@@ -332,7 +332,7 @@ func warnIgnoredAlterTableCmds(sql string, loc *locator, rawStmt *pg_query.RawSt
 // own in a schema. offset is where in the parsed SQL the message points, so
 // the error can name the file, line and column of the repeat.
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V, on string, offset int32) error {
-	if _, ok := m.GetOk(key); ok {
+	if m.Has(key) {
 		scope := ""
 		if on != "" {
 			scope = " on " + on
@@ -762,8 +762,8 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				// sequence, which PostgreSQL accepts and pg_dump writes for
 				// a view column's default. IF EXISTS is about the database,
 				// not the file, so it does not excuse a missing declaration.
-				_, isView := views.GetOk(fqtn)
-				_, isSeq := sequences.GetOk(fqtn)
+				isView := views.Has(fqtn)
+				isSeq := sequences.Has(fqtn)
 				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE || isView || isSeq {
 					warnIgnoredStmt(sql, loc, rawStmt)
 					continue
@@ -1097,7 +1097,7 @@ func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Tabl
 			if !con.Type.IsPrimaryKeyConstraint() || con.IndexName == "" {
 				continue
 			}
-			if _, ok := t.Indexes.GetOk(con.IndexName); !ok {
+			if !t.Indexes.Has(con.IndexName) {
 				return fmt.Errorf("index %s used by primary key %s on table %s is not declared", model.Ident(con.IndexName), model.Ident(con.Name), fqtn)
 			}
 			for _, colName := range primaryKeyColumns(t) {
@@ -1223,11 +1223,11 @@ func checkAlterTableTargets(as *pg_query.AlterTableStmt, t *model.Table, fqtn st
 		switch cmd.Subtype {
 		case pg_query.AlterTableType_AT_EnableTrig, pg_query.AlterTableType_AT_DisableTrig,
 			pg_query.AlterTableType_AT_EnableAlwaysTrig, pg_query.AlterTableType_AT_EnableReplicaTrig:
-			if _, ok := t.Triggers.GetOk(cmd.Name); !ok {
+			if !t.Triggers.Has(cmd.Name) {
 				return undeclared("ALTER TABLE "+fqtn, "trigger", cmd.Name, offset)
 			}
 		case pg_query.AlterTableType_AT_SetStorage, pg_query.AlterTableType_AT_SetCompression:
-			if _, ok := t.Columns.GetOk(cmd.Name); !ok && !t.IsPartitionChild() {
+			if !t.Columns.Has(cmd.Name) && !t.IsPartitionChild() {
 				return undeclared("ALTER TABLE "+fqtn, "column", cmd.Name, offset)
 			}
 		}

@@ -99,7 +99,7 @@ func tableRetyped(fqtn string, current, desired *model.Table) bool {
 // table: the rename source when the current table has it, otherwise name.
 func currentColumnName(current *model.Table, name string, desiredCol *model.Column) string {
 	if desiredCol.RenameFrom != nil {
-		if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+		if current.Columns.Has(*desiredCol.RenameFrom) {
 			return *desiredCol.RenameFrom
 		}
 	}
@@ -187,7 +187,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 
 	// New tables
 	for k, v := range desired.All() {
-		if _, ok := current.GetOk(k); !ok {
+		if !current.Has(k) {
 			result.Stmts = append(result.Stmts, v.SQL())
 			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v, parentIndexCopies(current, desired, v))
 			if err != nil {
@@ -217,7 +217,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			currentKey := k
 			if desiredTable.RenameFrom != nil {
-				if _, ok := original.GetOk(*desiredTable.RenameFrom); ok {
+				if original.Has(*desiredTable.RenameFrom) {
 					currentKey = *desiredTable.RenameFrom
 				}
 			}
@@ -265,7 +265,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	// rejects dropping it on its own, and it goes with the partition anyway.
 	tableAllowed := dc.IsDropAllowed("table")
 	for k, tbl := range current.All() {
-		if _, ok := desired.GetOk(k); ok {
+		if desired.Has(k) {
 			continue
 		}
 		for name, fk := range tbl.ForeignKeys.All() {
@@ -648,7 +648,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 
 	// Add new columns
 	for name, col := range desired.All() {
-		if _, ok := current.GetOk(name); !ok {
+		if !current.Has(name) {
 			if col.Backfill != nil {
 				filled := *col
 				filled.Default = col.Backfill
@@ -710,7 +710,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	colAllowed := dc.IsDropAllowed("column")
 	for _, pass := range []bool{true, false} {
 		for name, col := range current.All() {
-			if _, ok := desired.GetOk(name); ok {
+			if desired.Has(name) {
 				continue
 			}
 			if col.Generated.IsStoredGeneratedColumn() != pass {
@@ -926,7 +926,7 @@ func notNullViaCheckSQL(fqtn string, current, desired *model.Table) (stmts, setN
 		// the directive's, and so is one on the current side that is not a
 		// CHECK (col IS NOT NULL). The constraint diff handles it, and the
 		// column gets a plain SET NOT NULL.
-		_, declared := desired.Constraints.GetOk(conName)
+		declared := desired.Constraints.Has(conName)
 		con, hasCon := current.Constraints.GetOk(conName)
 		if declared || hasCon && !isNotNullCheckOn(con, currentName) {
 			if !currentCol.NotNull {
@@ -1823,9 +1823,9 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// so it is left to VALIDATE CONSTRAINT below.
 	conAllowed := dc.IsDropAllowed("constraint")
 	for name, con := range current.All() {
-		_, ok := desired.GetOk(name)
+		kept := desired.Has(name)
 		ch := changes[name]
-		if ok && (!ch.changed || ch.validateOnly) {
+		if kept && (!ch.changed || ch.validateOnly) {
 			continue
 		}
 		dropName := name
@@ -1833,11 +1833,11 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 			dropName = oldName
 		}
 		drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
-		if !ok && !conAllowed {
+		if !kept && !conAllowed {
 			disallowed = append(disallowed, "-- skipped: "+drop)
 			continue
 		}
-		if !ok && con.Type.IsCheckConstraint() {
+		if !kept && con.Type.IsCheckConstraint() {
 			checkDrops = append(checkDrops, drop)
 			continue
 		}
@@ -1846,9 +1846,9 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 
 	// Add new or changed constraints, or validate an existing NOT VALID one.
 	for name, desiredCon := range desired.All() {
-		_, ok := current.GetOk(name)
+		exists := current.Has(name)
 		ch := changes[name]
-		if ok && !ch.changed {
+		if exists && !ch.changed {
 			continue
 		}
 		if ch.validateOnly {
@@ -2193,9 +2193,9 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 	// definition, so it is left to VALIDATE CONSTRAINT below.
 	fkAllowed := dc.IsDropAllowed("foreign_key")
 	for name, currentFk := range current.All() {
-		_, ok := desired.GetOk(name)
+		kept := desired.Has(name)
 		ch := changes[name]
-		if ok && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
+		if kept && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
 			continue
 		}
 		// A key the desired schema drops altogether reaches this with no entry
@@ -2208,7 +2208,7 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 			dropName = oldName
 		}
 		drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
-		if !ok && !fkAllowed {
+		if !kept && !fkAllowed {
 			disallowed = append(disallowed, "-- skipped: "+drop)
 			continue
 		}
@@ -2217,9 +2217,9 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 
 	// Add new or changed FKs, or validate an existing NOT VALID one.
 	for name, desiredFk := range desired.All() {
-		_, ok := current.GetOk(name)
+		exists := current.Has(name)
 		ch := changes[name]
-		if ok && !ch.changed {
+		if exists && !ch.changed {
 			continue
 		}
 		if ch.deferralOnly || ch.validateOnly {
@@ -2268,7 +2268,7 @@ func withInheritedColumns(current, desired *model.Table) *model.Table {
 	// A comment on a column the table does not have is kept so it still
 	// reaches PostgreSQL and fails there rather than disappearing here.
 	for name, col := range desired.Columns.All() {
-		if _, ok := cols.GetOk(name); !ok {
+		if !cols.Has(name) {
 			cols.Set(name, col)
 		}
 	}

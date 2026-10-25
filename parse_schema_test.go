@@ -19,7 +19,7 @@ func TestClient_ParseSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	// An unqualified name is qualified with the first schema.
-	_, ok := result.Tables.GetOk("myschema.t")
+	ok := result.Tables.Has("myschema.t")
 	assert.True(t, ok)
 }
 

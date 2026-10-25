@@ -69,9 +69,9 @@ func TestEnums(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, enums.Len())
 
-		_, ok := enums.GetOk("public.role")
+		ok := enums.Has("public.role")
 		assert.True(t, ok)
-		_, ok = enums.GetOk("public.status")
+		ok = enums.Has("public.status")
 		assert.True(t, ok)
 	})
 }

@@ -37,13 +37,13 @@ func detectRenames[V any](
 
 		oldObj, ok := adjusted.GetOk(oldKey)
 		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
+			if adjusted.Has(newKey) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if _, exists := adjusted.GetOk(newKey); exists {
+		if adjusted.Has(newKey) {
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
@@ -105,13 +105,13 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 
 		oldTable, ok := adjusted.GetOk(oldKey)
 		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
+			if adjusted.Has(newKey) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if _, exists := adjusted.GetOk(newKey); exists {
+		if adjusted.Has(newKey) {
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
@@ -159,7 +159,7 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 // renameIndexesRelation returns copies of indexes pointing at the renamed
 // relation, so a rename alone does not drop and re-create them.
 func renameIndexesRelation(indexes *orderedmap.Map[string, *model.Index], newName string) (*orderedmap.Map[string, *model.Index], error) {
-	if indexes == nil || indexes.Len() == 0 {
+	if indexes.Len() == 0 {
 		return indexes, nil
 	}
 	renamed := orderedmap.New[string, *model.Index]()
@@ -251,13 +251,13 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 
 		oldView, ok := adjusted.GetOk(oldKey)
 		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
+			if adjusted.Has(newKey) {
 				continue
 			}
 			return nil, nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if _, exists := adjusted.GetOk(newKey); exists {
+		if adjusted.Has(newKey) {
 			return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
@@ -318,13 +318,13 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		oldCol, ok := adjusted.GetOk(oldName)
 		if !ok {
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source column %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename column %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
@@ -360,13 +360,13 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		oldCon, ok := adjusted.GetOk(oldName)
 		if !ok {
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source constraint %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename constraint %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
@@ -398,13 +398,13 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 		oldIdx, ok := adjusted.GetOk(oldName)
 		if !ok {
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source index %s not found", model.Ident(oldName))
 		}
 
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename index %s to %s: destination already exists", model.Ident(oldName), model.Ident(newName))
 		}
 
@@ -463,13 +463,13 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		oldFK, ok := adjusted.GetOk(oldName)
 		if !ok {
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source foreign key %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename foreign key %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
@@ -505,13 +505,13 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		oldPol, ok := adjusted.GetOk(oldName)
 		if !ok {
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source policy %s not found on %s", model.Ident(oldName), fqtn)
 		}
 
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename policy %s to %s on %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 

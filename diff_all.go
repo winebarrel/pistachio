@@ -686,7 +686,7 @@ func renamedTablesAndIndexes(current, desired *orderedmap.Map[string, *model.Tab
 	for k, t := range desired.All() {
 		currentTable := k
 		if t.RenameFrom != nil {
-			if _, ok := current.GetOk(*t.RenameFrom); ok {
+			if current.Has(*t.RenameFrom) {
 				tables[k] = *t.RenameFrom
 				currentTable = *t.RenameFrom
 			}
@@ -903,7 +903,7 @@ func reconcileOwnedSequences(
 		if !seq.Owned() {
 			continue
 		}
-		if _, ok := current.GetOk(k); ok {
+		if current.Has(k) {
 			continue
 		}
 		col := currentColumn(currentTables, desiredTables, seq.OwnerFQTN(), *seq.OwnerColumn)
@@ -926,7 +926,7 @@ type columnRef struct {
 func currentColumn(currentTables, desiredTables *orderedmap.Map[string, *model.Table], fqtn, column string) *model.Column {
 	if dt, ok := desiredTables.GetOk(fqtn); ok {
 		if dt.RenameFrom != nil {
-			if _, ok := currentTables.GetOk(*dt.RenameFrom); ok {
+			if currentTables.Has(*dt.RenameFrom) {
 				fqtn = *dt.RenameFrom
 			}
 		}

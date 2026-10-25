@@ -125,7 +125,7 @@ func TestParseSQL_WarnsUnsupportedStmt_StripsComments(t *testing.T) {
 	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
-	_, ok := result.Tables.GetOk("public.t")
+	ok := result.Tables.Has("public.t")
 	assert.True(t, ok, "the supported table must still be parsed")
 
 	out := buf.String()
@@ -158,7 +158,7 @@ func TestParseSQL_WarnsCreateTableAs(t *testing.T) {
 	result, err := parseSQLNoFile("CREATE TABLE public.t AS SELECT 1 AS a;", "public")
 	require.NoError(t, err)
 
-	_, ok := result.Tables.GetOk("public.t")
+	ok := result.Tables.Has("public.t")
 	assert.False(t, ok)
 	assert.Contains(t, buf.String(), "ignored unsupported statement: CREATE TABLE public.t AS SELECT 1 AS a")
 }
@@ -215,7 +215,7 @@ func TestParseSQL_CreateTableLike_ExecuteIsNotError(t *testing.T) {
 	sql := "CREATE TABLE public.t (id integer);\n-- pista:execute\nCREATE TABLE public.t2 (LIKE public.t);"
 	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
-	_, ok := result.Tables.GetOk("public.t2")
+	ok := result.Tables.Has("public.t2")
 	assert.False(t, ok)
 	require.Len(t, result.ExecuteStmts, 1)
 	assert.Contains(t, result.ExecuteStmts[0].SQL, "LIKE public.t")
@@ -301,7 +301,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction(t *testing.T) {
 
 	tbl, ok := result.Tables.GetOk("public.t")
 	require.True(t, ok)
-	_, hasCol := tbl.Columns.GetOk("x")
+	hasCol := tbl.Columns.Has("x")
 	assert.False(t, hasCol, "the action is still dropped; only the warning is new")
 
 	out := buf.String()
@@ -327,7 +327,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T
 
 	tbl, ok := result.Tables.GetOk("public.t")
 	require.True(t, ok)
-	_, hasCon := tbl.Constraints.GetOk("t_id_check")
+	hasCon := tbl.Constraints.Has("t_id_check")
 	assert.True(t, hasCon, "the supported action must still be parsed")
 
 	out := buf.String()
@@ -748,7 +748,7 @@ func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
-	_, ok := result.Tables.GetOk("public.t")
+	ok := result.Tables.Has("public.t")
 	assert.True(t, ok)
 
 	const hint = " (use --with-tx or --try-tx to run the apply in a transaction)"
@@ -818,9 +818,9 @@ func TestParseSQLFilesWithSchema(t *testing.T) {
 
 	result, err := ParseSQLFilesWithSchema([]string{a, b}, "public")
 	require.NoError(t, err)
-	_, ok := result.Tables.GetOk("public.t1")
+	ok := result.Tables.Has("public.t1")
 	assert.True(t, ok, "unqualified t1 should be schema-qualified to public.t1")
-	_, ok = result.Tables.GetOk("public.t2")
+	ok = result.Tables.Has("public.t2")
 	assert.True(t, ok, "qualified public.t2 should be preserved")
 }
 
@@ -1251,7 +1251,7 @@ CREATE TABLE public.members (
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.members")
 	require.NotNil(t, tbl)
-	_, ok := tbl.ForeignKeys.GetOk("members_group_id_fkey")
+	ok := tbl.ForeignKeys.Has("members_group_id_fkey")
 	assert.True(t, ok)
 }
 
@@ -1440,11 +1440,11 @@ CREATE TABLE public.items (
 	require.True(t, ok)
 
 	// PK and UNIQUE
-	_, ok = tbl.Constraints.GetOk("items_pkey")
+	ok = tbl.Constraints.Has("items_pkey")
 	assert.True(t, ok)
-	_, ok = tbl.Constraints.GetOk("items_code_key")
+	ok = tbl.Constraints.Has("items_code_key")
 	assert.True(t, ok)
-	_, ok = tbl.Constraints.GetOk("items_val_check")
+	ok = tbl.Constraints.Has("items_val_check")
 	assert.True(t, ok)
 
 	// FK
@@ -1495,10 +1495,10 @@ func TestParseSQL_ColumnLevelUnnamedConstraintsAutoNamed(t *testing.T) {
 			tbl := result.Tables.Get(tt.table)
 			require.NotNil(t, tbl)
 			if tt.isForeignKey {
-				_, ok := tbl.ForeignKeys.GetOk(tt.conName)
+				ok := tbl.ForeignKeys.Has(tt.conName)
 				assert.True(t, ok, "expected FK %s", tt.conName)
 			} else {
-				_, ok := tbl.Constraints.GetOk(tt.conName)
+				ok := tbl.Constraints.Has(tt.conName)
 				assert.True(t, ok, "expected constraint %s", tt.conName)
 			}
 		})
@@ -1517,7 +1517,7 @@ func TestParseSQL_TableLevelUnnamedExclusionAutoNamed(t *testing.T) {
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.reservations")
 	require.NotNil(t, tbl)
-	_, ok := tbl.Constraints.GetOk("reservations_room_during_excl")
+	ok := tbl.Constraints.Has("reservations_room_during_excl")
 	assert.True(t, ok)
 }
 
@@ -1687,10 +1687,10 @@ ALTER TABLE public.t ADD CHECK (a > 0);`,
 			tbl := result.Tables.Get("public.t")
 			require.NotNil(t, tbl)
 			if tt.isForeignKey {
-				_, ok := tbl.ForeignKeys.GetOk(tt.conName)
+				ok := tbl.ForeignKeys.Has(tt.conName)
 				assert.True(t, ok, "expected FK %s, got %v", tt.conName, tbl.ForeignKeys.CollectKeys())
 			} else {
-				_, ok := tbl.Constraints.GetOk(tt.conName)
+				ok := tbl.Constraints.Has(tt.conName)
 				assert.True(t, ok, "expected constraint %s, got %v", tt.conName, tbl.Constraints.CollectKeys())
 			}
 		})
@@ -1724,7 +1724,7 @@ ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 
 	tbl := result.Tables.Get("public.items")
 	require.NotNil(t, tbl)
-	_, ok := tbl.Constraints.GetOk("items_code_unique")
+	ok := tbl.Constraints.Has("items_code_unique")
 	assert.True(t, ok)
 }
 
@@ -1846,11 +1846,11 @@ func TestParseSQL_InlineUniqueConstraint(t *testing.T) {
 	require.NotNil(t, tbl)
 	assert.Equal(t, 3, tbl.Constraints.Len())
 
-	_, ok := tbl.Constraints.GetOk("items_pkey")
+	ok := tbl.Constraints.Has("items_pkey")
 	assert.True(t, ok)
-	_, ok = tbl.Constraints.GetOk("items_code_key")
+	ok = tbl.Constraints.Has("items_code_key")
 	assert.True(t, ok)
-	_, ok = tbl.Constraints.GetOk("items_code_check")
+	ok = tbl.Constraints.Has("items_code_check")
 	assert.True(t, ok)
 }
 
@@ -1879,7 +1879,7 @@ func TestParseSQL_UnnamedTableConstraintAutoNamed(t *testing.T) {
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.items")
 	require.NotNil(t, tbl)
-	_, ok := tbl.Constraints.GetOk("items_pkey")
+	ok := tbl.Constraints.Has("items_pkey")
 	assert.True(t, ok)
 }
 
@@ -1975,7 +1975,7 @@ func TestParseSQL_AutoNameConstraintTruncation(t *testing.T) {
 			require.NoError(t, err)
 			tbl := result.Tables.Get(model.Ident("public", tt.table))
 			require.NotNil(t, tbl)
-			_, ok := tbl.Constraints.GetOk(tt.expected)
+			ok := tbl.Constraints.Has(tt.expected)
 			assert.True(t, ok, "constraint names: %v", tbl.Constraints.CollectKeys())
 			assert.LessOrEqual(t, len(tt.expected), 63)
 		})
@@ -2062,7 +2062,7 @@ func TestParseSQL_AutoNameIndexTruncation(t *testing.T) {
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public." + table)
 	require.NotNil(t, tbl)
-	_, ok := tbl.Indexes.GetOk(strings.Repeat("a", 50) + "_quantity_idx")
+	ok := tbl.Indexes.Has(strings.Repeat("a", 50) + "_quantity_idx")
 	assert.True(t, ok, "index names: %v", tbl.Indexes.CollectKeys())
 }
 
@@ -2101,7 +2101,7 @@ CREATE TABLE public.` + table + ` (` + col + ` integer REFERENCES public.ref_t(x
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public." + table)
 	require.NotNil(t, tbl)
-	_, ok := tbl.ForeignKeys.GetOk(strings.Repeat("f", 29) + "_" + strings.Repeat("c", 28) + "_fkey")
+	ok := tbl.ForeignKeys.Has(strings.Repeat("f", 29) + "_" + strings.Repeat("c", 28) + "_fkey")
 	assert.True(t, ok, "foreign key names: %v", tbl.ForeignKeys.CollectKeys())
 }
 
@@ -2555,7 +2555,7 @@ ALTER TABLE public.users DROP COLUMN name;`
 	tbl, ok := result.Tables.GetOk("public.users")
 	require.True(t, ok)
 	// The parser does not apply DDL changes; the column should still be present
-	_, ok = tbl.Columns.GetOk("name")
+	ok = tbl.Columns.Has("name")
 	assert.True(t, ok)
 	assert.Contains(t, buf.String(), "ignored unsupported statement")
 }
@@ -3657,9 +3657,9 @@ func TestParseAlterTableConstraints_Multiple(t *testing.T) {
 	tbl, ok := result.Tables.GetOk("public.orders")
 	require.True(t, ok)
 	assert.Equal(t, 2, tbl.Constraints.Len())
-	_, ok = tbl.Constraints.GetOk("orders_amount_check")
+	ok = tbl.Constraints.Has("orders_amount_check")
 	assert.True(t, ok)
-	_, ok = tbl.Constraints.GetOk("orders_code_key")
+	ok = tbl.Constraints.Has("orders_code_key")
 	assert.True(t, ok)
 }
 

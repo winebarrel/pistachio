@@ -27,7 +27,7 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 
 	// New enums
 	for k, desiredEnum := range desired.All() {
-		if _, ok := current.GetOk(k); !ok {
+		if !current.Has(k) {
 			result.Stmts = append(result.Stmts, desiredEnum.SQL())
 			if commentSQL := desiredEnum.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)

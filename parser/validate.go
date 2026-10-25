@@ -360,7 +360,7 @@ func validateNamespaces(r *ParseResult) error {
 			}
 			// A USING INDEX constraint that keeps the index's name is that
 			// index, already added above.
-			if _, ok := t.Indexes.GetOk(con.IndexName); ok && con.IndexName == con.Name {
+			if t.Indexes.Has(con.IndexName) && con.IndexName == con.Name {
 				continue
 			}
 			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)

@@ -27,7 +27,7 @@ func DiffCompositeTypes(current, desired *orderedmap.Map[string, *model.Composit
 
 	// New composite types
 	for k, desiredCT := range desired.All() {
-		if _, ok := current.GetOk(k); !ok {
+		if !current.Has(k) {
 			result.Stmts = append(result.Stmts, desiredCT.SQL())
 			if commentSQL := desiredCT.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)

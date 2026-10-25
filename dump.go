@@ -98,7 +98,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			copied.ForeignKeys = fks
 		}
 		copied.Indexes = stripIndexSchemas(copied.Indexes, t.Schema, t.Name)
-		if copied.Policies != nil && copied.Policies.Len() > 0 {
+		if copied.Policies.Len() > 0 {
 			policies := orderedmap.New[string, *model.Policy]()
 			for _, p := range copied.Policies.CollectValues() {
 				pCopied := *p
@@ -138,7 +138,7 @@ func stripIndexSchemas(
 	indexes *orderedmap.Map[string, *model.Index],
 	schema, name string,
 ) *orderedmap.Map[string, *model.Index] {
-	if indexes == nil || indexes.Len() == 0 {
+	if indexes.Len() == 0 {
 		return indexes
 	}
 	out := orderedmap.New[string, *model.Index]()
@@ -158,7 +158,7 @@ func stripTriggerSchemas(
 	triggers *orderedmap.Map[string, *model.Trigger],
 	schema, name string,
 ) *orderedmap.Map[string, *model.Trigger] {
-	if triggers == nil || triggers.Len() == 0 {
+	if triggers.Len() == 0 {
 		return triggers
 	}
 	out := orderedmap.New[string, *model.Trigger]()
