@@ -17,6 +17,7 @@ jobs:
     # GoReleaser publishes with the app token, so GITHUB_TOKEN only checks out.
     permissions:
       contents: read
+      pull-requests: read
       id-token: write
       attestations: write
     steps:
@@ -35,7 +36,11 @@ jobs:
           permission-contents: write
       # The release notes link the release pull request, the nearest release
       # merge before the tag on main. Other merges can come between: release-tag
-      # tags main as it stands after the approval.
+      # tags main as it stands after the approval. They also list the pull
+      # requests in its body, from "## Pull requests" on, with the backticks
+      # around each author dropped so that the release mentions them. The
+      # links above that section are left out: release-tag may still be
+      # pinning them when this runs.
       - name: Find the release pull request
         run: |
           number=$(git log -1 --first-parent --format=%s -E \
@@ -45,7 +50,18 @@ jobs:
             echo "::error::No release pull request merge precedes $GITHUB_REF_NAME"
             exit 1
           fi
-          echo "RELEASE_PR=$number" >> "$GITHUB_ENV"
+          prs=$(gh pr view "$number" --json body --jq .body |
+            sed -n '/^## Pull requests$/,$p' |
+            sed -E 's/^(- #[0-9]+ by )`(@[^`]+)`$/\1\2/')
+          {
+            echo "RELEASE_PR=$number"
+            echo "RELEASE_PRS<<EOF_RELEASE_PRS"
+            echo "$prs"
+            echo "EOF_RELEASE_PRS"
+          } >> "$GITHUB_ENV"
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run GoReleaser
         run: |
           docker run -q \
@@ -53,6 +69,7 @@ jobs:
             -e CGO_ENABLED=1 \
             -e GITHUB_TOKEN \
             -e RELEASE_PR \
+            -e RELEASE_PRS \
             -v "$GITHUB_WORKSPACE:/src" \
             -w /src \
             "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
