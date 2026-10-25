@@ -53,7 +53,7 @@ func detectRenames[V any](
 
 		stmts = append(stmts, "ALTER "+keyword+" "+oldKey+" RENAME TO "+model.Ident(desiredName)+";")
 
-		adjusted.RenameKey(oldKey, newKey)
+		adjusted.Delete(oldKey)
 		adjusted.Set(newKey, rename(oldObj, desiredName))
 	}
 
@@ -121,7 +121,7 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 
 		stmts = append(stmts, "ALTER TABLE "+oldKey+" RENAME TO "+model.Ident(desiredTable.Name)+";")
 
-		adjusted.RenameKey(oldKey, newKey)
+		adjusted.Delete(oldKey)
 		renamed := *oldTable
 		renamed.Name = desiredTable.Name
 
@@ -269,7 +269,7 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 
 		stmts = append(stmts, "ALTER "+oldView.ObjType()+" "+oldKey+" RENAME TO "+model.Ident(desiredView.Name)+";")
 
-		adjusted.RenameKey(oldKey, newKey)
+		adjusted.Delete(oldKey)
 		renamed := *oldView
 		renamed.Name = desiredView.Name
 		indexes, err := renameIndexesRelation(renamed.Indexes, desiredView.Name)
@@ -328,7 +328,7 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME COLUMN "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
 
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *oldCol
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -370,7 +370,7 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		renamedFrom[newName] = oldName
 
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *oldCon
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -408,7 +408,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 		stmts = append(stmts, "ALTER INDEX "+model.Ident(oldIdx.Schema, oldName)+" RENAME TO "+model.Ident(newName)+";")
 
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *oldIdx
 		renamed.Name = newName
 		// Update definition to reflect the new index name via pg_query parse/deparse
@@ -473,7 +473,7 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		renamedFrom[newName] = oldName
 
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *oldFK
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -515,7 +515,7 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		renamedFrom[newName] = oldName
 
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *oldPol
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)

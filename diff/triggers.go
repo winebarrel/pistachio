@@ -201,7 +201,7 @@ func detectTriggerRenames(
 		}
 
 		renamedFrom[newName] = oldName
-		adjusted.RenameKey(oldName, newName)
+		adjusted.Delete(oldName)
 		renamed := *old
 		renamed.Name = newName
 		renamed.Definition = def
