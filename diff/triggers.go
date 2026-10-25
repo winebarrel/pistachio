@@ -87,7 +87,7 @@ func diffTriggers(
 	// the recreate needs out of the way. A recreate whose RENAME was skipped
 	// still has to drop the old name.
 	for name := range current.Keys() {
-		if _, ok := desired.GetOk(name); !ok {
+		if !desired.Has(name) {
 			drop := dropTriggerSQL(fqtn, name)
 			if !triggerAllowed {
 				disallowed = append(disallowed, "-- skipped: "+drop)
@@ -182,12 +182,12 @@ func detectTriggerRenames(
 		if !ok {
 			// The rename has already been applied on an earlier run, so the
 			// directive can stay in the file until the next cleanup.
-			if _, exists := adjusted.GetOk(newName); exists {
+			if adjusted.Has(newName) {
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source trigger %s not found on %s", model.Ident(oldName), fqtn)
 		}
-		if _, exists := adjusted.GetOk(newName); exists {
+		if adjusted.Has(newName) {
 			return nil, nil, fmt.Errorf("cannot rename trigger %s to %s on %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 

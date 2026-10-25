@@ -35,7 +35,7 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 
 	// New sequences
 	for k, desiredSeq := range desired.All() {
-		if _, ok := current.GetOk(k); !ok {
+		if !current.Has(k) {
 			result.Stmts = append(result.Stmts, desiredSeq.SQL())
 			if commentSQL := desiredSeq.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)
@@ -64,7 +64,7 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 		// This runs before the rename, so it uses the old name.
 		name := k
 		if from := desiredSeq.RenameFrom; from != nil {
-			if _, ok := original.GetOk(*from); ok {
+			if original.Has(*from) {
 				name = *from
 			}
 		}

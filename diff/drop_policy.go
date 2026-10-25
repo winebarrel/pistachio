@@ -25,7 +25,7 @@ func normalizeDropChecker(dc DropChecker) DropChecker {
 // to skipped instead, commented out.
 func dropMissing[V any](current, desired *orderedmap.Map[string, V], keyword string, allowed bool) (drops, skipped []string) {
 	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
+		if !desired.Has(k) {
 			if allowed {
 				drops = append(drops, "DROP "+keyword+" "+k+";")
 			} else {

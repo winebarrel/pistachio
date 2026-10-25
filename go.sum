@@ -54,8 +54,8 @@ github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a h1:SJy1Pu0eH1C29X
 github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a/go.mod h1:DFSS3NAGHthKo1gTlmEcSBiZrRJXi28rLNd/1udP1c8=
 github.com/winebarrel/linkedlist v1.0.0 h1:O0xX3QprOQx7nzjybWiqzmAFslEAr5OlN4Erw0SGu7w=
 github.com/winebarrel/linkedlist v1.0.0/go.mod h1:q0tVx3lAnFjUE7qUzWo9sR3LVUQ3sLNZ4Ccm50AnxX4=
-github.com/winebarrel/orderedmap/v2 v2.3.0 h1:yaqnkwuWW1ggVzUGqNrxS4+x1mWdhhSdRIJtX4UGpWc=
-github.com/winebarrel/orderedmap/v2 v2.3.0/go.mod h1:ljWUDX2Nj10EuOJYMtGvWhnvYojbWCWsqTLKhhdCZJk=
+github.com/winebarrel/orderedmap/v2 v2.4.0 h1:YyNhVwxCtwlbkvekuJp0UoXg4UMZc/DTIaWrVpj6aUM=
+github.com/winebarrel/orderedmap/v2 v2.4.0/go.mod h1:ljWUDX2Nj10EuOJYMtGvWhnvYojbWCWsqTLKhhdCZJk=
 github.com/winebarrel/pgstub v0.3.0 h1:h6xFz9dLOFY/01Q7MunjxfmpmbSd93YCQ/GnPexjHx0=
 github.com/winebarrel/pgstub v0.3.0/go.mod h1:St+gw/Sp5AsrqsLD2NRtQWjXXEqaFHOMyKUc7RBJw3U=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=

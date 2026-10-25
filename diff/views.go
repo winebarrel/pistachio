@@ -467,7 +467,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 
 	// Dropped views. When the view-drop policy disallows it, emit a commented DROP.
 	for k, v := range current.All() {
-		if _, ok := desired.GetOk(k); !ok {
+		if !desired.Has(k) {
 			drop := "DROP " + v.ObjType() + " " + k + ";"
 			if viewAllowed {
 				result.DropStmts = append(result.DropStmts, drop)
@@ -528,7 +528,7 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 	if current != nil {
 		for col := range current.Keys() {
 			if desired != nil {
-				if _, ok := desired.GetOk(col); ok {
+				if desired.Has(col) {
 					continue
 				}
 			}

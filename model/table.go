@@ -327,7 +327,7 @@ func (t Table) StorageParamsSQL() string {
 // storageParamsWith renders storage parameters as a WITH clause, or "" when
 // there are none. Tables and views share it.
 func storageParamsWith(params *orderedmap.Map[string, string]) string {
-	if params == nil || params.Len() == 0 {
+	if params.Len() == 0 {
 		return ""
 	}
 	return "WITH (" + strings.Join(

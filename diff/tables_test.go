@@ -3053,10 +3053,10 @@ func TestWithInheritedColumns(t *testing.T) {
 	id, ok := got.Columns.GetOk("id")
 	require.True(t, ok)
 	assert.Nil(t, id.Comment)
-	_, ok = got.Columns.GetOk("created_at")
+	ok = got.Columns.Has("created_at")
 	assert.True(t, ok)
 	// A comment naming a column the table does not have survives.
-	_, ok = got.Columns.GetOk("ghost")
+	ok = got.Columns.Has("ghost")
 	assert.True(t, ok)
 	// The originals are untouched.
 	assert.Equal(t, 1, desired.Columns.Len())

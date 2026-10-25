@@ -42,7 +42,7 @@ func collectRenames[V any](current, desired *orderedmap.Map[string, V], get func
 		if !ok {
 			continue
 		}
-		if _, exists := current.GetOk(newKey); exists {
+		if current.Has(newKey) {
 			continue
 		}
 		schema, from, _ := get(cur)

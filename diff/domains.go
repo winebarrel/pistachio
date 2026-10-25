@@ -27,7 +27,7 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 
 	// New domains
 	for k, desiredDomain := range desired.All() {
-		if _, ok := current.GetOk(k); !ok {
+		if !current.Has(k) {
 			result.Stmts = append(result.Stmts, desiredDomain.SQL())
 			result.Stmts = append(result.Stmts, desiredDomain.NotValidConSQL()...)
 			if commentSQL := desiredDomain.CommentSQL(); commentSQL != "" {

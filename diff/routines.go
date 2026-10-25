@@ -41,7 +41,7 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 
 	// New routines
 	for k, desiredRoutine := range desired.All() {
-		if _, ok := current.GetOk(k); ok {
+		if current.Has(k) {
 			continue
 		}
 		stmts := result.stmtsFor(desiredRoutine)
@@ -81,7 +81,7 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 
 	// Dropped routines. When the drop policy disallows it, emit a commented DROP.
 	for k, currentRoutine := range current.All() {
-		if _, ok := desired.GetOk(k); ok {
+		if desired.Has(k) {
 			continue
 		}
 		if dropAllowed {
