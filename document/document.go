@@ -241,14 +241,11 @@ func newIndexes(indexes *orderedmap.Map[string, *model.Index], fqtn string, auto
 		return nil
 	}
 
-	m := orderedmap.New[string, *Index]()
-	for key, idx := range indexes.All() {
+	return indexes.TransformMap(func(key string, idx *model.Index) (string, *Index) {
 		index := newIndex(idx)
 		index.AutoNamed = autoNamed[parser.AutoNamedObject{Index: true, Table: fqtn, Name: idx.Name}]
-		m.Set(key, index)
-	}
-
-	return m
+		return key, index
+	})
 }
 
 func newIndex(idx *model.Index) *Index {

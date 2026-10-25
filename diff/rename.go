@@ -53,7 +53,7 @@ func detectRenames[V any](
 
 		stmts = append(stmts, "ALTER "+keyword+" "+oldKey+" RENAME TO "+model.Ident(desiredName)+";")
 
-		adjusted.Delete(oldKey)
+		adjusted.RenameKey(oldKey, newKey)
 		adjusted.Set(newKey, rename(oldObj, desiredName))
 	}
 
@@ -121,7 +121,7 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 
 		stmts = append(stmts, "ALTER TABLE "+oldKey+" RENAME TO "+model.Ident(desiredTable.Name)+";")
 
-		adjusted.Delete(oldKey)
+		adjusted.RenameKey(oldKey, newKey)
 		renamed := *oldTable
 		renamed.Name = desiredTable.Name
 
@@ -133,13 +133,11 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 
 		// Update FK table name
 		if renamed.ForeignKeys.Len() > 0 {
-			newFKs := orderedmap.New[string, *model.ForeignKey]()
-			for fkName, fk := range renamed.ForeignKeys.All() {
+			renamed.ForeignKeys = renamed.ForeignKeys.TransformMap(func(fkName string, fk *model.ForeignKey) (string, *model.ForeignKey) {
 				fkCopy := *fk
 				fkCopy.Table = desiredTable.Name
-				newFKs.Set(fkName, &fkCopy)
-			}
-			renamed.ForeignKeys = newFKs
+				return fkName, &fkCopy
+			})
 		}
 
 		if renamed.Triggers != nil {
@@ -271,7 +269,7 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 
 		stmts = append(stmts, "ALTER "+oldView.ObjType()+" "+oldKey+" RENAME TO "+model.Ident(desiredView.Name)+";")
 
-		adjusted.Delete(oldKey)
+		adjusted.RenameKey(oldKey, newKey)
 		renamed := *oldView
 		renamed.Name = desiredView.Name
 		indexes, err := renameIndexesRelation(renamed.Indexes, desiredView.Name)
@@ -330,7 +328,7 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME COLUMN "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
 
-		adjusted.Delete(oldName)
+		adjusted.RenameKey(oldName, newName)
 		renamed := *oldCol
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -372,7 +370,7 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		renamedFrom[newName] = oldName
 
-		adjusted.Delete(oldName)
+		adjusted.RenameKey(oldName, newName)
 		renamed := *oldCon
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -410,7 +408,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 		stmts = append(stmts, "ALTER INDEX "+model.Ident(oldIdx.Schema, oldName)+" RENAME TO "+model.Ident(newName)+";")
 
-		adjusted.Delete(oldName)
+		adjusted.RenameKey(oldName, newName)
 		renamed := *oldIdx
 		renamed.Name = newName
 		// Update definition to reflect the new index name via pg_query parse/deparse
@@ -475,7 +473,7 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 
 		renamedFrom[newName] = oldName
 
-		adjusted.Delete(oldName)
+		adjusted.RenameKey(oldName, newName)
 		renamed := *oldFK
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -517,7 +515,7 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 
 		renamedFrom[newName] = oldName
 
-		adjusted.Delete(oldName)
+		adjusted.RenameKey(oldName, newName)
 		renamed := *oldPol
 		renamed.Name = newName
 		adjusted.Set(newName, &renamed)
@@ -628,29 +626,25 @@ func rewriteColumnsInConstraintDef(def string, renames map[string]string) (strin
 // are left unchanged so downstream comparison still functions (will fall back
 // to redundant DROP/CREATE in that case).
 func rewriteColumnRefsInIndexes(indexes *orderedmap.Map[string, *model.Index], renames map[string]string) *orderedmap.Map[string, *model.Index] {
-	out := orderedmap.New[string, *model.Index]()
-	for name, idx := range indexes.All() {
+	return indexes.TransformMap(func(name string, idx *model.Index) (string, *model.Index) {
 		clone := *idx
 		if updated, err := rewriteColumnsInIndexDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
 		}
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
 
 // rewriteColumnRefsInConstraints returns a clone of constraints with each
 // Definition updated to reflect column renames.
 func rewriteColumnRefsInConstraints(cons *orderedmap.Map[string, *model.Constraint], renames map[string]string) *orderedmap.Map[string, *model.Constraint] {
-	out := orderedmap.New[string, *model.Constraint]()
-	for name, con := range cons.All() {
+	return cons.TransformMap(func(name string, con *model.Constraint) (string, *model.Constraint) {
 		clone := *con
 		if updated, err := rewriteColumnsInConstraintDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
 		}
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
 
 // renameColumnKeys returns a clone of the columns map where each key in
@@ -658,29 +652,25 @@ func rewriteColumnRefsInConstraints(cons *orderedmap.Map[string, *model.Constrai
 // (each existing key is matched once against the renames map) so chained
 // renames such as a->b alongside b->c do not cascade. Order is preserved.
 func renameColumnKeys(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
-	out := orderedmap.New[string, *model.Column]()
-	for name, col := range cols.All() {
+	return cols.TransformMap(func(name string, col *model.Column) (string, *model.Column) {
 		if newName, ok := renames[name]; ok {
 			name = newName
 		}
-		out.Set(name, col)
-	}
-	return out
+		return name, col
+	})
 }
 
 // rewriteColumnRefsInForeignKeys returns a clone of FKs with each Definition
 // updated to reflect column renames on the local side (FkAttrs). Referenced
 // columns are not touched.
 func rewriteColumnRefsInForeignKeys(fks *orderedmap.Map[string, *model.ForeignKey], renames map[string]string) *orderedmap.Map[string, *model.ForeignKey] {
-	out := orderedmap.New[string, *model.ForeignKey]()
-	for name, fk := range fks.All() {
+	return fks.TransformMap(func(name string, fk *model.ForeignKey) (string, *model.ForeignKey) {
 		clone := *fk
 		if updated, err := rewriteColumnsInConstraintDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
 		}
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
 
 // rewriteTriggerWhenColumnRefs walks a trigger WHEN expression and rewrites
@@ -738,15 +728,13 @@ func rewriteColumnsInTriggerDef(def string, renames map[string]string) (string, 
 // TRIGGER. Definitions that fail to parse/deparse are left unchanged, which
 // falls back to that redundant statement.
 func rewriteColumnRefsInTriggers(triggers *orderedmap.Map[string, *model.Trigger], renames map[string]string) *orderedmap.Map[string, *model.Trigger] {
-	out := orderedmap.New[string, *model.Trigger]()
-	for name, trg := range triggers.All() {
+	return triggers.TransformMap(func(name string, trg *model.Trigger) (string, *model.Trigger) {
 		clone := *trg
 		if updated, err := rewriteColumnsInTriggerDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
 		}
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
 
 // rewriteColumnsInExpr returns a bare SQL expression with column references
@@ -776,14 +764,12 @@ func rewriteColumnsInExpr(expr string, renames map[string]string) (string, error
 // ALTER POLICY. Expressions that fail to parse/deparse are left unchanged,
 // which falls back to that redundant statement.
 func rewriteColumnRefsInPolicies(policies *orderedmap.Map[string, *model.Policy], renames map[string]string) *orderedmap.Map[string, *model.Policy] {
-	out := orderedmap.New[string, *model.Policy]()
-	for name, pol := range policies.All() {
+	return policies.TransformMap(func(name string, pol *model.Policy) (string, *model.Policy) {
 		clone := *pol
 		clone.Using = rewriteColumnsInExprPtr(pol.Using, renames)
 		clone.WithCheck = rewriteColumnsInExprPtr(pol.WithCheck, renames)
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
 
 // rewriteColumnsInExprPtr rewrites an optional expression, returning the
@@ -810,13 +796,11 @@ func rewriteColumnsInExprPtr(expr *string, renames map[string]string) *string {
 // not parse PostgreSQL 18's VIRTUAL yet. The test is on the column being
 // generated at all, so a virtual one needs nothing here once it does.
 func rewriteColumnRefsInGenerated(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
-	out := orderedmap.New[string, *model.Column]()
-	for name, col := range cols.All() {
+	return cols.TransformMap(func(name string, col *model.Column) (string, *model.Column) {
 		clone := *col
 		if col.Generated.IsGeneratedColumn() && col.Default != nil {
 			clone.Default = rewriteColumnsInExprPtr(col.Default, renames)
 		}
-		out.Set(name, &clone)
-	}
-	return out
+		return name, &clone
+	})
 }
