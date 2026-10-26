@@ -52,7 +52,7 @@ jobs:
           fi
           prs=$(gh pr view "$number" --json body --jq .body |
             sed -n '/^## Pull requests$/,$p' |
-            sed -E 's/^(- #[0-9]+ .* by )`(@[^`]+)`$/\1\2/')
+            sed -E 's/^(- \[#[0-9]+\]\([^)]*\) .* by )`(@[^`]+)`$/\1\2/')
           {
             echo "RELEASE_PR=$number"
             echo "RELEASE_PRS<<EOF_RELEASE_PRS"

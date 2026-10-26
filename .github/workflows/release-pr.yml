@@ -99,11 +99,13 @@ jobs:
           # requests with no label. One with several labels goes under the
           # first of them in that order. Each is written with its title, since
           # the release notes do not show the title of a bare "#N" as a pull
-          # request body does. The author is written as code, which
-          # is not a mention, so that rewriting the body notifies nobody;
-          # release.yml drops the backticks in the release notes.
+          # request body does. The number is a plain link rather than "#N", so
+          # that the pull request body does not show the title a second time.
+          # The author is written as code, which is not a mention, so that
+          # rewriting the body notifies nobody; release.yml drops the
+          # backticks in the release notes.
           if [ -n "$pulls" ]; then
-            prs=$(jq -rs '
+            prs=$(jq -rs --arg repo "$GH_REPO" '
               unique_by(.number)
               | ["feat", "bug", "refactor", "test"] as $order
               | map(. + {group: (
@@ -113,7 +115,7 @@ jobs:
                 )})
               | group_by(.group)
               | sort_by(.[0].group as $g | [($order | index($g)) // (if $g == "other" then 1e9 else 1e8 end), $g])
-              | map("### \(.[0].group)\n\n" + (map("- #\(.number) \(.title) by `@\(.author)`") | join("\n")))
+              | map("### \(.[0].group)\n\n" + (map("- [#\(.number)](https://github.com/\($repo)/pull/\(.number)) \(.title) by `@\(.author)`") | join("\n")))
               | join("\n\n")' <<< "$pulls")
             body+=$'\n\n## Pull requests\n\n'"$prs"
           fi
