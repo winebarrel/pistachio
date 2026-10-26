@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+## [1.89.4] - 2026-10-26
+
 * `plan` now detects a change of the cast in a column `DEFAULT` to `text` or `varchar`, such as `now()::date` changed to `now()::text`. It used to report no changes.
 
 ## [1.89.3] - 2026-10-26
