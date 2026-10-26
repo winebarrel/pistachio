@@ -235,6 +235,9 @@ tip do not load. Its loader says why.
 | cratesio | cratesio | [rust-lang/crates.io](https://github.com/rust-lang/crates.io) |
 | panoptes | panoptes | [zooniverse/panoptes](https://github.com/zooniverse/panoptes) |
 | harness | harness | [harness/harness](https://github.com/harness/harness) |
+| jbpm | jbpm | [kiegroup/jbpm](https://github.com/kiegroup/jbpm) |
+| kanboard | public | [kanboard/kanboard](https://github.com/kanboard/kanboard) |
+| bytebase | bytebase | [bytebase/bytebase](https://github.com/bytebase/bytebase) |
 
 ## Coverage
 
@@ -266,6 +269,8 @@ exceptions:
   ghostfolio, and typebot were counted on 2026-09-22 on 16.13.
 - cratesio was counted on 2026-09-25 on 16.13. panoptes was counted on 2026-10-04 on 16.14.
   harness was counted on 2026-10-08 on 16.15.
+- jbpm, kanboard, and bytebase were counted on 2026-10-26 on 16.15, the
+  Sequences column included.
 - The Sequences column was counted on 15.18 throughout. The Triggers column was
   added on 2026-08-24 and the Routines column on 2026-08-25. Both were counted
   on 15.18 for every sample.
@@ -276,7 +281,7 @@ The columns hold the following:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only. Pistachio manages the
   sequence behind a serial or identity column as an attribute of that column,
-  not as an object of its own. Counting those sequences too would add 2,319
+  not as an object of its own. Counting those sequences too would add 2,354
   more. 886 of them are gitlab's, 210 are chado's, and 31 are hexpm's. hexpm
   declares no standalone sequence at all. zed, with 17 such sequences, and
   gravitino, with 1, declare none either. authelia's 25 and hydra's 2 are the
@@ -410,11 +415,14 @@ pistachio does not read them either.
 | cratesio | 35 | 207 | 85 | 35 | 47 | 1 | 0 | 0 | 25 | 31 |
 | panoptes | 54 | 530 | 202 | 68 | 52 | 0 | 0 | 0 | 4 | 0 |
 | harness | 97 | 1,060 | 246 | 180 | 141 | 0 | 3 | 0 | 6 | 8 |
-| **Total** | **10,315** | **89,002** | **31,316** | **13,827** | **17,058** | **2,311** | **718** | **873** | **2,033** | **1,831** |
+| jbpm | 46 | 314 | 146 | 45 | 41 | 0 | 0 | 34 | 0 | 0 |
+| kanboard | 48 | 288 | 76 | 59 | 58 | 0 | 0 | 0 | 0 | 0 |
+| bytebase | 48 | 287 | 120 | 60 | 55 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **10,457** | **89,891** | **31,658** | **13,991** | **17,212** | **2,311** | **718** | **907** | **2,033** | **1,831** |
 
 ### Size
 
-The 111 dumps come to about 292,000 lines of SQL. chado is 43,700 of them,
+The 114 dumps come to about 294,000 lines of SQL. chado is 43,700 of them,
 which is the longest dump of any sample. gitlab is 34,700 and uyuni is 19,700.
 gitlab is still about a quarter of the constraints, a fifth of the indexes, a
 sixth of the foreign keys and of the columns, and a seventh of the tables.
@@ -438,22 +446,24 @@ Indexes:
 
 - gin: synapse, rt, musicbrainz, danbooru, lago, mattermost, windmill,
   langfuse, openreplay, logto, concourse, uyuni, lobehub, hexpm, zed,
-  hoppscotch, panoptes.
+  hoppscotch, panoptes, bytebase.
 - gist: musicbrainz, osm, chado, inaturalist.
 - hash: musicbrainz, langfuse, uyuni.
 - brin: musicbrainz, logto.
 - hnsw, pgvector's method: citizenlab, affine, lobehub.
 - Partial indexes: mediawiki, synapse, musicbrainz, chado, danbooru, lago,
   mattermost, lemmy, windmill, feedbin, penpot, openreplay, logto, omero,
-  uyuni, lobehub, hydra, panoptes, harness.
+  uyuni, lobehub, hydra, panoptes, harness, jbpm, bytebase.
 - Expression indexes: rt, musicbrainz, danbooru, mattermost, feedbin, langfuse,
-  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm, panoptes, harness.
-- Unique indexes over an expression: rt, mattermost, harness (most of them
-  partial).
+  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm, panoptes, harness,
+  bytebase.
+- Unique indexes over an expression: rt, mattermost, harness, bytebase (most
+  of them partial).
 - gin over `to_tsvector`: rt, langfuse, uyuni, hexpm (with another function
   inside it).
 - An operator class named: `gin_trgm_ops` (danbooru, openreplay, uyuni, hexpm,
-  zed, hoppscotch), `jsonb_path_ops` (mattermost, hexpm, lobehub, concourse),
+  zed, hoppscotch), `jsonb_path_ops` (mattermost, hexpm, lobehub, concourse,
+  bytebase),
   `text_pattern_ops` (mattermost), `inet_ops` (osm).
 - An operator class from an extension: qualified with the extension's schema
   (citizenlab), unqualified (affine, lobehub, zed, hoppscotch).
@@ -473,20 +483,23 @@ Constraints and keys:
 - CHECK constraints added by hand to an ORM schema: affine, lobehub.
 - CHECK constraints named at install time: uyuni.
 - No CHECK at all: dhis2, mattermost, vaultwarden, bonita, omop, zed,
-  formbricks.
+  formbricks, jbpm, kanboard.
 - Foreign keys over more than one column: zed, formbricks, hydra (three
-  columns), harness.
+  columns), harness, bytebase.
 - Foreign keys across schemas: adventureworks, mimiciv, chado.
 - Referential actions on both sides: icinga_director, calcom, triggerdev,
   langfuse, logto, formbricks, hoppscotch, authelia; `ON UPDATE RESTRICT`:
   hydra.
-- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni, harness.
+- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni, harness,
+  kanboard.
+- `ON UPDATE` alone: bytebase.
 - No foreign key at all: mediawiki, temporal, imdb, dolphinscheduler,
   nightingale, joomla, hyperswitch, icinga_ido, bareos, opencms, kamailio,
   shenyu, nacos, gravitino, streampark.
 - Tables with no primary key: shenyu, concourse, omop, teable, typebot,
-  authelia, harness.
-- Composite primary keys: vaultwarden, bonita, harness.
+  authelia, harness, jbpm, kanboard, bytebase.
+- Composite primary keys: vaultwarden, bonita, harness, jbpm, kanboard,
+  bytebase.
 
 Types and columns:
 
@@ -502,9 +515,9 @@ Types and columns:
 - A serial column whose sequence still carries the name the table had before
   a rename, so dump writes the sequence on its own with `OWNED BY`: harness.
 - Standalone sequences: ranger, wso2apim, wso2is, dcm4chee, alfresco,
-  roundcube, omero, uyuni, streampark (non-default `START WITH` and
+  roundcube, omero, uyuni, jbpm, streampark (non-default `START WITH` and
   `MINVALUE`).
-- tsvector columns: dvdrental, pagila, panoptes.
+- tsvector columns: dvdrental, pagila, panoptes, bytebase.
 - A non-default collation: musicbrainz.
 - Types from a contrib extension: sourcegraph, plausible, hexpm (`citext`),
   lemmy (`ltree`), feedbin (`hstore`).
