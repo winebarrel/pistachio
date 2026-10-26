@@ -1181,7 +1181,7 @@ func NormalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 
 func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
-		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) && !isTextLengthCast(tc.TypeName) {
+		if tc.Arg != nil && !ctx.IsSelectTarget() && isStrippedTextCast(tc.TypeName) {
 			return tc.Arg
 		}
 	}
@@ -1444,6 +1444,12 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // catalog never adds one, so neither side's normalization strips it.
 func isTextLengthCast(tn *pg_query.TypeName) bool {
 	return isTextLikeTypeName(tn) && len(tn.Typmods) > 0
+}
+
+// isStrippedTextCast reports whether normalizeCheckExpr strips a cast to the
+// TypeName: a text-like type without a length.
+func isStrippedTextCast(tn *pg_query.TypeName) bool {
+	return isTextLikeTypeName(tn) && !isTextLengthCast(tn)
 }
 
 // isTextTypeName reports whether the TypeName is a bare text, the way the
@@ -2758,6 +2764,11 @@ func equalDefault(current, desired *string) bool {
 	desCast := expressionCast(desTarget.Val)
 	switch {
 	case curCast != nil && desCast != nil:
+		// normalizeCheckExpr strips a text-like cast, so a cast to text on
+		// one side only is a change it would hide.
+		if isStrippedTextCast(curCast.TypeName) != isStrippedTextCast(desCast.TypeName) {
+			return false
+		}
 		unqualifyType(curCast.TypeName)
 		unqualifyType(desCast.TypeName)
 	case curCast != nil && desTarget.Val.GetTypeCast() == nil:
