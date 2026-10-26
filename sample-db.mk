@@ -133,6 +133,9 @@ typebot|sample-db-prisma|REPO=baptisteArno/typebot.io SHA=61056ff9a98082485add81
 cratesio|sample-db-cratesio||cratesio
 panoptes|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zooniverse/panoptes/a6f0f141d0c3f1ac69995e4b4dc511a06aa8ff3f/db/structure.sql SCHEMA=panoptes|panoptes
 harness|sample-db-harness||harness
+jbpm|sample-db-url-schema|URL=https://raw.githubusercontent.com/kiegroup/jbpm/d518cacb3957a203a906a8ae1525aec12728a0d2/jbpm-db-scripts/src/main/resources/db/ddl-scripts/postgresql/postgresql-jbpm-schema.sql SCHEMA=jbpm|jbpm
+kanboard|sample-db-url|URL=https://raw.githubusercontent.com/kanboard/kanboard/19c65283083e6e675040b1f6ab325972b6492201/app/Schema/Sql/postgres.sql|
+bytebase|sample-db-url-schema|URL=https://raw.githubusercontent.com/bytebase/bytebase/0a987f5cfe5f6bded9eac09b5b6f48f72dcc5c96/backend/migrator/migration/LATEST.sql SCHEMA=bytebase|bytebase
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
