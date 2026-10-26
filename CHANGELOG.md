@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+## [1.89.3] - 2026-10-26
+
 * `plan` now detects a change to a `varchar(n)` cast in a `CHECK` constraint, an index predicate, a policy or a view, such as `code::varchar(3)` changed to `code::varchar(4)` or to `code`. It used to report no changes.
 
 ## [1.89.2] - 2026-10-23
