@@ -2075,6 +2075,19 @@ func TestEqualDefault_currentNestedCastStripped(t *testing.T) {
 	))
 }
 
+func TestEqualDefault_expressionCastToTextLike(t *testing.T) {
+	// The text-like cast strip must not hide a change of an expression cast
+	// to or from a text-like type.
+	assert.False(t, equalDefault(new("(now())::date"), new("now()::text")))
+	assert.False(t, equalDefault(new("(now())::date"), new("now()::varchar")))
+	assert.False(t, equalDefault(new("(now())::text"), new("now()::date")))
+	assert.True(t, equalDefault(new("(now())::text"), new("now()::text")))
+	assert.True(t, equalDefault(new("(now())::character varying"), new("now()::varchar")))
+	assert.True(t, equalDefault(new("(now())::character varying(5)"), new("now()::varchar(5)")))
+	// A schema named text is not a text cast.
+	assert.True(t, equalDefault(new("(lower('X'::text))::status"), new("lower('X')::text.status")))
+}
+
 func TestEqualDefault_bothExplicitCastsMatch(t *testing.T) {
 	assert.True(t, equalDefault(
 		new("'0'::integer"),

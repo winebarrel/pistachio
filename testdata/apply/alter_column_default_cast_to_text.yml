@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.t (
+      a text DEFAULT now()::date,
+      b text DEFAULT now()::date
+  );
+desired: |
+  CREATE TABLE public.t (
+      a text DEFAULT now()::text,
+      b text DEFAULT now()::varchar
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a text DEFAULT (now())::text,
+      b text DEFAULT (now())::character varying
+  );
