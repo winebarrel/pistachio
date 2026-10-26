@@ -1,0 +1,19 @@
+# A cast to varchar(n) truncates its operand, so its length is part of what the
+# constraint checks. Only a text-like cast without a length is stripped.
+init: |
+  CREATE TABLE public.codes (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT codes_pkey PRIMARY KEY (id),
+      CONSTRAINT codes_code_check CHECK (code::varchar(3) = 'abc')
+  );
+desired: |
+  CREATE TABLE public.codes (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT codes_pkey PRIMARY KEY (id),
+      CONSTRAINT codes_code_check CHECK (code::varchar(4) = 'abc')
+  );
+plan: |
+  ALTER TABLE public.codes DROP CONSTRAINT codes_code_check;
+  ALTER TABLE public.codes ADD CONSTRAINT codes_code_check CHECK (code::varchar(4) = 'abc');

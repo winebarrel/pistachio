@@ -1,0 +1,14 @@
+# The catalog keeps a varchar(n) cast as character varying(n) and adds ::text
+# around it. The length cast is compared, so the written form must still match.
+init: ""
+desired: |
+  CREATE TABLE public.codes (
+      code text,
+      CONSTRAINT codes_code_check CHECK (code::varchar(3) = 'abc')
+  );
+applied: |
+  -- public.codes
+  CREATE TABLE public.codes (
+      code text,
+      CONSTRAINT codes_code_check CHECK (code::character varying(3)::text = 'abc'::text)
+  );

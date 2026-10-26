@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` now detects a change to a `varchar(n)` cast in a `CHECK` constraint, an index predicate, a policy or a view, such as `code::varchar(3)` changed to `code::varchar(4)` or to `code`. It used to report no changes.
+
 ## [1.89.2] - 2026-10-23
 
 * `plan` no longer drops `NOT NULL` from a primary key column when the `PRIMARY KEY` is written before the column, as in `CREATE TABLE t (PRIMARY KEY (id), id int)`.

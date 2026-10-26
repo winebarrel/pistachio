@@ -1,0 +1,19 @@
+# The catalog never adds a varchar(n) cast, so one the current side carries was
+# written, and removing it changes what the constraint checks.
+init: |
+  CREATE TABLE public.codes (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT codes_pkey PRIMARY KEY (id),
+      CONSTRAINT codes_code_check CHECK (code::varchar(3) = 'abc')
+  );
+desired: |
+  CREATE TABLE public.codes (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT codes_pkey PRIMARY KEY (id),
+      CONSTRAINT codes_code_check CHECK (code = 'abc')
+  );
+plan: |
+  ALTER TABLE public.codes DROP CONSTRAINT codes_code_check;
+  ALTER TABLE public.codes ADD CONSTRAINT codes_code_check CHECK (code = 'abc');
