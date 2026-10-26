@@ -2764,13 +2764,13 @@ func equalDefault(current, desired *string) bool {
 	desCast := expressionCast(desTarget.Val)
 	switch {
 	case curCast != nil && desCast != nil:
+		unqualifyType(curCast.TypeName)
+		unqualifyType(desCast.TypeName)
 		// normalizeCheckExpr strips a text-like cast, so a cast to text on
 		// one side only is a change it would hide.
 		if isStrippedTextCast(curCast.TypeName) != isStrippedTextCast(desCast.TypeName) {
 			return false
 		}
-		unqualifyType(curCast.TypeName)
-		unqualifyType(desCast.TypeName)
 	case curCast != nil && desTarget.Val.GetTypeCast() == nil:
 		return false
 	case desCast != nil && curTarget.Val.GetTypeCast() == nil:
