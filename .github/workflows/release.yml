@@ -37,11 +37,10 @@ jobs:
       # The release notes link the release pull request, the nearest release
       # merge before the tag on main. Other merges can come between: release-tag
       # tags main as it stands after the approval. They also list the pull
-      # requests in its body, from "## Pull requests" on, with the title of
-      # each, which the release notes do not show for a bare "#N" as the pull
-      # request body does, and without the backticks around each author, so
-      # that the release mentions them. The links above that section are left
-      # out: release-tag may still be pinning them when this runs.
+      # requests in its body, from "## Pull requests" on, with the backticks
+      # around each author dropped so that the release mentions them. The
+      # links above that section are left out: release-tag may still be
+      # pinning them when this runs.
       - name: Find the release pull request
         run: |
           number=$(git log -1 --first-parent --format=%s -E \
@@ -51,18 +50,9 @@ jobs:
             echo "::error::No release pull request merge precedes $GITHUB_REF_NAME"
             exit 1
           fi
-          item='^- #([0-9]+) by `(@[^`]+)`$'
           prs=$(gh pr view "$number" --json body --jq .body |
             sed -n '/^## Pull requests$/,$p' |
-            while IFS= read -r line; do
-              if [[ $line =~ $item ]]; then
-                pr=${BASH_REMATCH[1]}
-                author=${BASH_REMATCH[2]}
-                echo "- #$pr $(gh pr view "$pr" --json title --jq .title) by $author"
-              else
-                echo "$line"
-              fi
-            done)
+            sed -E 's/^(- \[#[0-9]+\]\([^)]*\) .* by )`(@[^`]+)`$/\1\2/')
           {
             echo "RELEASE_PR=$number"
             echo "RELEASE_PRS<<EOF_RELEASE_PRS"
