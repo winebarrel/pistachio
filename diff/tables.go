@@ -1181,7 +1181,7 @@ func NormalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 
 func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
-		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) && len(tc.TypeName.Typmods) == 0 {
+		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) && !isTextLengthCast(tc.TypeName) {
 			return tc.Arg
 		}
 	}
@@ -1439,6 +1439,13 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 	return false
 }
 
+// isTextLengthCast reports whether the TypeName is a text-like type with a
+// length, such as varchar(3). A cast to it truncates its operand, and the
+// catalog never adds one, so neither side's normalization strips it.
+func isTextLengthCast(tn *pg_query.TypeName) bool {
+	return isTextLikeTypeName(tn) && len(tn.Typmods) > 0
+}
+
 // isTextTypeName reports whether the TypeName is a bare text, the way the
 // catalog prints the built-in type, and not an array of it.
 func isTextTypeName(tn *pg_query.TypeName) bool {
@@ -1665,7 +1672,8 @@ func alignExclusionCasts(desired, current *pg_query.Constraint) {
 // pg_get_constraintdef and pg_get_viewdef spell out casts the written form
 // leaves implicit ('00:00:00'::time, '0'::integer, 'lit'::enum_type), and a
 // cast the desired side did write is compared as written, so a real
-// disagreement still surfaces.
+// disagreement still surfaces. A text-like cast with a length is never one the
+// catalog adds, so it is kept and removing it surfaces too.
 //
 // The function mutates the current tree in place and returns the (possibly
 // unwrapped) current node so callers can reassign at parent boundaries.
@@ -1693,7 +1701,7 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 		if ct == nil || desired.GetTypeCast() != nil {
 			return current
 		}
-		if ct.Arg == nil {
+		if ct.Arg == nil || isTextLengthCast(ct.TypeName) {
 			return current
 		}
 		arg := ct.Arg
