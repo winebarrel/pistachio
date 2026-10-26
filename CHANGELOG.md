@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.89.4] - 2026-10-26
 
 * `plan` now detects a change of the cast in a column `DEFAULT` to `text` or `varchar`, such as `now()::date` changed to `now()::text`. It used to report no changes.
 
