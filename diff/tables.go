@@ -1143,7 +1143,8 @@ var sequenceTypes = map[string]bool{
 // definitions compare as equal:
 //   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef
 //     adds to anything string-typed and a written definition practically never
-//     carries.
+//     carries. A cast with a length, such as varchar(3), is kept: it truncates
+//     its operand, and the catalog never adds one.
 //   - Converts = ANY(ARRAY[...]) to IN (...) and <> ALL(ARRAY[...]) to
 //     NOT IN (...) (PostgreSQL internal representation), and collapses a
 //     one-element IN list into the = or <> parse analysis stores it as.
@@ -1180,7 +1181,7 @@ func NormalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 
 func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
-		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {
+		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) && len(tc.TypeName.Typmods) == 0 {
 			return tc.Arg
 		}
 	}
