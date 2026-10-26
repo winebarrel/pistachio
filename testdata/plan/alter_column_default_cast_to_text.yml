@@ -1,0 +1,14 @@
+# A cast on an expression is compared when the new type is text-like, too.
+init: |
+  CREATE TABLE public.t (
+      a text DEFAULT now()::date,
+      b text DEFAULT now()::date
+  );
+desired: |
+  CREATE TABLE public.t (
+      a text DEFAULT now()::text,
+      b text DEFAULT now()::varchar
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN a SET DEFAULT now()::text;
+  ALTER TABLE public.t ALTER COLUMN b SET DEFAULT now()::varchar;
