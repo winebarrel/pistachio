@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      latest: ${{ steps.version.outputs.latest }}
     steps:
       - id: version
         run: |
@@ -39,7 +40,10 @@ jobs:
             echo "::error::v$version is not newer than the latest tag v$latest"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "latest=$latest"
+          } >> "$GITHUB_OUTPUT"
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
           ACTOR: ${{ github.actor }}
@@ -103,7 +107,10 @@ jobs:
           ref: main
           token: ${{ steps.app-token.outputs.token }}
       # Rename [Unreleased] to the version and date in a commit signed with
-      # the key, and tag it. Without that section main itself is tagged.
+      # the key, and tag it. The link definitions at the bottom of the file
+      # follow: [unreleased] compares the new tag with HEAD, and the version
+      # compares the latest tag with the new one. Without that section main
+      # itself is tagged and the links stay as they are.
       # One atomic push lands both or neither, so a failed run leaves main
       # as it was and a re-run starts over.
       - name: Commit, tag and push
@@ -111,6 +118,9 @@ jobs:
           sed -i "s/^## \[Unreleased\]\$/## [$VERSION] - $(TZ=Asia/Tokyo date +%Y-%m-%d)/" CHANGELOG.md
           refs=()
           if ! git diff --quiet; then
+            url=https://github.com/$GITHUB_REPOSITORY/compare
+            sed -i -e "s|^\[unreleased\]: .*|[unreleased]: $url/v$VERSION...HEAD|" \
+              -e "/^\[unreleased\]: /a [$VERSION]: $url/v$LATEST...v$VERSION" CHANGELOG.md
             git commit -q -S -am "Release v$VERSION"
             refs+=(HEAD:main)
           fi
@@ -118,6 +128,7 @@ jobs:
           git push --atomic origin "${refs[@]}" "v$VERSION"
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          LATEST: ${{ needs.version.outputs.latest }}
       # Point the release pull request's CHANGELOG link at the tag, which
       # keeps showing the changelog as it was released, and its Changes
       # link at the tags on either side, since the release branch goes away.
