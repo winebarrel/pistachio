@@ -24,6 +24,8 @@ import (
 //     relation,
 //   - output name stripping on every SELECT of a set operation but the
 //     leftmost, where pg_get_viewdef repeats the leftmost names,
+//   - LATERAL and alias-named column stripping on a function in FROM, see
+//     normalizeFromFunctions,
 //   - symmetric expression normalization via normalizeCheckExpr:
 //     paren / text-like cast stripping and `= ANY(ARRAY[...])` -> `IN (...)`,
 //   - asymmetric current-only cast alignment via alignCurrentCasts: strips
@@ -50,11 +52,13 @@ func equalViewDef(current, desired string) bool {
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
 		stripSetOpBranchNames(stmt.Stmt)
+		normalizeFromFunctions(stmt.Stmt)
 		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	for _, stmt := range desResult.Stmts {
 		stripQualifications(stmt.Stmt)
 		stripSetOpBranchNames(stmt.Stmt)
+		normalizeFromFunctions(stmt.Stmt)
 		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
@@ -258,6 +262,31 @@ func fromItemName(item *pg_query.Node) string {
 		}
 	}
 	return ""
+}
+
+// normalizeFromFunctions removes what pg_get_viewdef adds to a function in
+// FROM. It writes LATERAL on a function whose arguments read an earlier FROM
+// item, and on one where the keyword was written. On a function the keyword
+// changes nothing, since the arguments can read earlier items either way, so
+// it is dropped on both sides. A sub-query keeps it: there it decides which
+// relation a name resolves to.
+//
+// A function with one output column and a table alias alone has a column of
+// the alias's name, and pg_get_viewdef writes it out (`unnest(x) t` comes back
+// as `unnest(x) t(t)`). A column alias holding just the table alias is
+// dropped on both sides.
+func normalizeFromFunctions(node *pg_query.Node) {
+	pgast.Walk(node, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		rf := n.GetRangeFunction()
+		if rf == nil {
+			return n
+		}
+		rf.Lateral = false
+		if a := rf.Alias; a != nil && len(a.Colnames) == 1 && a.Colnames[0].GetString_().GetSval() == a.Aliasname {
+			a.Colnames = nil
+		}
+		return n
+	})
 }
 
 // stripSetOpBranchNames removes the target names from every SELECT of a
