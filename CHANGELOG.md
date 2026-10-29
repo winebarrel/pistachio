@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` no longer reports a change on every run for a view with a function in `FROM` written without `LATERAL`, such as `FROM t, unnest(t.tags) AS u(tag)`, or with a table alias and no column alias, such as `FROM generate_series(1, 3) AS g`.
+
 ## [1.89.4] - 2026-10-26
 
 * `plan` now detects a change of the cast in a column `DEFAULT` to `text` or `varchar`, such as `now()::date` changed to `now()::text`. It used to report no changes.

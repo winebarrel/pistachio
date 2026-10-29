@@ -1,0 +1,30 @@
+# A function in FROM written without LATERAL, or with a table alias and no
+# column alias, compares equal to what pg_get_viewdef returns for it. The
+# catalog adds LATERAL where the arguments read an earlier FROM item and
+# writes the column a one-column function gets from its alias. One view per
+# form, so a failure names the one that drifted.
+init: |
+  CREATE TABLE public.sensors (
+      id integer NOT NULL,
+      tags text[] NOT NULL,
+      samples jsonb NOT NULL,
+      CONSTRAINT sensors_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_implicit_lateral AS SELECT s.id, t.tag FROM public.sensors s, unnest(s.tags) AS t(tag);
+  CREATE VIEW public.v_implicit_lateral_join AS SELECT s.id, r.v FROM public.sensors s LEFT JOIN jsonb_array_elements(s.samples) AS r(v) ON true;
+  CREATE VIEW public.v_explicit_lateral AS SELECT s.id, k.n FROM public.sensors s, LATERAL generate_series(1, 4) AS k(n);
+  CREATE VIEW public.v_table_alias AS SELECT slot FROM generate_series(1, 8) AS slot;
+  CREATE VIEW public.v_table_alias_lateral AS SELECT s.id, tag.tag FROM public.sensors s, unnest(s.tags) AS tag;
+desired: |
+  CREATE TABLE public.sensors (
+      id integer NOT NULL,
+      tags text[] NOT NULL,
+      samples jsonb NOT NULL,
+      CONSTRAINT sensors_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_implicit_lateral AS SELECT s.id, t.tag FROM public.sensors s, unnest(s.tags) AS t(tag);
+  CREATE VIEW public.v_implicit_lateral_join AS SELECT s.id, r.v FROM public.sensors s LEFT JOIN jsonb_array_elements(s.samples) AS r(v) ON true;
+  CREATE VIEW public.v_explicit_lateral AS SELECT s.id, k.n FROM public.sensors s, LATERAL generate_series(1, 4) AS k(n);
+  CREATE VIEW public.v_table_alias AS SELECT slot FROM generate_series(1, 8) AS slot;
+  CREATE VIEW public.v_table_alias_lateral AS SELECT s.id, tag.tag FROM public.sensors s, unnest(s.tags) AS tag;
+plan: ""
