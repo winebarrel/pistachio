@@ -759,6 +759,29 @@ Workaround: write the prefix the way `pista dump` emits it.
 
 Origin: [#953](https://github.com/winebarrel/pistachio/pull/953).
 
+## Perpetual drift on a function in FROM without a column list
+
+Priority: low.
+
+`pg_get_viewdef` writes the full column list of a function in `FROM`. A view
+that leaves the list out does not match, so `CREATE OR REPLACE VIEW` is
+re-emitted on every plan. This happens in three cases:
+
+- A function that returns more than one column: `jsonb_each(x) j` comes back
+  as `jsonb_each(x) j(key, value)`.
+- `WITH ORDINALITY`: `unnest(x) WITH ORDINALITY t` comes back as
+  `unnest(x) WITH ORDINALITY t(t, ordinality)`.
+- A function with no alias: `generate_series(1, 3)` comes back as
+  `generate_series(1, 3) generate_series(generate_series)`.
+
+The diff already accepts `unnest(x) t` for `unnest(x) t(t)`, a function that
+returns one column. Handling the cases above needs the columns each function
+returns, and `DiffViews` does not have them.
+
+Workaround: write the column list the way `pista dump` emits it.
+
+Origin: [#1125](https://github.com/winebarrel/pistachio/pull/1125).
+
 ## Routine renaming is not supported
 
 `-- pista:renamed-from` works on tables, views, enums, enum values, domains,
