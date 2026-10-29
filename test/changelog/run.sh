@@ -138,6 +138,55 @@ $released" \
 
 $released"
 
+links='[unreleased]: https://example.com/compare/v1.0.0...HEAD
+[1.0.0]: https://example.com/compare/v0.1.0...v1.0.0
+'
+
+released_links='[unreleased]: https://example.com/compare/v1.1.0...HEAD
+[1.1.0]: https://example.com/compare/v1.0.0...v1.1.0
+[1.0.0]: https://example.com/compare/v0.1.0...v1.0.0
+'
+
+check 'theirs releases the section and its links' 0 \
+"# Changelog
+
+## [Unreleased]
+
+* B.
+
+$released
+$links" \
+"# Changelog
+
+## [Unreleased]
+
+* Ours.
+
+* B.
+
+$released
+$links" \
+"# Changelog
+
+## [1.1.0] - 2026-02-01
+
+* B.
+
+$released
+$released_links" \
+"# Changelog
+
+## [Unreleased]
+
+* Ours.
+
+## [1.1.0] - 2026-02-01
+
+* B.
+
+$released
+$released_links"
+
 check 'ours releases the section' 0 \
 "# Changelog
 

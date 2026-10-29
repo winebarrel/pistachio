@@ -1,0 +1,11 @@
+# Changing the arguments of a function in FROM still produces DDL when the
+# catalog has added LATERAL and the alias's column to the stored definition.
+init: |
+  CREATE TABLE public.sensors (id integer, tags text[]);
+  CREATE VIEW public.sensor_tags AS SELECT s.id, tag.tag FROM public.sensors s, unnest(s.tags) AS tag;
+desired: |
+  CREATE TABLE public.sensors (id integer, tags text[]);
+  CREATE VIEW public.sensor_tags AS SELECT s.id, tag.tag FROM public.sensors s, unnest(s.tags[1:2]) AS tag;
+plan: |
+  CREATE OR REPLACE VIEW public.sensor_tags AS
+  SELECT s.id, tag.tag FROM public.sensors s, unnest(s.tags[1:2]) tag;

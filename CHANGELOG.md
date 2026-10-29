@@ -1,4 +1,4 @@
-<!-- On release, rename [Unreleased] to the version and date. Do not leave an [Unreleased] section behind. -->
+<!-- On release, rename [Unreleased] to the version and date, point [unreleased] at the new tag and add the link of the version below it. Do not leave an [Unreleased] section behind. -->
 
 # Changelog
 
@@ -7,6 +7,8 @@
 * Parse desired files with the PostgreSQL 18 grammar (pg_query_go v18). Syntax added in PostgreSQL 18, such as `NOT ENFORCED` and `WITHOUT OVERLAPS`, no longer fails the parse.
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
+
+* `plan` no longer reports a change on every run for a view with a function in `FROM` written without `LATERAL`, such as `FROM t, unnest(t.tags) AS u(tag)`, or with a table alias and no column alias, such as `FROM generate_series(1, 3) AS g`.
 
 ## [1.89.4] - 2026-10-26
 
@@ -936,3 +938,140 @@
 ## [1.0.0] - 2026-04-28
 
 * Initial release.
+
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.89.4...HEAD
+[1.89.4]: https://github.com/winebarrel/pistachio/compare/v1.89.3...v1.89.4
+[1.89.3]: https://github.com/winebarrel/pistachio/compare/v1.89.2...v1.89.3
+[1.89.2]: https://github.com/winebarrel/pistachio/compare/v1.89.1...v1.89.2
+[1.89.1]: https://github.com/winebarrel/pistachio/compare/v1.89.0...v1.89.1
+[1.89.0]: https://github.com/winebarrel/pistachio/compare/v1.88.1...v1.89.0
+[1.88.1]: https://github.com/winebarrel/pistachio/compare/v1.88.0...v1.88.1
+[1.88.0]: https://github.com/winebarrel/pistachio/compare/v1.87.0...v1.88.0
+[1.87.0]: https://github.com/winebarrel/pistachio/compare/v1.86.0...v1.87.0
+[1.86.0]: https://github.com/winebarrel/pistachio/compare/v1.85.1...v1.86.0
+[1.85.1]: https://github.com/winebarrel/pistachio/compare/v1.85.0...v1.85.1
+[1.85.0]: https://github.com/winebarrel/pistachio/compare/v1.84.0...v1.85.0
+[1.84.0]: https://github.com/winebarrel/pistachio/compare/v1.83.1...v1.84.0
+[1.83.1]: https://github.com/winebarrel/pistachio/compare/v1.83.0...v1.83.1
+[1.83.0]: https://github.com/winebarrel/pistachio/compare/v1.82.1...v1.83.0
+[1.82.1]: https://github.com/winebarrel/pistachio/compare/v1.82.0...v1.82.1
+[1.82.0]: https://github.com/winebarrel/pistachio/compare/v1.81.0...v1.82.0
+[1.81.0]: https://github.com/winebarrel/pistachio/compare/v1.80.1...v1.81.0
+[1.80.1]: https://github.com/winebarrel/pistachio/compare/v1.80.0...v1.80.1
+[1.80.0]: https://github.com/winebarrel/pistachio/compare/v1.79.1...v1.80.0
+[1.79.1]: https://github.com/winebarrel/pistachio/compare/v1.79.0...v1.79.1
+[1.79.0]: https://github.com/winebarrel/pistachio/compare/v1.78.1...v1.79.0
+[1.78.1]: https://github.com/winebarrel/pistachio/compare/v1.78.0...v1.78.1
+[1.78.0]: https://github.com/winebarrel/pistachio/compare/v1.77.0...v1.78.0
+[1.77.0]: https://github.com/winebarrel/pistachio/compare/v1.76.0...v1.77.0
+[1.76.0]: https://github.com/winebarrel/pistachio/compare/v1.75.0...v1.76.0
+[1.75.0]: https://github.com/winebarrel/pistachio/compare/v1.74.0...v1.75.0
+[1.74.0]: https://github.com/winebarrel/pistachio/compare/v1.73.2...v1.74.0
+[1.73.2]: https://github.com/winebarrel/pistachio/compare/v1.73.1...v1.73.2
+[1.73.1]: https://github.com/winebarrel/pistachio/compare/v1.73.0...v1.73.1
+[1.73.0]: https://github.com/winebarrel/pistachio/compare/v1.72.1...v1.73.0
+[1.72.1]: https://github.com/winebarrel/pistachio/compare/v1.72.0...v1.72.1
+[1.72.0]: https://github.com/winebarrel/pistachio/compare/v1.71.0...v1.72.0
+[1.71.0]: https://github.com/winebarrel/pistachio/compare/v1.70.1...v1.71.0
+[1.70.1]: https://github.com/winebarrel/pistachio/compare/v1.70.0...v1.70.1
+[1.70.0]: https://github.com/winebarrel/pistachio/compare/v1.69.1...v1.70.0
+[1.69.1]: https://github.com/winebarrel/pistachio/compare/v1.69.0...v1.69.1
+[1.69.0]: https://github.com/winebarrel/pistachio/compare/v1.68.0...v1.69.0
+[1.68.0]: https://github.com/winebarrel/pistachio/compare/v1.67.1...v1.68.0
+[1.67.1]: https://github.com/winebarrel/pistachio/compare/v1.67.0...v1.67.1
+[1.67.0]: https://github.com/winebarrel/pistachio/compare/v1.66.1...v1.67.0
+[1.66.1]: https://github.com/winebarrel/pistachio/compare/v1.66.0...v1.66.1
+[1.66.0]: https://github.com/winebarrel/pistachio/compare/v1.65.0...v1.66.0
+[1.65.0]: https://github.com/winebarrel/pistachio/compare/v1.64.0...v1.65.0
+[1.64.0]: https://github.com/winebarrel/pistachio/compare/v1.63.0...v1.64.0
+[1.63.0]: https://github.com/winebarrel/pistachio/compare/v1.62.0...v1.63.0
+[1.62.0]: https://github.com/winebarrel/pistachio/compare/v1.61.0...v1.62.0
+[1.61.0]: https://github.com/winebarrel/pistachio/compare/v1.60.1...v1.61.0
+[1.60.1]: https://github.com/winebarrel/pistachio/compare/v1.60.0...v1.60.1
+[1.60.0]: https://github.com/winebarrel/pistachio/compare/v1.59.2...v1.60.0
+[1.59.2]: https://github.com/winebarrel/pistachio/compare/v1.59.1...v1.59.2
+[1.59.1]: https://github.com/winebarrel/pistachio/compare/v1.59.0...v1.59.1
+[1.59.0]: https://github.com/winebarrel/pistachio/compare/v1.58.0...v1.59.0
+[1.58.0]: https://github.com/winebarrel/pistachio/compare/v1.57.0...v1.58.0
+[1.57.0]: https://github.com/winebarrel/pistachio/compare/v1.56.0...v1.57.0
+[1.56.0]: https://github.com/winebarrel/pistachio/compare/v1.55.0...v1.56.0
+[1.55.0]: https://github.com/winebarrel/pistachio/compare/v1.54.2...v1.55.0
+[1.54.2]: https://github.com/winebarrel/pistachio/compare/v1.54.1...v1.54.2
+[1.54.1]: https://github.com/winebarrel/pistachio/compare/v1.54.0...v1.54.1
+[1.54.0]: https://github.com/winebarrel/pistachio/compare/v1.53.0...v1.54.0
+[1.53.0]: https://github.com/winebarrel/pistachio/compare/v1.52.0...v1.53.0
+[1.52.0]: https://github.com/winebarrel/pistachio/compare/v1.51.0...v1.52.0
+[1.51.0]: https://github.com/winebarrel/pistachio/compare/v1.50.0...v1.51.0
+[1.50.0]: https://github.com/winebarrel/pistachio/compare/v1.49.2...v1.50.0
+[1.49.2]: https://github.com/winebarrel/pistachio/compare/v1.49.1...v1.49.2
+[1.49.1]: https://github.com/winebarrel/pistachio/compare/v1.49.0...v1.49.1
+[1.49.0]: https://github.com/winebarrel/pistachio/compare/v1.48.0...v1.49.0
+[1.48.0]: https://github.com/winebarrel/pistachio/compare/v1.47.0...v1.48.0
+[1.47.0]: https://github.com/winebarrel/pistachio/compare/v1.46.0...v1.47.0
+[1.46.0]: https://github.com/winebarrel/pistachio/compare/v1.45.0...v1.46.0
+[1.45.0]: https://github.com/winebarrel/pistachio/compare/v1.44.1...v1.45.0
+[1.44.1]: https://github.com/winebarrel/pistachio/compare/v1.44.0...v1.44.1
+[1.44.0]: https://github.com/winebarrel/pistachio/compare/v1.43.0...v1.44.0
+[1.43.0]: https://github.com/winebarrel/pistachio/compare/v1.42.0...v1.43.0
+[1.42.0]: https://github.com/winebarrel/pistachio/compare/v1.41.1...v1.42.0
+[1.41.1]: https://github.com/winebarrel/pistachio/compare/v1.41.0...v1.41.1
+[1.41.0]: https://github.com/winebarrel/pistachio/compare/v1.40.0...v1.41.0
+[1.40.0]: https://github.com/winebarrel/pistachio/compare/v1.39.0...v1.40.0
+[1.39.0]: https://github.com/winebarrel/pistachio/compare/v1.38.1...v1.39.0
+[1.38.1]: https://github.com/winebarrel/pistachio/compare/v1.38.0...v1.38.1
+[1.38.0]: https://github.com/winebarrel/pistachio/compare/v1.37.0...v1.38.0
+[1.37.0]: https://github.com/winebarrel/pistachio/compare/v1.36.0...v1.37.0
+[1.36.0]: https://github.com/winebarrel/pistachio/compare/v1.35.0...v1.36.0
+[1.35.0]: https://github.com/winebarrel/pistachio/compare/v1.34.0...v1.35.0
+[1.34.0]: https://github.com/winebarrel/pistachio/compare/v1.33.0...v1.34.0
+[1.33.0]: https://github.com/winebarrel/pistachio/compare/v1.32.0...v1.33.0
+[1.32.0]: https://github.com/winebarrel/pistachio/compare/v1.31.0...v1.32.0
+[1.31.0]: https://github.com/winebarrel/pistachio/compare/v1.30.0...v1.31.0
+[1.30.0]: https://github.com/winebarrel/pistachio/compare/v1.29.0...v1.30.0
+[1.29.0]: https://github.com/winebarrel/pistachio/compare/v1.28.0...v1.29.0
+[1.28.0]: https://github.com/winebarrel/pistachio/compare/v1.27.0...v1.28.0
+[1.27.0]: https://github.com/winebarrel/pistachio/compare/v1.26.0...v1.27.0
+[1.26.0]: https://github.com/winebarrel/pistachio/compare/v1.25.0...v1.26.0
+[1.25.0]: https://github.com/winebarrel/pistachio/compare/v1.24.0...v1.25.0
+[1.24.0]: https://github.com/winebarrel/pistachio/compare/v1.23.1...v1.24.0
+[1.23.1]: https://github.com/winebarrel/pistachio/compare/v1.23.0...v1.23.1
+[1.23.0]: https://github.com/winebarrel/pistachio/compare/v1.22.0...v1.23.0
+[1.22.0]: https://github.com/winebarrel/pistachio/compare/v1.21.1...v1.22.0
+[1.21.1]: https://github.com/winebarrel/pistachio/compare/v1.21.0...v1.21.1
+[1.21.0]: https://github.com/winebarrel/pistachio/compare/v1.20.0...v1.21.0
+[1.20.0]: https://github.com/winebarrel/pistachio/compare/v1.19.0...v1.20.0
+[1.19.0]: https://github.com/winebarrel/pistachio/compare/v1.18.0...v1.19.0
+[1.18.0]: https://github.com/winebarrel/pistachio/compare/v1.17.0...v1.18.0
+[1.17.0]: https://github.com/winebarrel/pistachio/compare/v1.16.1...v1.17.0
+[1.16.1]: https://github.com/winebarrel/pistachio/compare/v1.16.0...v1.16.1
+[1.16.0]: https://github.com/winebarrel/pistachio/compare/v1.15.0...v1.16.0
+[1.15.0]: https://github.com/winebarrel/pistachio/compare/v1.14.0...v1.15.0
+[1.14.0]: https://github.com/winebarrel/pistachio/compare/v1.13.0...v1.14.0
+[1.13.0]: https://github.com/winebarrel/pistachio/compare/v1.12.1...v1.13.0
+[1.12.1]: https://github.com/winebarrel/pistachio/compare/v1.12.0...v1.12.1
+[1.12.0]: https://github.com/winebarrel/pistachio/compare/v1.11.0...v1.12.0
+[1.11.0]: https://github.com/winebarrel/pistachio/compare/v1.10.6...v1.11.0
+[1.10.6]: https://github.com/winebarrel/pistachio/compare/v1.10.5...v1.10.6
+[1.10.5]: https://github.com/winebarrel/pistachio/compare/v1.10.4...v1.10.5
+[1.10.4]: https://github.com/winebarrel/pistachio/compare/v1.10.3...v1.10.4
+[1.10.2]: https://github.com/winebarrel/pistachio/compare/v1.10.1...v1.10.2
+[1.10.1]: https://github.com/winebarrel/pistachio/compare/v1.10.0...v1.10.1
+[1.10.0]: https://github.com/winebarrel/pistachio/compare/v1.9.1...v1.10.0
+[1.9.1]: https://github.com/winebarrel/pistachio/compare/v1.9.0...v1.9.1
+[1.9.0]: https://github.com/winebarrel/pistachio/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/winebarrel/pistachio/compare/v1.7.3...v1.8.0
+[1.7.3]: https://github.com/winebarrel/pistachio/compare/v1.7.2...v1.7.3
+[1.7.2]: https://github.com/winebarrel/pistachio/compare/v1.7.1...v1.7.2
+[1.7.1]: https://github.com/winebarrel/pistachio/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/winebarrel/pistachio/compare/v1.6.2...v1.7.0
+[1.6.2]: https://github.com/winebarrel/pistachio/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/winebarrel/pistachio/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/winebarrel/pistachio/compare/v1.5.2...v1.6.0
+[1.5.2]: https://github.com/winebarrel/pistachio/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/winebarrel/pistachio/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/winebarrel/pistachio/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/winebarrel/pistachio/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/winebarrel/pistachio/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/winebarrel/pistachio/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/winebarrel/pistachio/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/winebarrel/pistachio/compare/v0.27.0...v1.0.0

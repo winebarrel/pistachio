@@ -549,6 +549,51 @@ func TestEqualViewDef_funcCallArgs(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_fromFunctionLateral(t *testing.T) {
+	// The catalog marks a function LATERAL when its arguments read an
+	// earlier FROM item, and keeps a written LATERAL on one that does not.
+	// On a function the keyword changes nothing.
+	assert.True(t, equalViewDef(
+		"SELECT s.id, r.v FROM sensors s, LATERAL jsonb_array_elements(s.samples) r(v)",
+		"SELECT s.id, r.v FROM sensors s, jsonb_array_elements(s.samples) r(v)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT s.id, k.n FROM sensors s CROSS JOIN generate_series(1, 4) k(n)",
+		"SELECT s.id, k.n FROM sensors s CROSS JOIN LATERAL generate_series(1, 4) k(n)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT s.id, r.v FROM sensors s LEFT JOIN LATERAL jsonb_array_elements(s.samples) r(v) ON true",
+		"SELECT s.id, r.v FROM sensors s LEFT JOIN jsonb_array_elements(s.samples) r(v) ON true",
+	))
+	// On a sub-query it decides which relation a name resolves to.
+	assert.False(t, equalViewDef(
+		"SELECT s.id, m.n FROM sensors s, LATERAL (SELECT max(s.id) AS n) m",
+		"SELECT s.id, m.n FROM sensors s, (SELECT max(s.id) AS n) m",
+	))
+}
+
+func TestEqualViewDef_fromFunctionColumnAlias(t *testing.T) {
+	// A function with one output column and only a table alias gets a
+	// column of the alias's name, which the catalog writes out.
+	assert.True(t, equalViewDef(
+		"SELECT k.k FROM generate_series(1, 4) k(k)",
+		"SELECT k FROM generate_series(1, 4) k",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT s.id, tag.tag FROM sensors s, LATERAL unnest(s.tags) tag(tag)",
+		"SELECT s.id, tag.tag FROM sensors s, unnest(s.tags) AS tag",
+	))
+	// A column alias of another name is a different column.
+	assert.False(t, equalViewDef(
+		"SELECT k.n FROM generate_series(1, 4) k(n)",
+		"SELECT k FROM generate_series(1, 4) k",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT k.k FROM generate_series(1, 4) k(k)",
+		"SELECT k FROM generate_series(1, 5) k",
+	))
+}
+
 func TestEqualViewDef_cte(t *testing.T) {
 	// Covers WithClause/CTE path
 	assert.True(t, equalViewDef(
