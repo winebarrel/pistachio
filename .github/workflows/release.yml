@@ -9,7 +9,11 @@ permissions:
   packages: write
 
 env:
-  GOLANG_CROSS_VERSION: v1.27.3
+  # The image runs with the token that writes the release and the tap, so pin
+  # it by digest: a tag can be moved. Update both together, taking the digest
+  # of the image index, for example with
+  # docker buildx imagetools inspect ghcr.io/goreleaser/goreleaser-cross:<tag>
+  GOLANG_CROSS_VERSION: v1.27.3@sha256:1820cee53c4c06cfb43c2203caca73f9497042f5b6061c8916a251228a321975
 
 jobs:
   goreleaser:
