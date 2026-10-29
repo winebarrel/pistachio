@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+## [1.89.5] - 2026-10-29
+
 * `plan` no longer reports a change on every run for a view with a function in `FROM` written without `LATERAL`, such as `FROM t, unnest(t.tags) AS u(tag)`, or with a table alias and no column alias, such as `FROM generate_series(1, 3) AS g`.
 
 ## [1.89.4] - 2026-10-26
@@ -939,7 +941,8 @@
 
 * Initial release.
 
-[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.89.4...HEAD
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.89.5...HEAD
+[1.89.5]: https://github.com/winebarrel/pistachio/compare/v1.89.4...v1.89.5
 [1.89.4]: https://github.com/winebarrel/pistachio/compare/v1.89.3...v1.89.4
 [1.89.3]: https://github.com/winebarrel/pistachio/compare/v1.89.2...v1.89.3
 [1.89.2]: https://github.com/winebarrel/pistachio/compare/v1.89.1...v1.89.2
