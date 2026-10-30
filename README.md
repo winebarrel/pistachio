@@ -30,6 +30,7 @@ pistachio reads the SQL files with [pg_query_go](https://github.com/pganalyze/pg
 ```bash
 brew install winebarrel/pistachio/pistachio     # Homebrew
 mise use github:winebarrel/pistachio            # mise
+nix profile install github:winebarrel/pistachio # Nix
 ```
 
 Alternatively, download a binary from [Releases](https://github.com/winebarrel/pistachio/releases/latest). Binaries exist for macOS and Linux on amd64 and arm64, and for Windows on amd64.

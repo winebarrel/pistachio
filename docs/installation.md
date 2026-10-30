@@ -16,6 +16,16 @@ mise use github:winebarrel/pistachio            # latest
 mise use github:winebarrel/pistachio@<version>  # a specific version
 ```
 
+## Nix
+
+```bash
+nix profile install github:winebarrel/pistachio            # main
+nix profile install github:winebarrel/pistachio/<version>  # a specific version
+```
+
+The flake builds `pista` from source. `--version` prints the commit it was
+built from.
+
 ## Download binary
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases/latest).
