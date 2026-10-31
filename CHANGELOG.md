@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+* The `no-enum-type` rule in `rules/gitlab` now reports a column whose enum type is written without its schema, such as `status status`, the way `dump` writes an enum on the search_path. It used to report only a schema-qualified type.
+
 * The `-- Connected to` line names the database PostgreSQL connects to, the one named after the user, when the connection string gives no database. It used to leave the name empty.
 
 * `plan` no longer drops and adds again a foreign key to its own table when the referenced column is renamed with `-- pista:renamed-from`. The `RENAME COLUMN` alone is enough.
