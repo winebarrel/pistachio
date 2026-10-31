@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+* `plan` no longer reports a change on every run for a trigger whose `WHEN` expression is written without the casts PostgreSQL adds, such as `WHEN (NEW.amount > 0)` on a `numeric` column or `WHEN (NEW.status = 'done')` on an enum column.
+
 * `plan` no longer drops and creates again on every run a constraint trigger whose `FROM` table is written with its schema, such as `FROM public.accounts`.
 
 * The `no-enum-type` rule in `rules/gitlab` now reports a column whose enum type is written without its schema, such as `status status`, the way `dump` writes an enum on the search_path. It used to report only a schema-qualified type.

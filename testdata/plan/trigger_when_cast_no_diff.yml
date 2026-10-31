@@ -1,0 +1,29 @@
+# A WHEN expression written without the casts pg_get_triggerdef adds, the way
+# a CHECK body is usually written. The catalog reads 0::numeric and
+# 'done'::status, which must not read as a change.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TYPE public.status AS ENUM ('open', 'done');
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount numeric,
+      status public.status,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER orders_amount AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.amount > 0) EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER orders_done AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.status = 'done') EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TYPE public.status AS ENUM ('open', 'done');
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount numeric,
+      status public.status,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER orders_amount AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.amount > 0) EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER orders_done AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.status = 'done') EXECUTE FUNCTION public.stamp();
+plan: ""

@@ -318,6 +318,14 @@ func equalTriggerDef(current, desired, schema string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the desired trigger definition: %w", err)
 	}
+	// pg_get_triggerdef adds casts to the WHEN expression the way
+	// pg_get_constraintdef does to a CHECK body, so drop the ones the desired
+	// side does not write.
+	curCT := curResult.Stmts[0].Stmt.GetCreateTrigStmt()
+	desCT := desResult.Stmts[0].Stmt.GetCreateTrigStmt()
+	if curCT.WhenClause != nil && desCT.WhenClause != nil {
+		curCT.WhenClause = alignCurrentCasts(desCT.WhenClause, curCT.WhenClause)
+	}
 	cur, err := pg_query.Deparse(curResult)
 	if err != nil {
 		return false, fmt.Errorf("failed to deparse the current trigger definition: %w", err)
