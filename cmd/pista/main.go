@@ -20,7 +20,7 @@ func versionString() string {
 	var pgQueryGo string
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, dep := range info.Deps {
-			if dep.Path == "github.com/pganalyze/pg_query_go/v6" {
+			if dep.Path == "github.com/pganalyze/pg_query_go/v18" {
 				pgQueryGo = dep.Version
 			}
 		}

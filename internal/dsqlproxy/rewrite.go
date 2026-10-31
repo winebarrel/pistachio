@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 )
 
 // The messages come from DSQL.md, which records what a live cluster
