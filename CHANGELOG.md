@@ -4,9 +4,11 @@
 
 ## [Unreleased]
 
+* `plan` no longer drops and creates again on every run a constraint trigger whose `FROM` table is written with its schema, such as `FROM public.accounts`.
+
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
 
-* `plan` no longer drops and creates again on every run a constraint trigger whose `FROM` table is written with its schema, such as `FROM public.accounts`.
+* `lint` no longer runs column rules on a partition child that has a `COMMENT ON COLUMN`, such as one `dump` writes. It used to report the commented column as if the child declared it, with no file position.
 
 ## [1.89.5] - 2026-10-29
 

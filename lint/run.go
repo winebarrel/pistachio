@@ -151,12 +151,16 @@ func collectTargets(r *parser.ParseResult, schemas []string) []target {
 			table, _ := jsonTables[fqtn].(map[string]any)
 			add(parser.LintTarget{Kind: parser.LintTable, Table: fqtn}, "table "+fqtn, map[string]any{"table": table})
 
-			columns, _ := table["columns"].([]any)
-			for _, c := range columns {
-				column, _ := c.(map[string]any)
-				name, _ := column["name"].(string)
-				add(parser.LintTarget{Kind: parser.LintColumn, Table: fqtn, Name: name},
-					"column "+fqtn+"."+model.Ident(name), map[string]any{"table": table, "column": column})
+			// A partition child declares no columns of its own. The entries it
+			// has hold only a comment on an inherited column.
+			if !t.IsPartitionChild() {
+				columns, _ := table["columns"].([]any)
+				for _, c := range columns {
+					column, _ := c.(map[string]any)
+					name, _ := column["name"].(string)
+					add(parser.LintTarget{Kind: parser.LintColumn, Table: fqtn, Name: name},
+						"column "+fqtn+"."+model.Ident(name), map[string]any{"table": table, "column": column})
+				}
 			}
 
 			addIndexes(add, fqtn, table, t.Indexes)
