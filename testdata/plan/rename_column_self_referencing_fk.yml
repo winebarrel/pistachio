@@ -1,0 +1,19 @@
+# PostgreSQL renames the referenced column of a foreign key to its own table
+# too, so the key needs no DROP and ADD around the RENAME COLUMN.
+init: |
+  CREATE TABLE public.tree (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT tree_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.tree ADD CONSTRAINT tree_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.tree(id);
+desired: |
+  CREATE TABLE public.tree (
+      -- pista:renamed-from id
+      node_id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT tree_pkey PRIMARY KEY (node_id)
+  );
+  ALTER TABLE public.tree ADD CONSTRAINT tree_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.tree(node_id);
+plan: |
+  ALTER TABLE public.tree RENAME COLUMN id TO node_id;
