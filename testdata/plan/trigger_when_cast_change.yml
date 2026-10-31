@@ -1,0 +1,21 @@
+# The casts pg_get_triggerdef adds are dropped only where the desired side
+# has none, so a changed constant still reads as a change.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount numeric,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER orders_amount AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.amount > 0) EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount numeric,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER orders_amount AFTER UPDATE ON public.orders
+      FOR EACH ROW WHEN (NEW.amount > 1) EXECUTE FUNCTION public.stamp();
+plan: |
+  CREATE OR REPLACE TRIGGER orders_amount AFTER UPDATE ON public.orders FOR EACH ROW WHEN (new.amount > 1) EXECUTE FUNCTION public.stamp();
