@@ -236,6 +236,31 @@ CREATE INDEX r_a_gist_idx ON public.r USING gist (a);`), []string{"public"})
 	}, got)
 }
 
+// TestGitLabRulesBareEnumName checks that no-enum-type reports an enum
+// written without its schema, the way dump writes one on the search_path.
+func TestGitLabRulesBareEnumName(t *testing.T) {
+	linter, err := lint.Load([]string{filepath.Join("..", "rules", "gitlab", "types.yml")}, &bytes.Buffer{})
+	require.NoError(t, err)
+
+	violations, err := linter.Run(parse(t, `
+CREATE TYPE mood AS ENUM ('a', 'b');
+CREATE TABLE public.t (
+  m mood,
+  ms mood[],
+  n smallint
+);`), []string{"public"})
+	require.NoError(t, err)
+
+	var got []string
+	for _, v := range violations {
+		got = append(got, v.String())
+	}
+	assert.Equal(t, []string{
+		"schema.sql:4:3: column public.t.m: no-enum-type: use smallint instead of an enum type",
+		"schema.sql:5:3: column public.t.ms: no-enum-type: use smallint instead of an enum type",
+	}, got)
+}
+
 // The rules from the GitLab database guidelines, run over a schema that breaks
 // each of them, and that holds the cases each must leave alone.
 func TestGitLabRules(t *testing.T) {

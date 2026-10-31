@@ -13,8 +13,12 @@ rules:
         && c.definition.contains("char_length(" + column.name + ") <="))
     message: add a check constraint on char_length of the column
 
+  # base_type is the type as written, so an enum on the search_path, which
+  # dump writes without its schema, is matched by name.
   - name: no-enum-type
     on: column
     description: Store enums as smallint.
-    assert: '!(column.base_type in doc.enums)'
+    assert: >-
+      !(column.base_type in doc.enums)
+        && !doc.enums.values().exists(e, e.name == column.base_type)
     message: use smallint instead of an enum type
