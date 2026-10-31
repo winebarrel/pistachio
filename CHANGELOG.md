@@ -6,6 +6,8 @@
 
 * The `no-enum-type` rule in `rules/gitlab` now reports a column whose enum type is written without its schema, such as `status status`, the way `dump` writes an enum on the search_path. It used to report only a schema-qualified type.
 
+* `plan` no longer drops and adds again a foreign key to its own table when the referenced column is renamed with `-- pista:renamed-from`. The `RENAME COLUMN` alone is enough.
+
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
 
 * `lint` no longer runs column rules on a partition child that has a `COMMENT ON COLUMN`, such as one `dump` writes. It used to report the commented column as if the child declared it, with no file position.
