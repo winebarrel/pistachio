@@ -583,6 +583,37 @@ type of the expression under the cast. Only the database knows that type.
 
 Origin: default cast review, 2026-09-24.
 
+## A bare FROM table of a constraint trigger is read in the trigger's schema
+
+Priority: low.
+
+A constraint trigger's `FROM` table written without its schema is read in the
+trigger's schema. On the catalog side this happens only when the trigger's
+table is written bare too, which says its schema is on the search_path.
+PostgreSQL resolves a bare name through the whole search_path, so the two
+differ when the search_path holds more than one schema and the `FROM` table is
+in another of them:
+
+```sql
+-- pista plan -n app,public --search-path app,public
+-- database: app.events, public.accounts, no app.accounts
+CREATE CONSTRAINT TRIGGER c AFTER INSERT ON app.events FROM public.accounts
+    FOR EACH ROW EXECUTE FUNCTION chk();
+```
+
+The catalog writes `ON events FROM accounts`, and `accounts` is read as
+`app.accounts`. So a desired `FROM public.accounts` reads as a change on every
+plan, and a move to a new `app.accounts` goes unreported. A desired bare
+`FROM accounts` is read in the trigger's schema as well, wherever the
+search_path resolves it. The default search_path holds only `public`, where
+the reading is exact. Resolving the name needs the schema the catalog omitted,
+which `tgconstrrelid` gives.
+
+Workaround: keep `--search-path` to one schema, and qualify the `FROM` table
+in the desired file.
+
+Origin: constraint trigger FROM review, 2026-10-31.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.
