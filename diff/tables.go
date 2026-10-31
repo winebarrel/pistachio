@@ -812,7 +812,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		// A serial column's nextval() default blocks ADD IDENTITY. The catalog
 		// reads it into Default, but a column built from a schema file carries
 		// none, so detect those by TypeName as well.
-		if current.Default != nil || isSerialType(current.TypeName) {
+		if current.Default != nil || model.IsSerialType(current.TypeName) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
 		}
 		if !current.NotNull {
@@ -1081,16 +1081,6 @@ func identityKind(id model.ColumnIdentity) string {
 	return "BY DEFAULT"
 }
 
-// isSerialType reports whether the type name corresponds to a Postgres serial
-// pseudo-type. catalog/columns.go renders these explicitly as "serial" /
-// "bigserial" / "smallserial". A desired serial column carries no Default,
-// so callers that need to drop the underlying nextval() default before an
-// ALTER must check the type name to detect this case.
-func isSerialType(typeName string) bool {
-	_, ok := serialBaseTypes[typeName]
-	return ok
-}
-
 // alterTypeName renders a type name for SET DATA TYPE. PostgreSQL accepts a
 // serial pseudo-type only in CREATE TABLE and ADD COLUMN, so naming one in an
 // ALTER fails with "type bigserial does not exist".
@@ -1116,7 +1106,7 @@ func alterSerialSequenceSQL(fqtn string, current, desired *model.Column) string 
 	if current.SerialSequence == nil {
 		return ""
 	}
-	if !isSerialType(current.TypeName) && !isSerialType(desired.TypeName) {
+	if !model.IsSerialType(current.TypeName) && !model.IsSerialType(desired.TypeName) {
 		return ""
 	}
 	// Only a type change reaches the sequence. Without this the statement
