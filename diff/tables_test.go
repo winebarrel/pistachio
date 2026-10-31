@@ -595,6 +595,33 @@ func TestDiffTables_dropTable_withFK(t *testing.T) {
 	assert.Equal(t, []string{"DROP TABLE public.users;", "DROP TABLE public.posts;"}, result.DropStmts)
 }
 
+func TestDiffTables_renameTable_dropFK(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	users := newTable("public", "users")
+	current.Set("public.users", users)
+	desired.Set("public.users", newTable("public", "users"))
+
+	posts := newTable("public", "posts")
+	posts.ForeignKeys.Set("posts_user_id_fkey", &model.ForeignKey{
+		Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
+		Schema: "public",
+		Table:  "posts",
+	})
+	current.Set("public.posts", posts)
+
+	articles := newTable("public", "articles")
+	articles.RenameFrom = new("public.posts")
+	desired.Set("public.articles", articles)
+
+	// FK drops run before the rename, so they name the table the old way.
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;"}, result.FKDropStmts)
+	assert.Equal(t, []string{"ALTER TABLE public.posts RENAME TO articles;"}, result.Stmts)
+}
+
 func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
@@ -3261,6 +3288,15 @@ func TestEqualConstraintDef_castFormattingDiff(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"CHECK (((color)::text = ANY ((ARRAY['red'::character varying, 'blue'::character varying])::text[])))",
 		"CHECK (color::text = ANY(ARRAY['red'::varchar, 'blue'::varchar]::text[]))",
+	))
+}
+
+func TestEqualConstraintDef_varcharLengthCastKept(t *testing.T) {
+	// The catalog never adds a cast to varchar(n), so the one in the current
+	// definition was written. Removing it changes what the constraint checks.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((((code)::character varying(3))::text = 'abc'::text))",
+		"CHECK (code = 'abc')",
 	))
 }
 

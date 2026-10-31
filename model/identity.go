@@ -1,6 +1,7 @@
 package model
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -26,11 +27,11 @@ type IdentitySequence struct {
 func seqTypeBounds(dataType string) (int64, int64) {
 	switch dataType {
 	case "smallint":
-		return -32768, 32767
+		return math.MinInt16, math.MaxInt16
 	case "integer":
-		return -2147483648, 2147483647
+		return math.MinInt32, math.MaxInt32
 	default: // bigint
-		return -9223372036854775808, 9223372036854775807
+		return math.MinInt64, math.MaxInt64
 	}
 }
 

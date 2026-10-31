@@ -122,7 +122,7 @@ func extractFirstIdentifier(s string) string {
 			result.WriteByte(ch)
 			continue
 		}
-		if ch == '.' || ch == '_' || ch == '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+		if ch == '.' || ch == '$' || isIdentByte(ch) {
 			result.WriteByte(ch)
 			continue
 		}

@@ -1,0 +1,27 @@
+# A foreign key dropped from a renamed table is dropped before the rename, so
+# the statement names the table the old way.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.posts
+  CREATE TABLE public.articles (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;
+  ALTER TABLE public.posts RENAME TO articles;

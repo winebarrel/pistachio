@@ -8,7 +8,11 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+* `plan` no longer drops and adds again a foreign key to its own table when the referenced column is renamed with `-- pista:renamed-from`. The `RENAME COLUMN` alone is enough.
+
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
+
+* `lint` no longer runs column rules on a partition child that has a `COMMENT ON COLUMN`, such as one `dump` writes. It used to report the commented column as if the child declared it, with no file position.
 
 ## [1.89.5] - 2026-10-29
 
