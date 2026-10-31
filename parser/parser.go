@@ -539,10 +539,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 
 		switch {
 		case node.GetCreateEnumStmt() != nil:
-			enum, err := parseCreateEnumStmt(node.GetCreateEnumStmt(), defaultSchema)
-			if err != nil {
-				return nil, err
-			}
+			enum := parseCreateEnumStmt(node.GetCreateEnumStmt(), defaultSchema)
 			if renameFrom != "" {
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				enum.RenameFrom = &qualified
@@ -2219,7 +2216,7 @@ func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap
 	return domains.Get(model.Ident(schema, domainName))
 }
 
-func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
+func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) *model.Enum {
 	schema, name := splitTypeName(es.TypeName, defaultSchema)
 
 	values := stringVals(es.Vals)
@@ -2228,7 +2225,7 @@ func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*mo
 		Schema: schema,
 		Name:   name,
 		Values: values,
-	}, nil
+	}
 }
 
 // seqParams holds a sequence option list after PostgreSQL's implicit defaults
