@@ -6,6 +6,8 @@
 
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
 
+* `lint` no longer runs column rules on a partition child that has a `COMMENT ON COLUMN`, such as one `dump` writes. It used to report the commented column as if the child declared it, with no file position.
+
 ## [1.89.5] - 2026-10-29
 
 * `plan` no longer reports a change on every run for a view with a function in `FROM` written without `LATERAL`, such as `FROM t, unnest(t.tags) AS u(tag)`, or with a table alias and no column alias, such as `FROM generate_series(1, 3) AS g`.
