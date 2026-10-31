@@ -614,6 +614,33 @@ in the desired file.
 
 Origin: constraint trigger FROM review, 2026-10-31.
 
+## A cast removed from a CHECK or trigger WHEN expression is not detected
+
+The catalog adds casts to a `CHECK` body and to a trigger `WHEN` expression,
+such as `0::numeric` or `'done'::status`, that a hand-written definition
+leaves out. So a cast that only the current side has is dropped before the
+comparison. A cast the user removes is dropped the same way, even where it
+changes the result:
+
+```sql
+-- database
+CREATE TRIGGER t AFTER UPDATE ON o FOR EACH ROW
+    WHEN (NEW.amount::integer > 0) EXECUTE FUNCTION f();
+-- desired
+CREATE TRIGGER t AFTER UPDATE ON o FOR EACH ROW
+    WHEN (NEW.amount > 0) EXECUTE FUNCTION f();
+```
+
+The plan reports no changes, although `amount = 0.4` fails the first condition
+and passes the second. A cast that is added, or changed to another type, is
+still reported. Telling the added casts from a written one needs the type of
+the expression under the cast, as for a `DEFAULT`.
+
+Workaround: change something else in the expression along with the cast, or
+drop and create the object by hand.
+
+Origin: trigger WHEN cast review, 2026-10-31.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.
