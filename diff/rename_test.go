@@ -322,14 +322,16 @@ func TestRewriteColumnRefsInForeignKeys_SelfReferenceRewritesRefAttrs(t *testing
 	public, tree, users := "public", "tree", "users"
 	in := orderedmap.New[string, *model.ForeignKey]()
 	in.Set("self", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "self", Definition: "FOREIGN KEY (parent_id) REFERENCES tree(id)"},
+		Name:       "self",
+		Definition: "FOREIGN KEY (parent_id) REFERENCES tree(id)",
 		Schema:     "public",
 		Table:      "tree",
 		RefSchema:  &public,
 		RefTable:   &tree,
 	})
 	in.Set("other", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "other", Definition: "FOREIGN KEY (id) REFERENCES users(id)"},
+		Name:       "other",
+		Definition: "FOREIGN KEY (id) REFERENCES users(id)",
 		Schema:     "public",
 		Table:      "tree",
 		RefSchema:  &public,
