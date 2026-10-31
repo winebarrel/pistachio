@@ -250,8 +250,9 @@ func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTri
 }
 
 // parseTriggerDef parses a CREATE TRIGGER statement and takes out the wording
-// that says nothing about the trigger's state. An implicit relation schema is
-// filled in from the owning relation, and OR REPLACE is cleared.
+// that says nothing about the trigger's state. An implicit schema on the
+// relation and on a constraint trigger's FROM table is filled in from the
+// owning relation, and OR REPLACE is cleared.
 //
 // The EXECUTE FUNCTION name goes through lastNamePart, since pg_get_triggerdef
 // omits the schema once the function's schema is on the search_path. The WHEN
@@ -268,6 +269,9 @@ func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
 	}
 	if ct.Relation != nil && ct.Relation.Schemaname == "" {
 		ct.Relation.Schemaname = schema
+	}
+	if ct.Constrrel != nil && ct.Constrrel.Schemaname == "" {
+		ct.Constrrel.Schemaname = schema
 	}
 	ct.Replace = false
 	ct.Funcname = lastNamePart(ct.Funcname)

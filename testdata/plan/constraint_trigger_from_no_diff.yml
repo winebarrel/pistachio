@@ -1,0 +1,33 @@
+# pg_get_triggerdef writes the FROM table of a constraint trigger without its
+# schema once the schema is on the search_path. A desired side that qualifies
+# it must not read as a change. Drops are allowed, so a DROP TRIGGER would
+# show up in the plan rather than in the skipped list.
+init: |
+  CREATE FUNCTION public.chk() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.accounts (
+      id integer NOT NULL,
+      CONSTRAINT accounts_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events FROM public.accounts
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION public.chk();
+desired: |
+  CREATE TABLE public.accounts (
+      id integer NOT NULL,
+      CONSTRAINT accounts_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events FROM public.accounts
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION public.chk();
+drop_policy:
+  allow_drop:
+    - all
+plan: ""
