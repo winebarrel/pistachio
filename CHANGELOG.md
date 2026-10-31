@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+## [1.90.0] - 2026-10-31
+
 * `plan` no longer reports a change on every run for a trigger whose `WHEN` expression is written without the casts PostgreSQL adds, such as `WHEN (NEW.amount > 0)` on a `numeric` column or `WHEN (NEW.status = 'done')` on an enum column.
 
 * `plan` no longer drops and creates again on every run a constraint trigger whose `FROM` table is written with its schema, such as `FROM public.accounts`.
@@ -955,7 +957,8 @@
 
 * Initial release.
 
-[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.89.5...HEAD
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.0...HEAD
+[1.90.0]: https://github.com/winebarrel/pistachio/compare/v1.89.5...v1.90.0
 [1.89.5]: https://github.com/winebarrel/pistachio/compare/v1.89.4...v1.89.5
 [1.89.4]: https://github.com/winebarrel/pistachio/compare/v1.89.3...v1.89.4
 [1.89.3]: https://github.com/winebarrel/pistachio/compare/v1.89.2...v1.89.3
