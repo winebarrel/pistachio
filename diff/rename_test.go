@@ -318,6 +318,31 @@ func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 	assert.Contains(t, got.Definition, "users (id)")
 }
 
+func TestRewriteColumnRefsInForeignKeys_SelfReferenceRewritesRefAttrs(t *testing.T) {
+	public, tree, users := "public", "tree", "users"
+	in := orderedmap.New[string, *model.ForeignKey]()
+	in.Set("self", &model.ForeignKey{
+		Name:       "self",
+		Definition: "FOREIGN KEY (parent_id) REFERENCES tree(id)",
+		Schema:     "public",
+		Table:      "tree",
+		RefSchema:  &public,
+		RefTable:   &tree,
+	})
+	in.Set("other", &model.ForeignKey{
+		Name:       "other",
+		Definition: "FOREIGN KEY (id) REFERENCES users(id)",
+		Schema:     "public",
+		Table:      "tree",
+		RefSchema:  &public,
+		RefTable:   &users,
+	})
+
+	out := rewriteColumnRefsInForeignKeys(in, one("id", "node_id"))
+	assert.Equal(t, "FOREIGN KEY (parent_id) REFERENCES tree (node_id)", out.Get("self").Definition)
+	assert.Equal(t, "FOREIGN KEY (node_id) REFERENCES users (id)", out.Get("other").Definition)
+}
+
 func TestRewriteColumnRefsInTriggers_RewritesUpdateOfAndWhen(t *testing.T) {
 	in := orderedmap.New[string, *model.Trigger]()
 	original := &model.Trigger{
