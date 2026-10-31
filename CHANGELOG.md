@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+* The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
+
 ## [1.89.5] - 2026-10-29
 
 * `plan` no longer reports a change on every run for a view with a function in `FROM` written without `LATERAL`, such as `FROM t, unnest(t.tags) AS u(tag)`, or with a table alias and no column alias, such as `FROM generate_series(1, 3) AS g`.

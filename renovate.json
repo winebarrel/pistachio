@@ -30,6 +30,28 @@
         "postgres"
       ],
       "enabled": false
+    },
+    {
+      "description": "The goreleaser-cross image runs with the token that writes the release and the Homebrew tap, so a person reviews each update",
+      "matchDepNames": [
+        "goreleaser/goreleaser-cross"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The goreleaser-cross image the release workflow runs, tagged <Go version>-<goreleaser version> and pinned by digest",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/release\\.yml$/"
+      ],
+      "matchStrings": [
+        "GOLANG_CROSS_VERSION: (?<currentValue>v[0-9.]+-v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]+)"
+      ],
+      "depNameTemplate": "goreleaser/goreleaser-cross",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^v1\\.(?<major>\\d+)\\.(?<minor>\\d+)-v(?<patch>\\d+)\\.(?<build>\\d+)\\.(?<revision>\\d+)$"
     }
   ]
 }

@@ -9,7 +9,13 @@ permissions:
   packages: write
 
 env:
-  GOLANG_CROSS_VERSION: v1.27.3
+  # The tag is <Go version>-<goreleaser version>. The image runs with the token
+  # that writes the release and the tap, so pin it by digest: a tag can be
+  # moved, and the Go-only tag moves whenever goreleaser is released. Renovate
+  # updates the tag and the digest together. The image is pulled from Docker
+  # Hub, not ghcr.io, because only Docker Hub gives Renovate the push time
+  # that minimumReleaseAge needs.
+  GOLANG_CROSS_VERSION: v1.27.3-v2.18.3@sha256:1820cee53c4c06cfb43c2203caca73f9497042f5b6061c8916a251228a321975
 
 jobs:
   goreleaser:
@@ -72,7 +78,7 @@ jobs:
             -e RELEASE_PRS \
             -v "$GITHUB_WORKSPACE:/src" \
             -w /src \
-            "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
+            "docker.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
             release --clean --release-notes-tmpl .github/release-notes.md.tmpl
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -86,6 +92,14 @@ jobs:
         uses: actions/attest@v4.2.2
         with:
           subject-path: dist/checksums.txt
+      # Homebrew and the packages install the binary out of the archive, so
+      # attest the binary as well for a check of the installed pista.
+      - name: Attest binaries
+        uses: actions/attest@v4.2.2
+        with:
+          subject-path: |
+            dist/*/pista
+            dist/*/pista.exe
 
   docker-build:
     strategy:
@@ -110,7 +124,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
       - &login-ghcr
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
