@@ -251,7 +251,9 @@ func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTri
 
 // parseTriggerDef parses a CREATE TRIGGER statement and takes out the wording
 // that says nothing about the trigger's state. An implicit relation schema is
-// filled in from the owning relation, and OR REPLACE is cleared.
+// filled in from the owning relation, and so is the schema of a constraint
+// trigger's FROM table, on the catalog's side only when the relation is bare
+// too. OR REPLACE is cleared.
 //
 // The EXECUTE FUNCTION name goes through lastNamePart, since pg_get_triggerdef
 // omits the schema once the function's schema is on the search_path. The WHEN
@@ -261,13 +263,22 @@ func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTri
 // pg_get_triggerdef writes them in whatever order the file gives.
 //
 // It returns the whole result so the caller can deparse it back.
-func parseTriggerDef(def, schema string) (*pg_query.ParseResult, error) {
+func parseTriggerDef(def, schema string, fromCatalog bool) (*pg_query.ParseResult, error) {
 	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
 		return nil, err
 	}
-	if ct.Relation != nil && ct.Relation.Schemaname == "" {
+	bareRelation := ct.Relation != nil && ct.Relation.Schemaname == ""
+	if bareRelation {
 		ct.Relation.Schemaname = schema
+	}
+	// In a desired definition a bare FROM table is in the trigger's schema. In
+	// the catalog's it is one the search_path reaches, which is the trigger's
+	// schema only when the relation is bare as well; with a qualified relation
+	// the trigger's schema is off the search_path, so the bare name is left
+	// as it is rather than guessed.
+	if ct.Constrrel != nil && ct.Constrrel.Schemaname == "" && (!fromCatalog || bareRelation) {
+		ct.Constrrel.Schemaname = schema
 	}
 	ct.Replace = false
 	ct.Funcname = lastNamePart(ct.Funcname)
@@ -299,11 +310,11 @@ func equalTriggerDef(current, desired, schema string) (bool, error) {
 	if current == desired {
 		return true, nil
 	}
-	curResult, err := parseTriggerDef(current, schema)
+	curResult, err := parseTriggerDef(current, schema, true)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the current trigger definition: %w", err)
 	}
-	desResult, err := parseTriggerDef(desired, schema)
+	desResult, err := parseTriggerDef(desired, schema, false)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the desired trigger definition: %w", err)
 	}

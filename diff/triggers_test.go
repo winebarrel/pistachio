@@ -387,11 +387,11 @@ func TestDiffTriggers_UnparseableDesiredDefinition(t *testing.T) {
 // A definition that parses as something other than CREATE TRIGGER cannot be
 // compared, and neither can a file holding more than one statement.
 func TestParseTriggerDef_WrongStatement(t *testing.T) {
-	_, err := parseTriggerDef("SELECT 1", "public")
+	_, err := parseTriggerDef("SELECT 1", "public", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 
-	_, err = parseTriggerDef(insertDef+"; "+insertDef, "public")
+	_, err = parseTriggerDef(insertDef+"; "+insertDef, "public", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
@@ -426,6 +426,46 @@ func TestRenameTriggerDef_Unparseable(t *testing.T) {
 	_, err = renameTriggerDef(insertDef+"; "+insertDef, "x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
+}
+
+// pg_get_triggerdef writes a table without its schema when the search_path
+// reaches it. A bare ON says the trigger's schema is on the search_path, so a
+// bare FROM is read in that schema too. A qualified ON says it is not, and a
+// bare FROM then names some other schema, so it is left bare. In a desired
+// definition a bare FROM is in the trigger's schema either way.
+func TestEqualTriggerDef_ConstraintTriggerFrom(t *testing.T) {
+	const tail = " DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION chk()"
+
+	same, err := equalTriggerDef(
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON events FROM accounts"+tail,
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON public.events FROM public.accounts"+tail,
+		"public")
+	require.NoError(t, err)
+	assert.True(t, same)
+
+	// The trigger is outside the search_path and its FROM table is in it. A
+	// move to the table of the same name in the trigger's schema is a change.
+	same, err = equalTriggerDef(
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON app.events FROM accounts"+tail,
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON app.events FROM app.accounts"+tail,
+		"app")
+	require.NoError(t, err)
+	assert.False(t, same)
+
+	same, err = equalTriggerDef(
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON app.events FROM app.accounts"+tail,
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON app.events FROM accounts"+tail,
+		"app")
+	require.NoError(t, err)
+	assert.True(t, same)
+
+	// A different FROM schema is a change.
+	same, err = equalTriggerDef(
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON events FROM accounts"+tail,
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON public.events FROM other.accounts"+tail,
+		"public")
+	require.NoError(t, err)
+	assert.False(t, same)
 }
 
 // pg_get_triggerdef omits the schema of the EXECUTE FUNCTION name once the
