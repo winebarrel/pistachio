@@ -367,11 +367,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	// and the DROP statement uses the old name instead.
 	needsRecreateRenamed := map[string]bool{}
 	for newKey := range renamedFrom {
-		desiredView, dok := desired.GetOk(newKey)
-		currentView, cok := current.GetOk(newKey)
-		if !dok || !cok {
-			continue
-		}
+		// detectViewRenames put newKey in both maps.
+		desiredView := desired.Get(newKey)
+		currentView := current.Get(newKey)
 		// detectViewRenames rejects a rename that switches between VIEW and
 		// MATERIALIZED VIEW, so this cannot be reached. Kept for the day that
 		// rename is allowed, when a type switch has to take the recreate path

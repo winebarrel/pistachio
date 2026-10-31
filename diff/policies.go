@@ -62,12 +62,8 @@ func diffPolicies(
 	// separator.
 	needsRecreateRenamed := map[string]bool{}
 	for newName := range renamedFrom {
-		cur, ok := current.GetOk(newName)
-		des, dok := desired.GetOk(newName)
-		if !ok || !dok {
-			continue
-		}
-		if needsRecreate(cur, des) {
+		// detectPolicyRenames put newName in both maps.
+		if needsRecreate(current.Get(newName), desired.Get(newName)) {
 			needsRecreateRenamed[newName] = true
 		}
 	}
