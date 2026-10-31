@@ -50,6 +50,13 @@ gh attestation verify pistachio_<version>_<os>_<arch>.tar.gz --repo winebarrel/p
 gh attestation verify oci://ghcr.io/winebarrel/pistachio:<tag> --repo winebarrel/pistachio
 ```
 
+The `pista` binary inside each archive is attested too, so an installed
+binary can be verified directly:
+
+```bash
+gh attestation verify "$(command -v pista)" --repo winebarrel/pistachio
+```
+
 The command exits with a nonzero status when the file or image was not built
 by the release workflow of this repository. The demo image has no attestation.
 
