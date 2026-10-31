@@ -14,7 +14,8 @@ rules:
     message: add a check constraint on char_length of the column
 
   # base_type is the type as written, so an enum on the search_path, which
-  # dump writes without its schema, is matched by name.
+  # dump writes without its schema, is matched by name. An enum name that
+  # needs quotes is not matched when written without its schema.
   - name: no-enum-type
     on: column
     description: Store enums as smallint.
