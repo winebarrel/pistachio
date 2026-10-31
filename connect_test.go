@@ -189,6 +189,27 @@ func TestConnInfoComment(t *testing.T) {
 	assert.NotContains(t, comment, "secret")
 }
 
+func TestConnInfoComment_DefaultDBName(t *testing.T) {
+	// With no dbname given, the server connects to the database named after
+	// the user, so the comment names that one.
+	t.Setenv("PGDATABASE", "")
+	client := NewClient(&Options{
+		ConnString: "host=myhost port=5433 user=myuser",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to postgres://myuser@myhost:5433/myuser", comment)
+
+	client = NewClient(&Options{
+		ConnString: "host=/tmp port=5433 user=myuser",
+	})
+
+	comment, err = client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to host=/tmp port=5433 dbname=myuser user=myuser", comment)
+}
+
 func TestConnInfoComment_WithDBNameOverride(t *testing.T) {
 	client := NewClient(&Options{
 		ConnString: "postgres://myuser@myhost/origdb",

@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* The `-- Connected to` line names the database PostgreSQL connects to, the one named after the user, when the connection string gives no database. It used to leave the name empty.
+
 * `plan` no longer drops and adds again a foreign key to its own table when the referenced column is renamed with `-- pista:renamed-from`. The `RENAME COLUMN` alone is enough.
 
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
