@@ -428,9 +428,6 @@ func TestRenameTriggerDef_Unparseable(t *testing.T) {
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
 
-// pg_get_triggerdef omits the schema of the EXECUTE FUNCTION name once the
-// function's schema is on the search_path, so the written qualified form has
-// to compare equal to it. A three-part name is stripped the same way.
 // pg_get_triggerdef writes a table without its schema when the search_path
 // reaches it. A bare ON says the trigger's schema is on the search_path, so a
 // bare FROM is read in that schema too. A qualified ON says it is not, and a
@@ -471,6 +468,9 @@ func TestEqualTriggerDef_ConstraintTriggerFrom(t *testing.T) {
 	assert.False(t, same)
 }
 
+// pg_get_triggerdef omits the schema of the EXECUTE FUNCTION name once the
+// function's schema is on the search_path, so the written qualified form has
+// to compare equal to it. A three-part name is stripped the same way.
 func TestEqualTriggerDef_QualifiedFunction(t *testing.T) {
 	current := "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp()"
 
