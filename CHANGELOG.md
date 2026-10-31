@@ -4,9 +4,11 @@
 
 ## [Unreleased]
 
+* The `no-enum-type` rule in `rules/gitlab` now reports a column whose enum type is written without its schema, such as `status status`, the way `dump` writes an enum on the search_path. It used to report only a schema-qualified type.
+
 * The `pista` binary in each release archive now carries a build provenance attestation, so `gh attestation verify` can check an installed `pista`, such as one installed with Homebrew.
 
-* The `no-enum-type` rule in `rules/gitlab` now reports a column whose enum type is written without its schema, such as `status status`, the way `dump` writes an enum on the search_path. It used to report only a schema-qualified type.
+* `lint` no longer runs column rules on a partition child that has a `COMMENT ON COLUMN`, such as one `dump` writes. It used to report the commented column as if the child declared it, with no file position.
 
 ## [1.89.5] - 2026-10-29
 

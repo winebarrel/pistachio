@@ -374,6 +374,26 @@ CREATE VIEW public.v AS SELECT a FROM public.t;`)
 	}, got)
 }
 
+// A comment on a column of a partition child leaves a column entry that
+// holds only the comment. The child declares no columns, so no column rule
+// runs on it.
+func TestRun_PartitionChildColumnComment(t *testing.T) {
+	got := run(t, `
+rules:
+  - name: c
+    on: column
+    assert: column.name != "a"
+    message: column
+`, `
+CREATE TABLE public.p (a int, b int) PARTITION BY RANGE (b);
+CREATE TABLE public.p_1 PARTITION OF public.p FOR VALUES FROM (0) TO (10);
+COMMENT ON COLUMN public.p_1.a IS 'x';`)
+
+	assert.Equal(t, []string{
+		"schema.sql:2:24: column public.p.a: c: column",
+	}, got)
+}
+
 // An index on a materialized view is checked with the view as table.
 func TestRun_MaterializedViewIndexReadsTheView(t *testing.T) {
 	got := run(t, `
