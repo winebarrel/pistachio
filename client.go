@@ -85,16 +85,23 @@ func (client *Client) ConnInfoComment() (string, error) {
 		return "", err
 	}
 
+	// With no dbname given, the server connects to the database named after
+	// the user.
+	db := cfg.Database
+	if db == "" {
+		db = cfg.User
+	}
+
 	if strings.HasPrefix(cfg.Host, "/") {
-		return fmt.Sprintf("-- Connected to host=%s port=%d dbname=%s user=%s", cfg.Host, cfg.Port, cfg.Database, cfg.User), nil
+		return fmt.Sprintf("-- Connected to host=%s port=%d dbname=%s user=%s", cfg.Host, cfg.Port, db, cfg.User), nil
 	}
 
 	u := url.URL{
 		Scheme:  "postgres",
 		User:    url.User(cfg.User),
 		Host:    net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
-		Path:    "/" + cfg.Database,
-		RawPath: "/" + url.PathEscape(cfg.Database),
+		Path:    "/" + db,
+		RawPath: "/" + url.PathEscape(db),
 	}
 	return "-- Connected to " + u.String(), nil
 }
