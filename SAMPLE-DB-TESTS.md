@@ -238,6 +238,7 @@ tip do not load. Its loader says why.
 | jbpm | jbpm | [kiegroup/jbpm](https://github.com/kiegroup/jbpm) |
 | kanboard | public | [kanboard/kanboard](https://github.com/kanboard/kanboard) |
 | bytebase | bytebase | [bytebase/bytebase](https://github.com/bytebase/bytebase) |
+| sonarqube | sonarqube | [SonarSource/sonarqube](https://github.com/SonarSource/sonarqube) |
 
 ## Coverage
 
@@ -270,7 +271,7 @@ exceptions:
 - cratesio was counted on 2026-09-25 on 16.13. panoptes was counted on 2026-10-04 on 16.14.
   harness was counted on 2026-10-08 on 16.15.
 - jbpm, kanboard, and bytebase were counted on 2026-10-26 on 16.15, the
-  Sequences column included.
+  Sequences column included. sonarqube was counted on 2026-10-31 on 16.15.
 - The Sequences column was counted on 15.18 throughout. The Triggers column was
   added on 2026-08-24 and the Routines column on 2026-08-25. Both were counted
   on 15.18 for every sample.
@@ -281,7 +282,7 @@ The columns hold the following:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only. Pistachio manages the
   sequence behind a serial or identity column as an attribute of that column,
-  not as an object of its own. Counting those sequences too would add 2,354
+  not as an object of its own. Counting those sequences too would add 2,357
   more. 886 of them are gitlab's, 210 are chado's, and 31 are hexpm's. hexpm
   declares no standalone sequence at all. zed, with 17 such sequences, and
   gravitino, with 1, declare none either. authelia's 25 and hydra's 2 are the
@@ -418,11 +419,12 @@ pistachio does not read them either.
 | jbpm | 46 | 314 | 146 | 45 | 41 | 0 | 0 | 34 | 0 | 0 |
 | kanboard | 48 | 288 | 76 | 59 | 58 | 0 | 0 | 0 | 0 | 0 |
 | bytebase | 48 | 287 | 120 | 60 | 55 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **10,457** | **89,891** | **31,658** | **13,991** | **17,212** | **2,311** | **718** | **907** | **2,033** | **1,831** |
+| sonarqube | 188 | 1,459 | 444 | 0 | 181 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **10,645** | **91,350** | **32,102** | **13,991** | **17,393** | **2,311** | **718** | **907** | **2,033** | **1,831** |
 
 ### Size
 
-The 114 dumps come to about 294,000 lines of SQL. chado is 43,700 of them,
+The 115 dumps come to about 297,000 lines of SQL. chado is 43,700 of them,
 which is the longest dump of any sample. gitlab is 34,700 and uyuni is 19,700.
 gitlab is still about a quarter of the constraints, a fifth of the indexes, a
 sixth of the foreign keys and of the columns, and a seventh of the tables.
@@ -471,7 +473,9 @@ Indexes:
   hoppscotch.
 - gist over a function the schema defines: chado.
 - gist over several columns, needing `btree_gist`: osm.
-- `NULLS NOT DISTINCT`: discourse, lago, hydra.
+- `NULLS NOT DISTINCT`: discourse, lago, hydra, sonarqube (92 of them).
+- `NULLS FIRST` on an ascending column: sonarqube (nearly every index
+  column).
 - `INCLUDE`: discourse, lago, hexpm, hydra (also partial).
 - Storage parameters on an index: concourse.
 - Bare unique indexes where a unique constraint could stand: lobehub, zed,
@@ -483,7 +487,7 @@ Constraints and keys:
 - CHECK constraints added by hand to an ORM schema: affine, lobehub.
 - CHECK constraints named at install time: uyuni.
 - No CHECK at all: dhis2, mattermost, vaultwarden, bonita, omop, zed,
-  formbricks, jbpm, kanboard.
+  formbricks, jbpm, kanboard, sonarqube.
 - Foreign keys over more than one column: zed, formbricks, hydra (three
   columns), harness, bytebase.
 - Foreign keys across schemas: adventureworks, mimiciv, chado.
@@ -495,11 +499,11 @@ Constraints and keys:
 - `ON UPDATE` alone: bytebase.
 - No foreign key at all: mediawiki, temporal, imdb, dolphinscheduler,
   nightingale, joomla, hyperswitch, icinga_ido, bareos, opencms, kamailio,
-  shenyu, nacos, gravitino, streampark.
+  shenyu, nacos, gravitino, streampark, sonarqube.
 - Tables with no primary key: shenyu, concourse, omop, teable, typebot,
-  authelia, harness, jbpm, kanboard, bytebase.
+  authelia, harness, jbpm, kanboard, bytebase, sonarqube.
 - Composite primary keys: vaultwarden, bonita, harness, jbpm, kanboard,
-  bytebase.
+  bytebase, sonarqube.
 
 Types and columns:
 
@@ -510,8 +514,9 @@ Types and columns:
 - Domains with CHECKs: icingadb (named), icinga_director, boundary, omero.
 - Composite types: ovirt, sourcegraph, chado, coder, marquez (built with ROW()
   in a view), uyuni (read by an index and a generated column).
-- Stored generated columns: bigbluebutton (over a function of its own), uyuni.
-- Identity columns: openreplay, uyuni.
+- Stored generated columns: bigbluebutton (over a function of its own), uyuni,
+  sonarqube.
+- Identity columns: openreplay, uyuni, sonarqube.
 - A serial column whose sequence still carries the name the table had before
   a rename, so dump writes the sequence on its own with `OWNED BY`: harness.
 - Standalone sequences: ranger, wso2apim, wso2is, dcm4chee, alfresco,
@@ -529,6 +534,7 @@ Types and columns:
 - Quoted mixed-case identifiers: chinook, hive, hatchet, calcom, triggerdev,
   documenso, bigbluebutton, dokploy, formbricks, hoppscotch; langfuse for its
   enum types only.
+- Quoted upper-case identifiers throughout: sonarqube.
 - Table and column comments: gravitino, shenyu, nacos, glific, streampark,
   harness (one table comment).
 

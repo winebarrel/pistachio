@@ -136,6 +136,7 @@ harness|sample-db-harness||harness
 jbpm|sample-db-url-schema|URL=https://raw.githubusercontent.com/kiegroup/jbpm/d518cacb3957a203a906a8ae1525aec12728a0d2/jbpm-db-scripts/src/main/resources/db/ddl-scripts/postgresql/postgresql-jbpm-schema.sql SCHEMA=jbpm|jbpm
 kanboard|sample-db-url|URL=https://raw.githubusercontent.com/kanboard/kanboard/19c65283083e6e675040b1f6ab325972b6492201/app/Schema/Sql/postgres.sql|
 bytebase|sample-db-url-schema|URL=https://raw.githubusercontent.com/bytebase/bytebase/0a987f5cfe5f6bded9eac09b5b6f48f72dcc5c96/backend/migrator/migration/LATEST.sql SCHEMA=bytebase|bytebase
+sonarqube|sample-db-sonarqube|URL=https://raw.githubusercontent.com/SonarSource/sonarqube/5f0d541bab0b7d3f4f30e2bb82d9e3981049895c/server/sonar-db-dao/src/schema/schema-sq.ddl SCHEMA=sonarqube|sonarqube
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1716,6 +1717,26 @@ sample-db-harness:
 	  | sed -E 's/([^A-Za-z0-9_])public\./\1/g' \
 	  | $(PSQL)
 	$(PSQL) -c 'SET search_path = harness; DROP TABLE migrations'
+
+# SonarQube (SonarSource/sonarqube, LGPL-3.0). Its migrations are Java, and the
+# only schema it keeps as a file is schema-sq.ddl, which a Gradle task dumps
+# from H2. The file is close to PostgreSQL, and the sed rewrites only what H2
+# spells another way. It drops the `#` banner, which PostgreSQL reads as an
+# operator. It maps the large object and TINYINT types to the ones SonarQube
+# creates on PostgreSQL. It moves `NULLS NOT DISTINCT` from after UNIQUE, where
+# H2 writes it, to after the column list, where PostgreSQL 15 reads it. It adds
+# STORED to the one generated column, which 15 to 17 require and without which
+# 18 would make the column virtual. The ascending NULLS FIRST on nearly every
+# index column is H2's and stays as it is.
+.PHONY: sample-db-sonarqube
+sample-db-sonarqube:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	$(FETCH) $(URL) \
+	  | sed -E -e '/^#/d' \
+	      -e 's/CHARACTER LARGE OBJECT/TEXT/g; s/BINARY LARGE OBJECT/BYTEA/g; s/TINYINT/SMALLINT/g' \
+	      -e 's/^CREATE UNIQUE NULLS NOT DISTINCT INDEX (.*);$$/CREATE UNIQUE INDEX \1 NULLS NOT DISTINCT;/' \
+	      -e 's/(GENERATED ALWAYS AS \(.*\))$$/\1 STORED/' \
+	  | $(PSQL)
 
 # SAMPLE narrows the check to the samples it names, separated by commas:
 #   make test-samples SAMPLE=lemmy,cratesio
