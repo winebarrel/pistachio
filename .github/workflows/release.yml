@@ -92,6 +92,14 @@ jobs:
         uses: actions/attest@v4.2.2
         with:
           subject-path: dist/checksums.txt
+      # Homebrew and the packages install the binary out of the archive, so
+      # attest the binary as well for a check of the installed pista.
+      - name: Attest binaries
+        uses: actions/attest@v4.2.2
+        with:
+          subject-path: |
+            dist/*/pista
+            dist/*/pista.exe
 
   docker-build:
     strategy:
