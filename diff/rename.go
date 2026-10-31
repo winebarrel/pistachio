@@ -587,12 +587,17 @@ func rewriteIndexElems(nodes []*pg_query.Node, renames map[string]string) {
 // rewriteColumnsInConstraintDef returns a new constraint definition fragment
 // (e.g. "PRIMARY KEY (id)", "CHECK ((x > 0))", "FOREIGN KEY (a) REFERENCES t(b)")
 // with column references rewritten according to the renames map (old -> new).
-// PkAttrs (referenced columns on the foreign side) are intentionally NOT
-// rewritten because they refer to a different table.
+// PkAttrs (referenced columns on the foreign side) are not rewritten because
+// they refer to a different table; rewriteColumnRefsInForeignKeys handles a key to its
+// own table.
 //
 // All renames are applied in a single AST walk so chained renames cannot
 // cascade.
 func rewriteColumnsInConstraintDef(def string, renames map[string]string) (string, error) {
+	return rewriteConstraintDef(def, renames, false)
+}
+
+func rewriteConstraintDef(def string, renames map[string]string, refColumns bool) (string, error) {
 	result, con, err := pgast.ParseConstraintDefStrict(def)
 	if err != nil {
 		return "", err
@@ -610,6 +615,9 @@ func rewriteColumnsInConstraintDef(def string, renames map[string]string) (strin
 	rewriteStringList(con.Keys)
 	rewriteStringList(con.Including)
 	rewriteStringList(con.FkAttrs)
+	if refColumns {
+		rewriteStringList(con.PkAttrs)
+	}
 	rewriteColumnRefsInExpr(con.RawExpr, renames)
 	rewriteColumnRefsInExpr(con.WhereClause, renames)
 	// EXCLUDE constraints encode each (column, operator) pair as a List node
@@ -661,12 +669,14 @@ func renameColumnKeys(cols *orderedmap.Map[string, *model.Column], renames map[s
 }
 
 // rewriteColumnRefsInForeignKeys returns a clone of FKs with each Definition
-// updated to reflect column renames on the local side (FkAttrs). Referenced
-// columns are not touched.
+// updated to reflect column renames on the local side (FkAttrs). The
+// referenced columns are rewritten only for a key to its own table, since
+// RENAME COLUMN renames them there too.
 func rewriteColumnRefsInForeignKeys(fks *orderedmap.Map[string, *model.ForeignKey], renames map[string]string) *orderedmap.Map[string, *model.ForeignKey] {
 	return fks.TransformMap(func(name string, fk *model.ForeignKey) (string, *model.ForeignKey) {
 		clone := *fk
-		if updated, err := rewriteColumnsInConstraintDef(clone.Definition, renames); err == nil {
+		selfRef := fk.RefSchema != nil && fk.RefTable != nil && *fk.RefSchema == fk.Schema && *fk.RefTable == fk.Table
+		if updated, err := rewriteConstraintDef(clone.Definition, renames, selfRef); err == nil {
 			clone.Definition = updated
 		}
 		return name, &clone
