@@ -3,7 +3,7 @@ module github.com/winebarrel/pistachio
 go 1.27.3
 
 require (
-	cel.dev/cel-go v0.32.0
+	cel.dev/cel-go v0.33.0
 	github.com/alecthomas/kong v1.16.1
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.11.0
