@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	cel.dev/cel-go v0.33.1
-	github.com/alecthomas/kong v1.16.1
+	github.com/alecthomas/kong v1.17.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pganalyze/pg_query_go/v6 v6.2.5
