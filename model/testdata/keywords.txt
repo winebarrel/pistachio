@@ -1,5 +1,5 @@
 # PostgreSQL keywords, one per line, from the kwlist.h bundled with
-# pg_query_go v6.2.5. Categories are not recorded here: util_test.go
+# pg_query_go v18.0.0-20261001001140-51b79d2d7669. Categories are not recorded here: util_test.go
 # derives each one through pg_query.Scan at run time.
 #
 # Regenerate with: make keywords
@@ -131,6 +131,7 @@ enable
 encoding
 encrypted
 end
+enforced
 enum
 error
 escape
@@ -285,6 +286,7 @@ nullif
 nulls
 numeric
 object
+objects
 of
 off
 offset
@@ -316,6 +318,7 @@ partition
 passing
 password
 path
+period
 placing
 plan
 plans
@@ -340,7 +343,6 @@ range
 read
 real
 reassign
-recheck
 recursive
 ref
 references
@@ -468,6 +470,7 @@ verbose
 version
 view
 views
+virtual
 volatile
 when
 where

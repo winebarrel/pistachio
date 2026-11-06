@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Parse desired files with the PostgreSQL 18 grammar (pg_query_go v18). Syntax added in PostgreSQL 18, such as `NOT ENFORCED` and `WITHOUT OVERLAPS`, no longer fails the parse.
+
+* A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
+
 ## [1.90.0] - 2026-10-31
 
 * `plan` no longer reports a change on every run for a trigger whose `WHEN` expression is written without the casts PostgreSQL adds, such as `WHEN (NEW.amount > 0)` on a `numeric` column or `WHEN (NEW.status = 'done')` on an enum column.

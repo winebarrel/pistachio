@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/internal/pgast"
 )
 
 func TestExtractStmtDirectives(t *testing.T) {
 	t.Run("single directive", func(t *testing.T) {
 		sql := `-- pista:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
@@ -26,7 +26,7 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 CREATE TYPE public.new_status AS ENUM ('active');
 -- pista:renamed-from public.old_users
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 2)
@@ -36,7 +36,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 
 	t.Run("no directives", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -46,7 +46,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 		sql := `CREATE TABLE public.users (id integer NOT NULL);
 -- pista:renamed-from public.old_posts
 CREATE TABLE public.posts (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
@@ -56,7 +56,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 	t.Run("directive with extra whitespace", func(t *testing.T) {
 		sql := `  -- pista:renamed-from  public.old_name
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "public.old_name", dirs[result.Stmts[0].StmtLocation])
@@ -65,7 +65,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("unqualified name", func(t *testing.T) {
 		sql := `-- pista:renamed-from old_name
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
@@ -74,7 +74,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("whitespace-only directive ignored", func(t *testing.T) {
 		sql := `-- pista:renamed-from
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -83,7 +83,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("regular comment ignored", func(t *testing.T) {
 		sql := `-- this is a regular comment
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -480,7 +480,7 @@ func TestQualifyRenameFrom(t *testing.T) {
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
 	sql := `-- pista:renamed-from "My Schema"."Old Name"
 CREATE TABLE public.users (id integer NOT NULL);`
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 	dirs := extractStmtDirectives(sql, result.Stmts)
 	assert.Equal(t, `"My Schema"."Old Name"`, dirs[result.Stmts[0].StmtLocation])
@@ -521,7 +521,7 @@ func TestExtractExecuteDirectives_WithCheckSQL(t *testing.T) {
 	sql := `-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -536,7 +536,7 @@ func TestExtractExecuteDirectives_CheckSQLTrailingSemicolon(t *testing.T) {
 	sql := `-- pista:execute SELECT true;
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
@@ -550,7 +550,7 @@ func TestExtractExecuteDirectives_WithoutCheckSQL(t *testing.T) {
 	sql := `-- pista:execute
 GRANT SELECT ON public.users TO readonly_role;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -566,7 +566,7 @@ func TestExtractExecuteDirectives_MixedWithManaged(t *testing.T) {
 -- pista:execute
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -584,7 +584,7 @@ CREATE OR REPLACE FUNCTION public.func1() RETURNS void AS $$ BEGIN END; $$ LANGU
 -- pista:execute SELECT true
 CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -598,7 +598,7 @@ CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGU
 func TestExtractExecuteDirectives_None(t *testing.T) {
 	sql := `CREATE TABLE public.users (id integer NOT NULL);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -611,7 +611,7 @@ func TestExtractExecuteDirectives_First(t *testing.T) {
 	sql := `-- pista:execute-first
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -627,7 +627,7 @@ func TestExtractExecuteDirectives_FirstWithCheckSQL(t *testing.T) {
 	sql := `-- pista:execute-first SELECT to_regprocedure('public.my_func()') IS NULL
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
@@ -645,7 +645,7 @@ CREATE OR REPLACE FUNCTION public.f1() RETURNS void AS $$ BEGIN END; $$ LANGUAGE
 -- pista:execute
 CREATE OR REPLACE FUNCTION public.f2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
@@ -661,7 +661,7 @@ func TestExtractExecuteDirectives_FirstCheckSQLTrailingSemicolon(t *testing.T) {
 	sql := `-- pista:execute-first SELECT true;
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
@@ -682,7 +682,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 -- pista:execute SELECT 1 = 1
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`,
 	} {
-		result, err := pg_query.Parse(sql)
+		result, err := pgast.Parse(sql)
 		require.NoError(t, err)
 
 		_, _, err = extractExecuteDirectives(sql, result.Stmts)
@@ -697,7 +697,7 @@ func TestExtractExecuteDirectives_FirstRepeated(t *testing.T) {
 -- pista:execute-first SELECT 2 = 2
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
@@ -712,7 +712,7 @@ func TestExtractExecuteDirectives_FirstMixedWithManaged(t *testing.T) {
 -- pista:execute-first
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
@@ -744,7 +744,7 @@ func TestExtractConcurrentlyDirectives(t *testing.T) {
 CREATE INDEX idx_name ON public.users USING btree (name);
 CREATE INDEX idx_email ON public.users USING btree (email);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractConcurrentlyDirectives(sql, result.Stmts)
@@ -757,7 +757,7 @@ func TestExtractConcurrentlyDirectives_withRenamedFrom(t *testing.T) {
 -- pista:concurrently
 CREATE INDEX idx_name ON public.users USING btree (name);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractConcurrentlyDirectives(sql, result.Stmts)
@@ -767,7 +767,7 @@ CREATE INDEX idx_name ON public.users USING btree (name);`
 func TestExtractConcurrentlyDirectives_noDirective(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.users USING btree (name);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractConcurrentlyDirectives(sql, result.Stmts)
@@ -779,7 +779,7 @@ func TestExtractBulkAlterDirectives(t *testing.T) {
 CREATE TABLE public.users (id integer NOT NULL);
 CREATE TABLE public.posts (id integer NOT NULL);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractBulkAlterDirectives(sql, result.Stmts)
@@ -792,7 +792,7 @@ func TestExtractBulkAlterDirectives_withRenamedFrom(t *testing.T) {
 -- pista:bulk-alter
 CREATE TABLE public.users (id integer NOT NULL);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractBulkAlterDirectives(sql, result.Stmts)
@@ -802,7 +802,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 func TestExtractBulkAlterDirectives_noDirective(t *testing.T) {
 	sql := `CREATE TABLE public.users (id integer NOT NULL);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractBulkAlterDirectives(sql, result.Stmts)
@@ -1331,7 +1331,7 @@ func TestExtractRefuseHazardDirectives(t *testing.T) {
 CREATE TABLE public.users (id integer NOT NULL);
 CREATE TABLE public.posts (id integer NOT NULL);`
 
-	result, err := pg_query.Parse(sql)
+	result, err := pgast.Parse(sql)
 	require.NoError(t, err)
 
 	directives := extractRefuseHazardDirectives(sql, result.Stmts)

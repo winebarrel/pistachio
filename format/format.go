@@ -12,7 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
+	"github.com/winebarrel/pistachio/internal/pgast"
 )
 
 // indentUnit is one level of indentation inside a definition list. pg_dump and
@@ -144,7 +145,7 @@ func scan(sql string) ([]*token, error) {
 // length for, which is what a file whose last statement has no semicolon
 // gives, runs to the next statement or to the end of the input.
 func split(sql string) ([]stmt, error) {
-	tree, err := pg_query.Parse(sql)
+	tree, err := pgast.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
