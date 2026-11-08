@@ -145,7 +145,7 @@ func (t Table) SQL() string {
 func (t Table) inlineConstraintDefs() []string {
 	folded := t.foldedKeys()
 	var defs []string
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if con.Type.IsCheckConstraint() && !con.Validated || folded[con.Name] || con.IndexName != "" {
 			continue
 		}
@@ -206,7 +206,7 @@ func (t Table) FoldedKeySQL() []string {
 	}
 	folded := t.foldedKeys()
 	var stmts []string
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if folded[con.Name] {
 			stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+";")
 		}
@@ -224,7 +224,7 @@ func (t Table) NotValidConSQL() []string {
 		return nil
 	}
 	var stmts []string
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if !con.Type.IsCheckConstraint() || con.Validated {
 			continue
 		}
@@ -237,7 +237,7 @@ func (t Table) NotValidConSQL() []string {
 // They go after the table's indexes, since each takes one over.
 func (t Table) UsingIndexConSQL() []string {
 	var stmts []string
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if con.IndexName != "" {
 			stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+";")
 		}
@@ -258,7 +258,7 @@ func (t Table) IdxSQL() string {
 // the same way.
 func (t Table) FkSQL() string {
 	var stmts []string
-	for _, fk := range t.ForeignKeys.CollectValues() {
+	for fk := range t.ForeignKeys.Values() {
 		if fk.Inherited {
 			continue
 		}
@@ -283,7 +283,7 @@ func (t Table) RLSSQL() []string {
 func (t Table) PolicySQL() []string {
 	var stmts []string
 	if t.Policies != nil {
-		for _, p := range t.Policies.CollectValues() {
+		for p := range t.Policies.Values() {
 			stmts = append(stmts, p.SQL())
 		}
 	}
@@ -295,7 +295,7 @@ func (t Table) PolicySQL() []string {
 func (t Table) TrigSQL() []string {
 	var stmts []string
 	if t.Triggers != nil {
-		for _, trg := range t.Triggers.CollectValues() {
+		for trg := range t.Triggers.Values() {
 			stmts = append(stmts, trg.SQL())
 			if s := trg.StateSQL(); s != "" {
 				stmts = append(stmts, s)
@@ -378,7 +378,7 @@ func (t Table) StorageSQL() []string {
 		return nil
 	}
 	var stmts []string
-	for _, col := range t.Columns.CollectValues() {
+	for col := range t.Columns.Values() {
 		if col.StorageType != "" && col.StorageType != col.TypeStorage {
 			stmts = append(stmts, SetStorageSQL(t.FQTN(), col.Name, col.StorageType))
 		}
@@ -408,7 +408,7 @@ func (t Table) RelationCommentSQL() []string {
 	if t.Comment != nil {
 		stmts = append(stmts, "COMMENT ON TABLE "+t.FQTN()+" IS "+QuoteLiteral(*t.Comment)+";")
 	}
-	for _, col := range t.Columns.CollectValues() {
+	for col := range t.Columns.Values() {
 		if col.Comment != nil {
 			stmts = append(stmts, "COMMENT ON COLUMN "+t.FQTN()+"."+Ident(col.Name)+" IS "+QuoteLiteral(*col.Comment)+";")
 		}
@@ -419,7 +419,7 @@ func (t Table) RelationCommentSQL() []string {
 // IndexCommentSQL renders the comments on the table's indexes.
 func (t Table) IndexCommentSQL() []string {
 	var stmts []string
-	for _, idx := range t.Indexes.CollectValues() {
+	for idx := range t.Indexes.Values() {
 		if s := idx.CommentSQL(); s != "" {
 			stmts = append(stmts, s)
 		}
@@ -435,7 +435,7 @@ func (t Table) ConstraintCommentSQL() []string {
 		return nil
 	}
 	var stmts []string
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if con.Inherited {
 			continue
 		}
@@ -450,7 +450,7 @@ func (t Table) ConstraintCommentSQL() []string {
 // partition's copy of its parent's key the way FkSQL does.
 func (t Table) FkCommentSQL() []string {
 	var stmts []string
-	for _, fk := range t.ForeignKeys.CollectValues() {
+	for fk := range t.ForeignKeys.Values() {
 		if fk.Inherited {
 			continue
 		}
@@ -465,7 +465,7 @@ func (t Table) FkCommentSQL() []string {
 func (t Table) PolicyCommentSQL() []string {
 	var stmts []string
 	if t.Policies != nil {
-		for _, p := range t.Policies.CollectValues() {
+		for p := range t.Policies.Values() {
 			if s := p.CommentSQL(); s != "" {
 				stmts = append(stmts, s)
 			}
@@ -478,7 +478,7 @@ func (t Table) PolicyCommentSQL() []string {
 func (t Table) TrigCommentSQL() []string {
 	var stmts []string
 	if t.Triggers != nil {
-		for _, trg := range t.Triggers.CollectValues() {
+		for trg := range t.Triggers.Values() {
 			if s := trg.CommentSQL(); s != "" {
 				stmts = append(stmts, s)
 			}

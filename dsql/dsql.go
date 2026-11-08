@@ -34,12 +34,12 @@ const btreeMethod = "btree_index"
 // A definition that does not parse is left as it is. The catalog writes
 // definitions that parse, so that is not reached by a real read.
 func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) {
-	for _, t := range tables.CollectValues() {
-		for _, col := range t.Columns.CollectValues() {
+	for t := range tables.Values() {
+		for col := range t.Columns.Values() {
 			col.Compression = ""
 		}
 
-		for _, con := range t.Constraints.CollectValues() {
+		for con := range t.Constraints.Values() {
 			if !con.Type.IsPrimaryKeyConstraint() {
 				continue
 			}
@@ -53,7 +53,7 @@ func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) {
 			}
 		}
 
-		for _, idx := range t.Indexes.CollectValues() {
+		for idx := range t.Indexes.Values() {
 			result, err := pg_query.Parse(idx.Definition)
 			if err != nil {
 				continue

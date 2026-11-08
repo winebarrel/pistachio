@@ -575,7 +575,7 @@ func viewTriggerStmts(v *model.View) []string {
 		return nil
 	}
 	var stmts []string
-	for _, trg := range v.Triggers.CollectValues() {
+	for trg := range v.Triggers.Values() {
 		stmts = append(stmts, trg.SQL())
 		if s := trg.CommentSQL(); s != "" {
 			stmts = append(stmts, s)
@@ -598,7 +598,7 @@ func createMatViewIndexes(result *ViewDiffResult, key string, view *model.View) 
 	if !view.Materialized || view.Indexes == nil {
 		return nil
 	}
-	for _, idx := range view.Indexes.CollectValues() {
+	for idx := range view.Indexes.Values() {
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
 			return fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), key, err)

@@ -65,7 +65,7 @@ func OrderFromSchema(
 
 		// Column type dependencies
 		if t.Columns != nil {
-			for _, col := range t.Columns.CollectValues() {
+			for col := range t.Columns.Values() {
 				if dep := resolveTypeDep(col.TypeName, t.Schema, k, defined); dep != "" {
 					g.AddEdge(k, dep)
 				}
