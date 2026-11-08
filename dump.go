@@ -77,7 +77,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 		return r.Tables
 	}
 	tables := orderedmap.New[string, *model.Table]()
-	for _, t := range r.Tables.CollectValues() {
+	for t := range r.Tables.Values() {
 		copied := *t
 		tableName := model.Ident(t.Name)
 		copied.Schema = ""
@@ -90,7 +90,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 		}
 		if copied.ForeignKeys.Len() > 0 {
 			fks := orderedmap.New[string, *model.ForeignKey]()
-			for _, fk := range copied.ForeignKeys.CollectValues() {
+			for fk := range copied.ForeignKeys.Values() {
 				fkCopied := *fk
 				fkCopied.Schema = ""
 				fks.Set(fk.Name, &fkCopied)
@@ -100,7 +100,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 		copied.Indexes = stripIndexSchemas(copied.Indexes, t.Schema, t.Name)
 		if copied.Policies.Len() > 0 {
 			policies := orderedmap.New[string, *model.Policy]()
-			for _, p := range copied.Policies.CollectValues() {
+			for p := range copied.Policies.Values() {
 				pCopied := *p
 				pCopied.Schema = ""
 				policies.Set(p.Name, &pCopied)
@@ -121,7 +121,7 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 		return r.Views
 	}
 	views := orderedmap.New[string, *model.View]()
-	for _, v := range r.Views.CollectValues() {
+	for v := range r.Views.Values() {
 		copied := *v
 		viewName := model.Ident(v.Name)
 		copied.Schema = ""
@@ -142,7 +142,7 @@ func stripIndexSchemas(
 		return indexes
 	}
 	out := orderedmap.New[string, *model.Index]()
-	for _, idx := range indexes.CollectValues() {
+	for idx := range indexes.Values() {
 		copied := *idx
 		copied.Schema = ""
 		copied.Definition = stripRelationSchemaPrefix(idx.Definition, schema, name)
@@ -162,7 +162,7 @@ func stripTriggerSchemas(
 		return triggers
 	}
 	out := orderedmap.New[string, *model.Trigger]()
-	for _, trg := range triggers.CollectValues() {
+	for trg := range triggers.Values() {
 		copied := *trg
 		copied.Schema = ""
 		copied.Definition = stripRelationSchemaPrefix(trg.Definition, schema, name)
@@ -179,7 +179,7 @@ func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
 		return r.Enums
 	}
 	enums := orderedmap.New[string, *model.Enum]()
-	for _, e := range r.Enums.CollectValues() {
+	for e := range r.Enums.Values() {
 		copied := *e
 		copied.Schema = ""
 		enums.Set(model.Ident(e.Name), &copied)
@@ -195,7 +195,7 @@ func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
 		return r.Domains
 	}
 	domains := orderedmap.New[string, *model.Domain]()
-	for _, d := range r.Domains.CollectValues() {
+	for d := range r.Domains.Values() {
 		copied := *d
 		copied.Schema = ""
 		domains.Set(model.Ident(d.Name), &copied)
@@ -211,7 +211,7 @@ func (r *DumpResult) compositeTypes() *orderedmap.Map[string, *model.CompositeTy
 		return r.CompositeTypes
 	}
 	compositeTypes := orderedmap.New[string, *model.CompositeType]()
-	for _, ct := range r.CompositeTypes.CollectValues() {
+	for ct := range r.CompositeTypes.Values() {
 		copied := *ct
 		copied.Schema = ""
 		compositeTypes.Set(model.Ident(ct.Name), &copied)
@@ -227,7 +227,7 @@ func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
 		return r.Sequences
 	}
 	sequences := orderedmap.New[string, *model.Sequence]()
-	for _, s := range r.Sequences.CollectValues() {
+	for s := range r.Sequences.Values() {
 		copied := *s
 		copied.Schema = ""
 		sequences.Set(model.Ident(s.Name), &copied)
@@ -245,7 +245,7 @@ func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
 		return r.Routines
 	}
 	routines := orderedmap.New[string, *model.Routine]()
-	for _, rt := range r.Routines.CollectValues() {
+	for rt := range r.Routines.Values() {
 		copied := *rt
 		copied.Schema = ""
 		routines.Set(copied.FQRN(), &copied)
@@ -348,16 +348,16 @@ func (r *DumpResult) Files() map[string]string {
 		files[name] = r.formatSQL(sql + "\n")
 		seen[strings.ToLower(name)] = true
 	}
-	for _, e := range r.enums().CollectValues() {
+	for e := range r.enums().Values() {
 		add(e.Schema, e.Name, model.EnumToSQL(e))
 	}
-	for _, d := range r.domains().CollectValues() {
+	for d := range r.domains().Values() {
 		add(d.Schema, d.Name, model.DomainToSQL(d))
 	}
-	for _, ct := range r.compositeTypes().CollectValues() {
+	for ct := range r.compositeTypes().Values() {
 		add(ct.Schema, ct.Name, model.CompositeTypeToSQL(ct))
 	}
-	for _, s := range r.sequences().CollectValues() {
+	for s := range r.sequences().Values() {
 		// OWNED BY goes in the sequence's file. The parser does not require
 		// the table to come first.
 		sql := model.SequenceToSQL(s)
@@ -366,15 +366,15 @@ func (r *DumpResult) Files() map[string]string {
 		}
 		add(s.Schema, s.Name, sql)
 	}
-	for _, rt := range r.routines().CollectValues() {
+	for rt := range r.routines().Values() {
 		// Overloads share a schema-qualified name, so uniqueFileName gives
 		// the second one a _2 suffix, the same as any other collision.
 		add(rt.Schema, rt.Name, model.RoutineToSQL(rt))
 	}
-	for _, t := range r.tables().CollectValues() {
+	for t := range r.tables().Values() {
 		add(t.Schema, t.Name, r.tableSQL(model.TableToSQL(t)))
 	}
-	for _, v := range r.views().CollectValues() {
+	for v := range r.views().Values() {
 		add(v.Schema, v.Name, model.ViewToSQL(v))
 	}
 	return files

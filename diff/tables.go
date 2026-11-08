@@ -380,7 +380,7 @@ func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fk
 	stmts = append(stmts, t.NotValidConSQL()...)
 	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
-	for _, idx := range t.Indexes.CollectValues() {
+	for idx := range t.Indexes.Values() {
 		if copies[idx.Name] {
 			continue
 		}
@@ -408,7 +408,7 @@ func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fk
 		stmts = append(stmts, t.IndexCommentSQL()...)
 	}
 	stmts = append(stmts, t.UsingIndexConSQL()...)
-	for _, fk := range t.ForeignKeys.CollectValues() {
+	for fk := range t.ForeignKeys.Values() {
 		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
 	}
 	fkStmts = append(fkStmts, t.FkCommentSQL()...)

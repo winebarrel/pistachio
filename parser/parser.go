@@ -2682,12 +2682,12 @@ func schemaName(names []string, def string) (schema, name string) {
 // views that carry one, or nil when no relation declares it. Every table and
 // view the parser builds holds an index map, so neither is checked for nil.
 func findIndex(tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], schema, name string) *model.Index {
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		if idx, ok := t.Indexes.GetOk(name); ok && idx.Schema == schema {
 			return idx
 		}
 	}
-	for _, v := range views.CollectValues() {
+	for v := range views.Values() {
 		if idx, ok := v.Indexes.GetOk(name); ok && idx.Schema == schema {
 			return idx
 		}

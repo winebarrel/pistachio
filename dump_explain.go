@@ -35,7 +35,7 @@ func explainDump(
 	}
 
 	partitions := map[string][]*model.Table{}
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		if t.IsPartitionChild() {
 			partitions[*t.PartitionOf] = append(partitions[*t.PartitionOf], t)
 		}
@@ -51,14 +51,14 @@ func explainDump(
 	}
 
 	setIndexSizes := func(indexes *orderedmap.Map[string, *model.Index]) {
-		for _, idx := range indexes.CollectValues() {
+		for idx := range indexes.Values() {
 			if bytes, ok := indexSizes[model.Ident(idx.Schema, idx.Name)]; ok {
 				idx.Size = sizePretty(bytes)
 			}
 		}
 	}
 
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		relations := []*model.Table{t}
 		if t.Partitioned {
 			relations = append(relations, descendants(t)...)
@@ -71,7 +71,7 @@ func explainDump(
 		setIndexSizes(t.Indexes)
 	}
 
-	for _, v := range views.CollectValues() {
+	for v := range views.Values() {
 		if !v.Materialized {
 			continue
 		}

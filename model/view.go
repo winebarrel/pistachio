@@ -137,7 +137,7 @@ func SetCheckOptionSQL(fqvn, option string) string {
 func (v View) TrigSQL() string {
 	var stmts []string
 	if v.Triggers != nil {
-		for _, trg := range v.Triggers.CollectValues() {
+		for trg := range v.Triggers.Values() {
 			stmts = append(stmts, trg.SQL())
 		}
 	}
@@ -155,14 +155,14 @@ func (v View) CommentSQL() string {
 		}
 	}
 	if v.Indexes != nil {
-		for _, idx := range v.Indexes.CollectValues() {
+		for idx := range v.Indexes.Values() {
 			if s := idx.CommentSQL(); s != "" {
 				stmts = append(stmts, s)
 			}
 		}
 	}
 	if v.Triggers != nil {
-		for _, trg := range v.Triggers.CollectValues() {
+		for trg := range v.Triggers.Values() {
 			if s := trg.CommentSQL(); s != "" {
 				stmts = append(stmts, s)
 			}
@@ -174,7 +174,7 @@ func (v View) CommentSQL() string {
 func ViewToSQL(v *View) string {
 	parts := []string{sizedHeader(v.FQVN(), v.Size), v.SQL()}
 	if v.Indexes != nil {
-		for _, idx := range v.Indexes.CollectValues() {
+		for idx := range v.Indexes.Values() {
 			parts = append(parts, idx.DumpSQL())
 		}
 	}

@@ -386,8 +386,8 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	}
 
 	if options.NotNullViaCheck {
-		for _, t := range desiredTables.CollectValues() {
-			for _, col := range t.Columns.CollectValues() {
+		for t := range desiredTables.Values() {
+			for col := range t.Columns.Values() {
 				col.NotNullViaCheck = true
 			}
 		}
@@ -488,7 +488,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	// --bulk-alter merges every table; the -- pista:bulk-alter directive
 	// opts in individual tables.
 	bulkAlterTables := make(map[string]bool)
-	for _, t := range desiredTables.CollectValues() {
+	for t := range desiredTables.Values() {
 		if t.BulkAlter {
 			bulkAlterTables[t.FQTN()] = true
 		}
@@ -1039,13 +1039,13 @@ func setConcurrentlyDirectives(
 	views *orderedmap.Map[string, *model.View],
 	on bool,
 ) {
-	for _, t := range tables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
+	for t := range tables.Values() {
+		for idx := range t.Indexes.Values() {
 			idx.Concurrently = on
 		}
 	}
-	for _, v := range views.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
+	for v := range views.Values() {
+		for idx := range v.Indexes.Values() {
 			idx.Concurrently = on
 		}
 	}
@@ -1062,7 +1062,7 @@ func setConcurrentlyDirectives(
 // not read. The SQL is the same either way: the renderer and the diff both
 // take a nil map for an empty one.
 func clearStorageParams(tables *orderedmap.Map[string, *model.Table]) {
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		t.StorageParams = orderedmap.New[string, string]()
 	}
 }
@@ -1072,7 +1072,7 @@ func clearStorageParams(tables *orderedmap.Map[string, *model.Table]) {
 // view is not touched: it holds only security_barrier and security_invoker,
 // which decide what the view means rather than how it is stored.
 func clearMatViewStorageParams(views *orderedmap.Map[string, *model.View]) {
-	for _, v := range views.CollectValues() {
+	for v := range views.Values() {
 		if v.Materialized {
 			v.StorageParams = orderedmap.New[string, string]()
 		}
@@ -1091,17 +1091,17 @@ func assumeValidatedConstraints(
 	desiredDomains *orderedmap.Map[string, *model.Domain],
 ) {
 	for _, tables := range []*orderedmap.Map[string, *model.Table]{currentTables, desiredTables} {
-		for _, t := range tables.CollectValues() {
-			for _, con := range t.Constraints.CollectValues() {
+		for t := range tables.Values() {
+			for con := range t.Constraints.Values() {
 				con.Validated = true
 			}
-			for _, fk := range t.ForeignKeys.CollectValues() {
+			for fk := range t.ForeignKeys.Values() {
 				fk.Validated = true
 			}
 		}
 	}
 	for _, domains := range []*orderedmap.Map[string, *model.Domain]{currentDomains, desiredDomains} {
-		for _, d := range domains.CollectValues() {
+		for d := range domains.Values() {
 			for _, c := range d.Constraints {
 				c.Validated = true
 			}
@@ -1275,7 +1275,7 @@ func addIndexPositions(
 		if !ok || indexes == nil {
 			return
 		}
-		for _, idx := range indexes.CollectValues() {
+		for idx := range indexes.Values() {
 			posMap[model.Ident(idx.Schema, idx.Name)] = pos
 		}
 	}
@@ -1528,16 +1528,16 @@ func nameIdent(names []*pg_query.Node) string {
 func invalidIndexWarnings(tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) []string {
 	var warnings []string
 	add := func(indexes *orderedmap.Map[string, *model.Index]) {
-		for _, idx := range indexes.CollectValues() {
+		for idx := range indexes.Values() {
 			if idx.Invalid {
 				warnings = append(warnings, "-- Warning: index "+model.Ident(idx.Schema, idx.Name)+" is invalid")
 			}
 		}
 	}
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		add(t.Indexes)
 	}
-	for _, v := range views.CollectValues() {
+	for v := range views.Values() {
 		add(v.Indexes)
 	}
 	return warnings

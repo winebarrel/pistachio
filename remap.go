@@ -346,13 +346,13 @@ func builtinName(names []*pg_query.Node, candidates ...string) bool {
 // remapColumns rewrites the schema in each column's type, collation and
 // default, in the partition parent, and in the constraint definitions.
 func remapColumns(t *model.Table, mapSchema func(string) string, replacer *defReplacer) {
-	for _, col := range t.Columns.CollectValues() {
+	for col := range t.Columns.Values() {
 		col.TypeName = remapQualifiedName(col.TypeName, mapSchema)
 		col.Collation = remapQualifiedNamePtr(col.Collation, mapSchema)
 		col.Default = remapDefaultExprPtr(col.Default, mapSchema)
 	}
 	t.PartitionOf = remapQualifiedNamePtr(t.PartitionOf, mapSchema)
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		con.Definition = replacer.ReplaceConstraint(con.Definition)
 	}
 }
@@ -407,13 +407,13 @@ func remapTables(
 ) *orderedmap.Map[string, *model.Table] {
 	remapped := orderedmap.New[string, *model.Table]()
 
-	for _, t := range tables.CollectValues() {
+	for t := range tables.Values() {
 		t.Schema = mapSchema(t.Schema)
 		remapColumns(t, mapSchema, replacer)
 
 		remapIndexes(t.Indexes, mapSchema, replacer)
 
-		for _, fk := range t.ForeignKeys.CollectValues() {
+		for fk := range t.ForeignKeys.Values() {
 			fk.Schema = mapSchema(fk.Schema)
 			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
 			fk.RefSchema = mapPtr(fk.RefSchema, mapSchema)
@@ -438,7 +438,7 @@ func remapPolicies(
 	mapSchema func(string) string,
 	replacer *defReplacer,
 ) {
-	for _, p := range policies.CollectValues() {
+	for p := range policies.Values() {
 		p.Schema = mapSchema(p.Schema)
 		p.Using = mapPtr(p.Using, replacer.ReplaceExpr)
 		p.WithCheck = mapPtr(p.WithCheck, replacer.ReplaceExpr)
@@ -453,7 +453,7 @@ func remapIndexes(
 	mapSchema func(string) string,
 	replacer *defReplacer,
 ) {
-	for _, idx := range indexes.CollectValues() {
+	for idx := range indexes.Values() {
 		idx.Schema = mapSchema(idx.Schema)
 		idx.Definition = replacer.Replace(idx.Definition)
 	}
@@ -468,7 +468,7 @@ func remapTriggers(
 	mapSchema func(string) string,
 	replacer *defReplacer,
 ) {
-	for _, trg := range triggers.CollectValues() {
+	for trg := range triggers.Values() {
 		trg.Schema = mapSchema(trg.Schema)
 		trg.Definition = replacer.Replace(trg.Definition)
 	}
@@ -495,7 +495,7 @@ func remapViews(
 ) *orderedmap.Map[string, *model.View] {
 	remapped := orderedmap.New[string, *model.View]()
 
-	for _, v := range views.CollectValues() {
+	for v := range views.Values() {
 		v.Schema = mapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
 		remapIndexes(v.Indexes, mapSchema, replacer)
@@ -526,7 +526,7 @@ func remapEnums(
 ) *orderedmap.Map[string, *model.Enum] {
 	remapped := orderedmap.New[string, *model.Enum]()
 
-	for _, e := range enums.CollectValues() {
+	for e := range enums.Values() {
 		e.Schema = mapSchema(e.Schema)
 		remapped.Set(e.FQEN(), e)
 	}
@@ -554,7 +554,7 @@ func remapSequences(
 ) *orderedmap.Map[string, *model.Sequence] {
 	remapped := orderedmap.New[string, *model.Sequence]()
 
-	for _, s := range sequences.CollectValues() {
+	for s := range sequences.Values() {
 		s.Schema = mapSchema(s.Schema)
 		remapped.Set(s.FQN(), s)
 	}
@@ -583,7 +583,7 @@ func remapDomains(
 ) *orderedmap.Map[string, *model.Domain] {
 	remapped := orderedmap.New[string, *model.Domain]()
 
-	for _, d := range domains.CollectValues() {
+	for d := range domains.Values() {
 		d.Schema = mapSchema(d.Schema)
 		remapDomain(d, mapSchema, replacer)
 		remapped.Set(d.FQDN(), d)
@@ -612,7 +612,7 @@ func remapCompositeTypes(
 ) *orderedmap.Map[string, *model.CompositeType] {
 	remapped := orderedmap.New[string, *model.CompositeType]()
 
-	for _, ct := range compositeTypes.CollectValues() {
+	for ct := range compositeTypes.Values() {
 		ct.Schema = mapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
 			a.TypeName = remapQualifiedName(a.TypeName, mapSchema)
@@ -648,7 +648,7 @@ func remapRoutines(
 ) *orderedmap.Map[string, *model.Routine] {
 	remapped := orderedmap.New[string, *model.Routine]()
 
-	for _, r := range routines.CollectValues() {
+	for r := range routines.Values() {
 		r.Schema = remapSchema(r.Schema)
 		r.ReturnType = remapQualifiedName(r.ReturnType, remapSchema)
 		for _, a := range r.Args {

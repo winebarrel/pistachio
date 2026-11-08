@@ -264,7 +264,7 @@ func newExplainer(
 		dropped:     map[string]map[string]bool{},
 		added:       map[string]map[string]*addedCheck{},
 	}
-	for _, t := range current.CollectValues() {
+	for t := range current.Values() {
 		if t.PartitionOf != nil {
 			ex.children[*t.PartitionOf] = append(ex.children[*t.PartitionOf], t)
 		}
@@ -478,7 +478,7 @@ func (ex *explainer) descendants(t *model.Table) []*model.Table {
 // constraint owns.
 func indexCount(t *model.Table) int {
 	n := t.Indexes.Len()
-	for _, con := range t.Constraints.CollectValues() {
+	for con := range t.Constraints.Values() {
 		if con.Type.IsPrimaryKeyConstraint() || con.Type.IsUniqueConstraint() || con.Type.IsExclusionConstraint() {
 			n++
 		}
@@ -1010,7 +1010,7 @@ func (ex *explainer) classifyAlterDomain(ad *pg_query.AlterDomainStmt) explainEf
 		if t.IsPartitionChild() {
 			continue
 		}
-		for _, col := range t.Columns.CollectValues() {
+		for col := range t.Columns.Values() {
 			typ := strings.TrimSuffix(col.TypeName, "[]")
 			if typ == domain || typ == bare {
 				eff.addTarget(ex.target(key, t, t.Partitioned))

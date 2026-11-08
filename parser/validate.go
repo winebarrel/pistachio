@@ -59,14 +59,14 @@ func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 			})
 		}
 
-		for _, idx := range t.Indexes.CollectValues() {
+		for idx := range t.Indexes.Values() {
 			reportMissing(&errs, cols, collectColumnRefsInIndexDef(idx.Definition), func(ref string) error {
 				return fmt.Errorf("column %s referenced in index %s does not exist on table %s",
 					model.Ident(ref), model.Ident(idx.Name), fqtn)
 			})
 		}
 
-		for _, con := range t.Constraints.CollectValues() {
+		for con := range t.Constraints.Values() {
 			kind := constraintKindLabel(con.Type)
 			reportMissing(&errs, cols, collectColumnRefsInConstraintDef(con.Definition), func(ref string) error {
 				return fmt.Errorf("column %s referenced in %s %s does not exist on table %s",
@@ -74,7 +74,7 @@ func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 			})
 		}
 
-		for _, fk := range t.ForeignKeys.CollectValues() {
+		for fk := range t.ForeignKeys.Values() {
 			reportMissing(&errs, cols, collectColumnRefsInFKDef(fk.Definition), func(ref string) error {
 				return fmt.Errorf("column %s referenced in foreign key %s does not exist on table %s",
 					model.Ident(ref), model.Ident(fk.Name), fqtn)
@@ -344,7 +344,7 @@ func validateNamespaces(r *ParseResult) error {
 	}
 
 	addIndexes := func(indexes *orderedmap.Map[string, *model.Index]) {
-		for _, idx := range indexes.CollectValues() {
+		for idx := range indexes.Values() {
 			add(model.Ident(idx.Schema, idx.Name), "index", relations)
 		}
 	}
@@ -353,7 +353,7 @@ func validateNamespaces(r *ParseResult) error {
 		add(fqtn, "table", relations, types)
 		addIndexes(t.Indexes)
 		constraints := newScopedNamespace("constraint", fqtn)
-		for _, con := range t.Constraints.CollectValues() {
+		for con := range t.Constraints.Values() {
 			add(model.Ident(con.Name), constraintKindLabel(con.Type), constraints)
 			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
 				continue
@@ -365,7 +365,7 @@ func validateNamespaces(r *ParseResult) error {
 			}
 			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)
 		}
-		for _, fk := range t.ForeignKeys.CollectValues() {
+		for fk := range t.ForeignKeys.Values() {
 			add(model.Ident(fk.Name), constraintKindLabel(fk.Type), constraints)
 		}
 	}

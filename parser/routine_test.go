@@ -292,7 +292,7 @@ func TestParseSQL_CommentOnAmbiguousRoutineIsSkipped(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	for _, r := range result.Routines.CollectValues() {
+	for r := range result.Routines.Values() {
 		assert.Nil(t, r.Comment)
 	}
 }

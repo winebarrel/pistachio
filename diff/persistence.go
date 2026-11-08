@@ -93,7 +93,7 @@ func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 	}
 	refs := make([][]int, len(changes))
 	for i, c := range changes {
-		for _, fk := range c.table.ForeignKeys.CollectValues() {
+		for fk := range c.table.ForeignKeys.Values() {
 			// A reference written without a schema arrives with one already.
 			// The parser fills RefSchema with the first target schema, which
 			// is where search_path lands a bare name, not with the owning
