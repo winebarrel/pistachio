@@ -331,7 +331,10 @@ jobs:
       PGPORT: "5432"
     services:
       postgres:
-        image: postgres:16
+        # The minor version the recording in testdata/dsql/ reports as
+        # server_version. The proxy passes the server's through, so a newer
+        # image fails dsql-recording.
+        image: postgres:16.15
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
@@ -360,7 +363,10 @@ jobs:
       PGPORT: "5432"
     services:
       postgres:
-        image: postgres:16
+        # The minor version the recording in testdata/dsql/ reports as
+        # server_version. The proxy passes the server's through, so a newer
+        # image fails dsql-recording.
+        image: postgres:16.15
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
