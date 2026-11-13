@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
@@ -94,9 +94,8 @@ type ForeignKey struct {
 // An unqualified domain name is looked up in schemas and then in public, the
 // search path that plan, apply and dump set.
 //
-// A definition that pg_query cannot read, such as a PostgreSQL 18 foreign key
-// with NOT ENFORCED, leaves the added fields of that index or key empty rather
-// than failing the document.
+// A definition that pg_query cannot read leaves the added fields of that index
+// or key empty rather than failing the document.
 func New(r *parser.ParseResult, schemas []string) *Document {
 	if !slices.Contains(schemas, "public") {
 		schemas = append(slices.Clip(schemas), "public")
