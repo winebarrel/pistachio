@@ -1,1 +1,1 @@
-mkdocs-material[imaging]==9.8.0
+mkdocs-material[imaging]==9.8.1
