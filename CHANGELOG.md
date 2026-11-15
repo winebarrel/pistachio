@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The pager set in `PISTA_PAGER` starts only when a command writes to stdout. A command that writes nothing, such as `fmt` with nothing to change or one that fails before any output, no longer opens an empty pager.
+
 ## [1.90.0] - 2026-10-31
 
 * `plan` no longer reports a change on every run for a trigger whose `WHEN` expression is written without the casts PostgreSQL adds, such as `WHEN (NEW.amount > 0)` on a `numeric` column or `WHEN (NEW.status = 'done')` on an enum column.

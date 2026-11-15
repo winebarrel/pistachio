@@ -49,29 +49,62 @@ func StartPager(w io.Writer, pager *bool) (io.Writer, func(), error) {
 	} else {
 		cmd = exec.Command("sh", "-c", cmdline)
 	}
+	// A missing shell is reported now. The pager itself starts on the first
+	// write, so a command that writes nothing to stdout never starts it.
+	if cmd.Err != nil {
+		return w, noop, fmt.Errorf("starting pager %q: %w", cmdline, cmd.Err)
+	}
 	cmd.Stdout = f
 	cmd.Stderr = os.Stderr
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return w, noop, fmt.Errorf("opening pager pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		stdin.Close() //nolint:errcheck
-		return w, noop, fmt.Errorf("starting pager %q: %w", cmdline, err)
-	}
+	p := &lazyPager{cmd: cmd, cmdline: cmdline}
 	// Idempotent so callers can pair an explicit close (to drain the pager
 	// before a process-terminating call like kong.Context.FatalIfErrorf,
 	// which bypasses defers via os.Exit) with `defer closer()` for panic
 	// safety, without double-closing the pipe or double-waiting on the
 	// subprocess.
 	var once sync.Once
-	closer := func() {
-		once.Do(func() {
-			stdin.Close() //nolint:errcheck
-			cmd.Wait()    //nolint:errcheck
-		})
+	closer := func() { once.Do(p.close) }
+	return p, closer, nil
+}
+
+// lazyPager starts the pager on the first Write.
+type lazyPager struct {
+	cmd     *exec.Cmd
+	cmdline string
+	stdin   io.WriteCloser
+	err     error
+}
+
+func (p *lazyPager) Write(b []byte) (int, error) {
+	if p.stdin == nil && p.err == nil {
+		p.err = p.start()
 	}
-	return stdin, closer, nil
+	if p.err != nil {
+		return 0, p.err
+	}
+	return p.stdin.Write(b)
+}
+
+func (p *lazyPager) start() error {
+	stdin, err := p.cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("opening pager pipe: %w", err)
+	}
+	if err := p.cmd.Start(); err != nil {
+		stdin.Close() //nolint:errcheck
+		return fmt.Errorf("starting pager %q: %w", p.cmdline, err)
+	}
+	p.stdin = stdin
+	return nil
+}
+
+// close does nothing when the pager never started.
+func (p *lazyPager) close() {
+	if p.stdin == nil {
+		return
+	}
+	p.stdin.Close() //nolint:errcheck
+	p.cmd.Wait()    //nolint:errcheck
 }
 
 // isTerminalFn is a package-level indirection so tests can simulate a TTY
