@@ -304,6 +304,39 @@ func TestRun_Pager(t *testing.T) {
 	assert.Contains(t, string(got), "CREATE TABLE public.users")
 }
 
+// The pager starts on the first write, so a command that writes nothing to
+// stdout, whether it succeeds or fails, never starts it. The pager here
+// writes as soon as it starts, so any output means it ran.
+func TestRun_PagerNotStartedWithoutOutput(t *testing.T) {
+	t.Setenv("PISTA_PAGER", "echo started; cat")
+	desired := writeFile(t, "desired.sql", usersTable)
+
+	tests := []struct {
+		name string
+		args []string
+		code int
+	}{
+		{name: "fmt", args: []string{"fmt", "--pager", desired}, code: 0},
+		{name: "plan error", args: []string{"plan", "--pager", "-c", "invalid://connection", desired}, code: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.CreateTemp(t.TempDir(), "out")
+			require.NoError(t, err)
+			defer f.Close()
+
+			code, _ := runCLI(t, f, tt.args...)
+			assert.Equal(t, tt.code, code)
+
+			_, err = f.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+			got, err := io.ReadAll(f)
+			require.NoError(t, err)
+			assert.Empty(t, string(got))
+		})
+	}
+}
+
 // The flags that lay SQL out have nothing to change in a JSON document, so
 // kong refuses them alongside --json. The parser rejects them before a
 // database is reached, so no connection is needed.
