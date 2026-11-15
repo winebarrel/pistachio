@@ -18,7 +18,8 @@ type checkNotBooleanError struct {
 }
 
 func (e *checkNotBooleanError) Error() string {
-	return fmt.Sprintf("check SQL must return a boolean, got %v", e.value)
+	// %#v quotes a string, so a text 'true' does not read as a boolean.
+	return fmt.Sprintf("check SQL must return a boolean, got %#v", e.value)
 }
 
 // evalCheck reads the result of the check SQL of a -- pista:execute directive.

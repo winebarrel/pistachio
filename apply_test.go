@@ -810,6 +810,7 @@ func TestApply_ExecuteCheckSQLNotBoolean(t *testing.T) {
 		want  string
 	}{
 		{check: "SELECT count(*) FROM pg_proc WHERE proname = 'test_func'", want: "check SQL must return a boolean, got 0"},
+		{check: "SELECT 'true'::text", want: `check SQL must return a boolean, got "true"`},
 		{check: "SELECT NULL::boolean", want: "check SQL returned NULL"},
 	}
 	for _, tt := range tests {
