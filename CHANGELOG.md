@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.90.1] - 2026-11-15
 
 * `plan` fails on a `-- pista:execute` check that returns a value other than a `boolean`, such as `SELECT count(*) FROM ...`. It used to keep the statement with a note and leave the error to `apply`.
 
@@ -957,7 +957,8 @@
 
 * Initial release.
 
-[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.0...HEAD
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.1...HEAD
+[1.90.1]: https://github.com/winebarrel/pistachio/compare/v1.90.0...v1.90.1
 [1.90.0]: https://github.com/winebarrel/pistachio/compare/v1.89.5...v1.90.0
 [1.89.5]: https://github.com/winebarrel/pistachio/compare/v1.89.4...v1.89.5
 [1.89.4]: https://github.com/winebarrel/pistachio/compare/v1.89.3...v1.89.4
