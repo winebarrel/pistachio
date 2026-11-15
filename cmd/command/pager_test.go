@@ -170,6 +170,58 @@ func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	}
 }
 
+func TestStartPager_NotStartedWithoutWrite(t *testing.T) {
+	// The pager writes as soon as it starts, so an empty file means it never
+	// ran.
+	t.Setenv("PISTA_PAGER", "echo started")
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
+	defer restore()
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+
+	_, closer, err := StartPager(f, nil)
+	if err != nil {
+		t.Fatalf("StartPager: %v", err)
+	}
+	closer()
+
+	got, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("pager should not start without a write, got %q", got)
+	}
+}
+
+func TestStartPager_FailsWithoutShell(t *testing.T) {
+	// The shell is looked up before the command runs, so a missing one is
+	// reported by StartPager rather than on the first write.
+	t.Setenv("PISTA_PAGER", "cat")
+	t.Setenv("PATH", "")
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
+	defer restore()
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+
+	w, closer, err := StartPager(f, nil)
+	defer closer()
+	if err == nil || !strings.Contains(err.Error(), "starting pager") {
+		t.Fatalf("expected a starting pager error, got %v", err)
+	}
+	if w != io.Writer(f) {
+		t.Fatalf("writer should be returned unchanged on error, got %T", w)
+	}
+}
+
 func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	// Caller-side pattern: defer + explicit close. Calling closer twice
 	// must not panic, double-close the pipe, or double-wait on the child.
