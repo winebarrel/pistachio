@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -185,7 +186,13 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			shouldExecute := true
 			note := ""
 			if es.CheckSQL != "" {
-				if err := conn.QueryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+				var err error
+				if shouldExecute, err = evalCheck(conn.QueryRow(ctx, es.CheckSQL)); err != nil {
+					// The type a check returns does not depend on the state
+					// of the database, so apply would fail the same way.
+					if _, ok := errors.AsType[*checkNotBooleanError](err); ok {
+						return nil, fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
+					}
 					if options.Out != "" {
 						return nil, fmt.Errorf(
 							"failed to evaluate check SQL for --out: %s: %w (plan connects read-only; --no-read-only answers a check that writes)",

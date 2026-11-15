@@ -392,7 +392,8 @@ func (client *Client) applyStmts(
 			shouldExecute := true
 
 			if es.CheckSQL != "" {
-				if err := queryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+				var err error
+				if shouldExecute, err = evalCheck(queryRow(ctx, es.CheckSQL)); err != nil {
 					return fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
 				}
 			}
