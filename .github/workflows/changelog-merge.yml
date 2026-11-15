@@ -22,8 +22,8 @@ jobs:
   # CHANGELOG.md, this merges main into its branch with
   # scripts/merge-changelog.sh, and pushes the merge commit when the file
   # differs from what a text merge gives, a conflict included. A pull
-  # request that conflicts anywhere else, or comes from a fork, is left
-  # alone.
+  # request that conflicts anywhere else, comes from a fork, or whose merge
+  # changes a file under .github/workflows is left alone.
   merge:
     runs-on: ubuntu-latest
     steps:
@@ -73,6 +73,12 @@ jobs:
               continue
             fi
             if [ "$(git rev-parse HEAD:CHANGELOG.md)" = "$text" ]; then
+              continue
+            fi
+            # Updating a branch with a change under .github/workflows needs
+            # the workflows permission, which the App token does not carry.
+            if [ -n "$(git diff --name-only "origin/$branch" HEAD -- .github/workflows)" ]; then
+              echo "::notice::$branch: the merge changes .github/workflows; skipped"
               continue
             fi
             # GitHub signs a commit made through the API, not one pushed, so
