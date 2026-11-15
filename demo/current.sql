@@ -160,3 +160,10 @@ CREATE MATERIALIZED VIEW tag_usage AS
     GROUP BY t.id, t.name;
 
 CREATE UNIQUE INDEX tag_usage_tag_id_idx ON tag_usage (tag_id);
+
+-- ---------- sample data ----------
+--  desired.sql adds users.locale as NOT NULL; pista:backfill fills these rows.
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
+INSERT INTO users (email, display_name, links) VALUES
+    ('alice@example.com', 'Alice', ROW('https://alice.example.com', 'alice')),
+    ('bob@example.com',   'Bob',   NULL);

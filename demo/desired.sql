@@ -58,13 +58,15 @@ END;
 $$;
 
 -- ---------- users ----------
---  +avatar_url
+--  +avatar_url, +locale (existing rows get 'en')
 CREATE TABLE users (
     id           bigserial PRIMARY KEY,
     email        email_address NOT NULL UNIQUE,
     display_name text NOT NULL,
     links        social_links,
     avatar_url   text,
+    -- pista:backfill 'en'
+    locale       text NOT NULL,
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 
