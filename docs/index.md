@@ -132,3 +132,4 @@ pista apply ./schema/*.sql         # apply it
 - [ridgepole](https://github.com/ridgepole/ridgepole) is a DB schema
   management tool using a Rails DSL.
 - [qrev](https://github.com/winebarrel/qrev) is a SQL execution history management tool.
+- [hazel](https://github.com/winebarrel/hazel) is a declarative schema management tool for SQLite.
