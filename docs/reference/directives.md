@@ -160,7 +160,7 @@ If the column already exists or the table is new, the directive does nothing, so
 
 ## -- pista:execute
 
-Includes SQL that pistachio does not manage in schema files: a grant, an extension, or a function without `--manage-routine`. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression. When it returns `true`, the statement runs. Otherwise the statement is skipped. Without a check, the statement always runs.
+Includes SQL that pistachio does not manage in schema files: a grant, an extension, or a function without `--manage-routine`. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression, which must return one `boolean` value. When it returns `true`, the statement runs. When it returns `false`, the statement is skipped. Without a check, the statement always runs.
 
 `plan` evaluates the check too, and leaves out the statements that `apply` would skip. So the plan shows what will run. Both commands run the check under the target schemas plus `public`, so an unqualified name in the check resolves to the same object in both.
 
@@ -172,7 +172,9 @@ Some checks cannot be answered at plan time. `plan` runs before the managed DDL,
 INSERT INTO public.audit_log (id, note) VALUES (1, 'seed');
 ```
 
-During `apply`, the check runs at its proper moment. A failure there is an error and stops the run.
+A check that returns a value of another type, such as `SELECT count(*) FROM ...`, fails `plan`, since the type does not change between `plan` and `apply`. A check that returns `NULL` remains in the plan with the reason recorded, since the result can change once the run has applied earlier statements.
+
+During `apply`, the check runs at its proper moment. A failure there is an error and stops the run. That includes a check that returns `NULL` or a value that is not a `boolean`.
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL

@@ -1,0 +1,15 @@
+# The type a check returns does not depend on the state of the database, so a
+# check that returns something other than a boolean is refused at plan time.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute SELECT count(*) FROM pg_proc WHERE proname = 'my_func'
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+error: 'failed to evaluate check SQL: SELECT count(*) FROM pg_proc WHERE proname = ''my_func'': check SQL must return a boolean, got 0'

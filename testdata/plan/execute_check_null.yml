@@ -1,0 +1,19 @@
+# A NULL can depend on the state of the database, such as max() over a table
+# an execute-first statement fills, so plan keeps the statement and leaves the
+# decision to apply.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute SELECT max(id) > 0 FROM public.users
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+plan: |
+  -- pista:execute SELECT max(id) > 0 FROM public.users
+  -- check SQL could not be evaluated at plan time: check SQL returned NULL; apply will decide
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;

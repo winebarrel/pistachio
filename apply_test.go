@@ -797,6 +797,42 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
 }
 
+func TestApply_ExecuteCheckSQLNotBoolean(t *testing.T) {
+	// A check that returns something other than a boolean fails with the
+	// message plan gives. NULL fails too, since apply has no later run to
+	// leave the decision to.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	tests := []struct {
+		check string
+		want  string
+	}{
+		{check: "SELECT count(*) FROM pg_proc WHERE proname = 'test_func'", want: "check SQL must return a boolean, got 0"},
+		{check: "SELECT NULL::boolean", want: "check SQL returned NULL"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.check, func(t *testing.T) {
+			testutil.SetupDB(t, ctx, conn, "")
+
+			desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+			require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute `+tt.check+`
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+			client := NewClient(&Options{
+				ConnString: conn.Config().ConnString(),
+				Schemas:    []string{"public"},
+			})
+
+			_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "failed to evaluate check SQL: "+tt.check+": "+tt.want)
+		})
+	}
+}
+
 func TestApply_ExecuteFirstCheckSQLError(t *testing.T) {
 	// An execute-first check runs before the managed DDL, on its own call
 	// site, so its error path needs its own test.
