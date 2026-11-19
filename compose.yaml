@@ -49,3 +49,10 @@ services:
     profiles: ["all"]
     ports:
       - "5418:5432"
+  pg19:
+    <<: *postgres
+    # PostgreSQL 19 is not released yet; this is its newest release candidate.
+    image: postgres:19rc2
+    profiles: ["all"]
+    ports:
+      - "5419:5432"
