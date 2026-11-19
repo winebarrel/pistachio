@@ -84,8 +84,9 @@ func (tc *applyTestCase) expectedApplied(major int) string {
 		if tc.AppliedPG17 != "" {
 			return tc.AppliedPG17
 		}
-	case 18:
-		if tc.AppliedPG18 != "" {
+	default:
+		// The PG18 variant also holds for every later version.
+		if major >= 18 && tc.AppliedPG18 != "" {
 			return tc.AppliedPG18
 		}
 	}

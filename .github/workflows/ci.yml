@@ -179,14 +179,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres: [15, 16, 17, 18]
+        postgres: [15, 16, 17, 18, 19]
     env:
       # One version per job, so the service can keep the default port; the
       # Makefile otherwise defaults to the port compose.yaml publishes locally.
       PGPORT: "5432"
     services:
       postgres:
-        image: postgres:${{ matrix.postgres }}
+        # PostgreSQL 19 is not released yet, so its job runs the newest
+        # release candidate. Switch it to the plain tag once 19 is out.
+        image: postgres:${{ matrix.postgres == 19 && '19rc2' || matrix.postgres }}
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
@@ -211,10 +213,11 @@ jobs:
         run: |
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
             | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
-          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          # The 19 component holds the pre-release packages of 19.
+          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main 19" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          sudo apt-get install -y -qq postgresql-client-19
       - run: make test-fidelity
       # Uploaded even when the tests failed; the coverage job reports on it.
       - uses: actions/upload-artifact@v7.0.2
@@ -263,7 +266,7 @@ jobs:
           pattern: coverage-*
       - name: Check that every profile arrived
         run: |
-          for name in windows-apply windows-plan windows-rest pg15 pg16 pg17 pg18 dsql; do
+          for name in windows-apply windows-plan windows-rest pg15 pg16 pg17 pg18 pg19 dsql; do
             if [ ! -f "$RUNNER_TEMP/coverage/coverage-$name/coverage.txt" ]; then
               echo "::error::coverage-$name did not arrive"
               exit 1

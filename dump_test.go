@@ -50,8 +50,9 @@ func (tc *dumpTestCase) expectedDump(major int) string {
 		if tc.DumpPG17 != "" {
 			return tc.DumpPG17
 		}
-	case 18:
-		if tc.DumpPG18 != "" {
+	default:
+		// The PG18 variant also holds for every later version.
+		if major >= 18 && tc.DumpPG18 != "" {
 			return tc.DumpPG18
 		}
 	}

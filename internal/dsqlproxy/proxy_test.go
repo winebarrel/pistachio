@@ -159,8 +159,9 @@ func TestProxy_Catalog(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, [][2]string{{"id", ""}, {"name", "l"}, {"n", ""}}, got)
 
-	// DSQL reports the bare version number.
-	assert.Regexp(t, `^\d+\.\d+$`, conn.PgConn().ParameterStatus("server_version"))
+	// DSQL reports the bare version number. A pre-release server reports
+	// one such as 19rc2.
+	assert.Regexp(t, `^\d+(\.\d+|(beta|rc)\d+)$`, conn.PgConn().ParameterStatus("server_version"))
 }
 
 func TestProxy_RejectsReadOnlyStartup(t *testing.T) {
