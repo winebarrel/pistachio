@@ -11,6 +11,7 @@ func commentOnSQL(target string, comment *string) string {
 	return "COMMENT ON " + target + " IS " + model.QuoteLiteral(*comment) + ";"
 }
 
+// equalPtr reports whether a and b are both nil or point to equal values.
 func equalPtr[T comparable](a, b *T) bool {
 	if a == nil || b == nil {
 		return a == b
