@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start_proxy serves internal/dsqlproxy in front of a database of its own on
+# start_proxy serves test/dsqlproxy in front of a database of its own on
 # the server PGHOST, PGPORT and PGUSER name, and sets PROXY_ADDR to the
 # address it listens on and PROXY_PID to its process. The database is created
 # again on each call. The role must be a superuser: the proxy marks an index

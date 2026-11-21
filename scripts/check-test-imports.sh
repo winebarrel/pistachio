@@ -11,7 +11,6 @@ set -euo pipefail
 # packages under it too.
 test_only=$(go list \
     ./internal/testutil/... \
-    ./internal/dsqlproxy \
     ./test/...)
 
 status=0

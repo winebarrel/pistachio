@@ -9,7 +9,7 @@
 # The recording is committed, so the run fails when the file names the
 # cluster or holds something that looks like an AWS credential.
 #
-# TestConformance in internal/dsqlproxy then runs on the cluster as well. It
+# TestConformance in test/dsqlproxy then runs on the cluster as well. It
 # fails where the cluster answers a statement differently from what DSQL.md
 # records and the proxy reproduces: bring both in line with the cluster.
 set -euo pipefail
@@ -30,7 +30,7 @@ export TEST_PISTA_DSQL_CONN_STR="postgres://admin@$DSQL_HOST:5432/postgres?sslmo
 # way, and the status of the tests is the script's in the end.
 status=0
 go test -count=1 -v -run '^TestDSQL$' . || status=$?
-go test -count=1 -v -run '^TestConformance$' ./internal/dsqlproxy/ || status=$?
+go test -count=1 -v -run '^TestConformance$' ./test/dsqlproxy/ || status=$?
 
 cluster=${DSQL_HOST%%.*}
 if [ -f "$recording" ] && grep -nEi -e "$cluster" -e 'on\.aws|amazonaws\.com|arn:aws' -e '(AKIA|ASIA)[0-9A-Z]{16}' -e 'X-Amz-' "$recording"; then

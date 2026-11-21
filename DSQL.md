@@ -48,7 +48,7 @@ cluster named by `DSQL_HOST`. They take the schemas of
 aws-samples/aurora-dsql-samples at a pinned commit, then build, change and
 drop them step by step, checking for drift after each. Nothing is recorded.
 
-`make test-dsql-proxy` runs the same scenarios against internal/dsqlproxy,
+`make test-dsql-proxy` runs the same scenarios against test/dsqlproxy,
 a proxy that makes a local PostgreSQL 16 server answer the way this file
 says DSQL does: ASYNC jobs and `sys.wait_for_job`, the statements DSQL
 refuses with their messages, one DDL statement per transaction, and the
@@ -60,7 +60,7 @@ through the proxy gives testdata/dsql/dsql.yaml unchanged.
 two differ, and the `dsql-recording` CI job runs it. When the recording is
 made again, run it as well and bring the proxy in line where the two differ.
 
-TestConformance in internal/dsqlproxy holds the statements below that DSQL
+TestConformance in test/dsqlproxy holds the statements below that DSQL
 accepts or refuses, with the SQLSTATE and message of each refusal. `make
 test` runs it against the proxy, and `make record-dsql` against the cluster
 after TestDSQL. A case that fails on the cluster means DSQL changed: correct

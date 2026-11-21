@@ -128,7 +128,7 @@ record-dsql:
 test-dsql-scenario:
 	bash test/dsql/run.sh
 
-# The same scenarios against internal/dsqlproxy, a proxy that makes the local
+# The same scenarios against test/dsqlproxy, a proxy that makes the local
 # server answer the way DSQL does. It uses a database pista_dsql of its own on
 # the server PGPORT selects. DSQL speaks the PostgreSQL 16 protocol, so run it
 # on 16 (PGPORT=5416 with compose.yaml).
@@ -136,7 +136,7 @@ test-dsql-scenario:
 test-dsql-proxy:
 	DSQL_PROXY=1 bash test/dsql/run.sh
 
-# Records TestDSQL through internal/dsqlproxy and fails when the recording
+# Records TestDSQL through test/dsqlproxy and fails when the recording
 # differs from the one the live cluster made. Like test-dsql-proxy, it runs on
 # the server PGPORT selects, which should be PostgreSQL 16. See
 # scripts/check-dsql-recording.sh.

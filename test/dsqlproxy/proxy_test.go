@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio/internal/dsqlproxy"
 	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/test/dsqlproxy"
 )
 
 // connect starts a proxy in front of a database of its own and connects to
