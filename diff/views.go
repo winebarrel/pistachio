@@ -61,9 +61,11 @@ func equalViewDef(current, desired string) bool {
 	return errCur == nil && errDes == nil && curStr == desStr
 }
 
-func normalizeViewStmts(stmts []*pg_query.RawStmt, namer func(*pg_query.Node) string) {
+// normalizeViewStmts applies the equalViewDef normalizations to each
+// statement in place, naming unnamed targets with name.
+func normalizeViewStmts(stmts []*pg_query.RawStmt, name targetNamer) {
 	for _, stmt := range stmts {
-		nameTargets(stmt.Stmt, namer)
+		nameTargets(stmt.Stmt, name)
 		stripQualifications(stmt.Stmt)
 		stripSetOpBranchNames(stmt.Stmt)
 		normalizeFromFunctions(stmt.Stmt)
