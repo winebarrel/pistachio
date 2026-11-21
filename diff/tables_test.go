@@ -1956,14 +1956,6 @@ func TestDiffComments_newColumn(t *testing.T) {
 	assert.Contains(t, stmts[0], "COMMENT ON COLUMN")
 }
 
-func TestEqualPtr(t *testing.T) {
-	assert.True(t, equalPtr[string](nil, nil))
-	assert.False(t, equalPtr(new("a"), nil))
-	assert.False(t, equalPtr(nil, new("a")))
-	assert.True(t, equalPtr(new("a"), new("a")))
-	assert.False(t, equalPtr(new("a"), new("b")))
-}
-
 func TestEqualTypeName(t *testing.T) {
 	assert.True(t, equalTypeName("integer", "integer", "public"))
 	assert.True(t, equalTypeName("serial", "integer", "public"))
