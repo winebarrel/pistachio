@@ -55,6 +55,27 @@ func TestParse_LeadingCommentsBelongToStatement(t *testing.T) {
 	}, got)
 }
 
+func TestParse_EmptyStatementBeforeStatement(t *testing.T) {
+	sql := ";\n-- a\nSELECT 1;;\n-- b\nSELECT 2; ; -- c\nSELECT 3"
+	result, err := pgast.Parse(sql)
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 3)
+
+	var got []string
+	for _, stmt := range result.Stmts {
+		end := stmt.StmtLocation + stmt.StmtLen
+		if stmt.StmtLen == 0 {
+			end = int32(len(sql))
+		}
+		got = append(got, sql[stmt.StmtLocation:end])
+	}
+	assert.Equal(t, []string{
+		"\n-- a\nSELECT 1",
+		"\n-- b\nSELECT 2",
+		" -- c\nSELECT 3",
+	}, got)
+}
+
 func TestParse_Error(t *testing.T) {
 	_, err := pgast.Parse("SELEC 1")
 	require.Error(t, err)

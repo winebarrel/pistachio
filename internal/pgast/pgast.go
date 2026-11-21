@@ -23,14 +23,28 @@ var ParseTreeVersion = func() int32 {
 // starts right after the semicolon that ends the statement before it, so the
 // blank lines and comments before a statement are part of it. The directives
 // are read from there. pg_query starts a statement at its first token.
+// Empty statements are skipped: a statement after `;;` starts after the last
+// semicolon.
 func Parse(sql string) (*pg_query.ParseResult, error) {
 	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil {
 		return nil, err
 	}
 
+	scan, err := pg_query.Scan(sql)
+	if err != nil {
+		return nil, err
+	}
+	tokens := scan.GetTokens()
+
 	var start int32
 	for _, stmt := range result.Stmts {
+		for len(tokens) > 0 && tokens[0].Start < stmt.StmtLocation {
+			if tokens[0].Token == pg_query.Token_ASCII_59 && tokens[0].End > start {
+				start = tokens[0].End
+			}
+			tokens = tokens[1:]
+		}
 		end := stmt.StmtLocation + stmt.StmtLen
 		stmt.StmtLocation = start
 		// A StmtLen of 0 is a final statement with no semicolon, which runs
