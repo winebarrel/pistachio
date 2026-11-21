@@ -8,16 +8,42 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 )
 
 // ParseTreeVersion is the parse tree version the bundled libpg_query writes.
-// Deparse rejects a ParseResult with any other Version, so a ParseResult
-// built by hand must set it. An empty string always parses.
+// A ParseResult built by hand sets it, so that it carries the Version a
+// parsed one does. An empty string always parses.
 var ParseTreeVersion = func() int32 {
 	result, _ := pg_query.Parse("")
 	return result.GetVersion()
 }()
+
+// Parse parses sql like pg_query.Parse, but each statement's StmtLocation
+// starts right after the semicolon that ends the statement before it, so the
+// blank lines and comments before a statement are part of it. The directives
+// are read from there. pg_query starts a statement at its first token.
+func Parse(sql string) (*pg_query.ParseResult, error) {
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+
+	var start int32
+	for _, stmt := range result.Stmts {
+		end := stmt.StmtLocation + stmt.StmtLen
+		stmt.StmtLocation = start
+		// A StmtLen of 0 is a final statement with no semicolon, which runs
+		// to the end of the input.
+		if stmt.StmtLen != 0 {
+			stmt.StmtLen = end - start
+		}
+		// StmtLen stops before the semicolon.
+		start = end + 1
+	}
+
+	return result, nil
+}
 
 // constraintWrapPrefix is the wrapper used to parse a constraint definition
 // fragment (e.g. "PRIMARY KEY (id)") as part of a full statement so that

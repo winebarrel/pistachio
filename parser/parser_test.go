@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
@@ -187,6 +187,33 @@ func TestParseSQL_CreateTableLikeIsError(t *testing.T) {
 		{
 			"CREATE TABLE public.t (id integer);\nCREATE TABLE public.p (LIKE public.t) PARTITION BY RANGE (id);",
 			"CREATE TABLE public.p: LIKE is not supported (list the columns instead)",
+		},
+	} {
+		_, err := parseSQLNoFile(tc.sql, "public")
+		require.EqualError(t, err, tc.err, tc.sql)
+	}
+}
+
+// The parser reads PostgreSQL 18 syntax that the model has no place for. A
+// NOT NULL table constraint and a VIRTUAL generated column are errors, so
+// that they are not read as a nullable or a STORED column.
+func TestParseSQL_UnsupportedPG18SyntaxIsError(t *testing.T) {
+	for _, tc := range []struct{ sql, err string }{
+		{
+			"CREATE TABLE public.t (a integer, CONSTRAINT t_a_nn NOT NULL a);",
+			"table t: a NOT NULL table constraint is not supported (write NOT NULL on the column)",
+		},
+		{
+			"CREATE TABLE public.t (a integer);\nALTER TABLE public.t ADD CONSTRAINT t_a_nn NOT NULL a;",
+			"table t: a NOT NULL table constraint is not supported (write NOT NULL on the column)",
+		},
+		{
+			"CREATE TABLE public.t (a integer, b integer GENERATED ALWAYS AS (a * 2) VIRTUAL);",
+			"column b: a VIRTUAL generated column is not supported",
+		},
+		{
+			"CREATE TABLE public.t (a integer, b integer GENERATED ALWAYS AS (a * 2));",
+			"column b: a VIRTUAL generated column is not supported",
 		},
 	} {
 		_, err := parseSQLNoFile(tc.sql, "public")

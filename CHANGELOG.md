@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Parse desired files with the PostgreSQL 18 grammar (pg_query_go v18). Syntax added in PostgreSQL 18, such as `NOT ENFORCED` and `WITHOUT OVERLAPS`, no longer fails the parse.
+
+* A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
+
 ## [1.90.2] - 2026-11-21
 
 * `plan` no longer reports a change on every run for a view or materialized view with a target written without an alias, such as `count(*)` or `lower(name)`, including one in a sub-select. Such a view used to be dropped and created again. A change to it is now planned as `CREATE OR REPLACE VIEW`.
