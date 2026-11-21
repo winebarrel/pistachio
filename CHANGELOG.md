@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+## [1.90.2] - 2026-11-21
+
 * `plan` no longer reports a change on every run for a view or materialized view with a target written without an alias, such as `count(*)` or `lower(name)`, including one in a sub-select. Such a view used to be dropped and created again. A change to it is now planned as `CREATE OR REPLACE VIEW`.
 
 ## [1.90.1] - 2026-11-15
@@ -965,7 +967,8 @@
 
 * Initial release.
 
-[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.1...HEAD
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.2...HEAD
+[1.90.2]: https://github.com/winebarrel/pistachio/compare/v1.90.1...v1.90.2
 [1.90.1]: https://github.com/winebarrel/pistachio/compare/v1.90.0...v1.90.1
 [1.90.0]: https://github.com/winebarrel/pistachio/compare/v1.89.5...v1.90.0
 [1.89.5]: https://github.com/winebarrel/pistachio/compare/v1.89.4...v1.89.5
