@@ -7,12 +7,12 @@ PostgreSQL manual.
 
 The findings were verified against a live DSQL cluster (PostgreSQL 16 wire
 protocol, ap-northeast-1) on 2026-07-23, again on 2026-10-10
-(`server_version` 16.15, `sys.dsql_major_version()` 1), on 2026-10-11, and
-on 2026-10-12.
+(`server_version` 16.15, `sys.dsql_major_version()` 1), on 2026-10-11,
+on 2026-10-12, and on 2026-11-21 (`server_version` 16.16).
 DSQL adds features over time, so a finding below can go stale; the AWS
 release notes say when.
 
-The features that DSQL does not support (triggers, PL/pgSQL, and so on) are
+The features that DSQL does not support (triggers, and so on) are
 out of scope. A schema that is written for DSQL never
 contains them. DSQL refuses them at apply.
 
@@ -280,3 +280,18 @@ Findings of 2026-10-12, from TestConformance:
 - Two DDL statements in one simple query string fail like two in one
   transaction.
 - A stored generated column works in `CREATE TABLE`.
+
+Findings of 2026-11-21, after PL/pgSQL support (AWS release of 2026-11-19):
+- `CREATE FUNCTION` and `CREATE PROCEDURE` work in `LANGUAGE sql` and
+  `LANGUAGE plpgsql`, and so do `CREATE OR REPLACE`, `CALL`, `DO`, `COMMENT
+  ON FUNCTION`, `ALTER FUNCTION ... RENAME TO`, `SECURITY DEFINER` and a
+  `SET` clause. `--manage-routine` plans, applies and dumps them without
+  drift, a return type change and a routine used from a column default or a
+  view included.
+- `ALTER FUNCTION` with any other action -> `unsupported statement:
+  AlterFunction`. pistachio changes a routine with `CREATE OR REPLACE` or
+  DROP and CREATE, so this needs no change.
+- `CREATE TRIGGER` -> `CREATE TRIGGER not supported`. A function returning
+  `trigger` can be created.
+- Two `CREATE FUNCTION` statements in one simple query string fail like two
+  DDL statements in one transaction.

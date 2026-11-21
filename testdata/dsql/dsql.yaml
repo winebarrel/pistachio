@@ -1,5 +1,5 @@
-recorded_at: 2026-10-19T05:01:29Z
-server_version: "16.15"
+recorded_at: 2026-11-21T01:39:21Z
+server_version: "16.16"
 exchanges:
   - query: SELECT sys.dsql_major_version()
     columns: [dsql_major_version]
