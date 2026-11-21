@@ -260,6 +260,10 @@ func refusal(node *pg_query.Node) string {
 		return "unsupported statement: CreateExtension"
 	case node.GetCreateTableAsStmt() != nil:
 		return "unsupported statement: CreateTableAs"
+	case node.GetCreateTrigStmt() != nil:
+		return "CREATE TRIGGER not supported"
+	case node.GetAlterFunctionStmt() != nil:
+		return "unsupported statement: AlterFunction"
 	}
 	return ""
 }

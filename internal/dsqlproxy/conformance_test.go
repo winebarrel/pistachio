@@ -35,6 +35,8 @@ var conformanceSetup = []string{
 	"CREATE UNIQUE INDEX ASYNC probe_t_c_uidx ON probe_t (c)",
 	"ALTER TABLE probe_t ADD CONSTRAINT probe_t_n_check CHECK (n > 0) NOT VALID",
 	"CREATE DOMAIN probe_d AS int",
+	"CREATE FUNCTION probe_fn() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$",
+	"CREATE FUNCTION probe_tf() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
 }
 
 // What the cases may leave behind, dropped before and after the run.
@@ -52,6 +54,10 @@ var conformanceTeardown = []string{
 	"DROP SEQUENCE IF EXISTS probe_s",
 	"DROP TYPE IF EXISTS probe_x",
 	"DROP DOMAIN IF EXISTS probe_d",
+	"DROP FUNCTION IF EXISTS probe_x()",
+	"DROP FUNCTION IF EXISTS probe_fn()",
+	"DROP FUNCTION IF EXISTS probe_tf()",
+	"DROP PROCEDURE IF EXISTS probe_x()",
 }
 
 var conformanceCases = []conformanceCase{
@@ -116,6 +122,15 @@ var conformanceCases = []conformanceCase{
 	{sql: "CREATE TABLE probe_a (id bigint PRIMARY KEY, c text, n bigint GENERATED ALWAYS AS IDENTITY (CACHE 1))", undo: "DROP TABLE probe_a"},
 	{sql: "CREATE SEQUENCE probe_s CACHE 1", undo: "DROP SEQUENCE probe_s"},
 	{sql: "COMMENT ON TABLE probe_t IS 'x'", undo: "COMMENT ON TABLE probe_t IS NULL"},
+
+	// Routines.
+	{sql: "CREATE FUNCTION probe_x() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN 1; END $$", undo: "DROP FUNCTION probe_x()"},
+	{sql: "CREATE PROCEDURE probe_x() LANGUAGE plpgsql AS $$ BEGIN NULL; END $$", undo: "DROP PROCEDURE probe_x()"},
+	{sql: "CREATE OR REPLACE FUNCTION probe_fn() RETURNS int LANGUAGE sql STABLE AS $$ SELECT 2 $$"},
+	{sql: "COMMENT ON FUNCTION probe_fn() IS 'x'", undo: "COMMENT ON FUNCTION probe_fn() IS NULL"},
+	{sql: "DO $$ BEGIN NULL; END $$"},
+	{sql: "ALTER FUNCTION probe_fn() IMMUTABLE", code: refused, msg: "unsupported statement: AlterFunction"},
+	{sql: "CREATE TRIGGER probe_x BEFORE INSERT ON probe_t FOR EACH ROW EXECUTE FUNCTION probe_tf()", code: refused, msg: "CREATE TRIGGER not supported"},
 
 	// Transactions and sessions.
 	{sql: "CREATE TABLE probe_m1 (id bigint PRIMARY KEY); CREATE TABLE probe_m2 (id bigint PRIMARY KEY)", code: refused, msg: "multiple ddl statements not supported in a transaction"},
