@@ -2306,22 +2306,6 @@ func diffComments(current, desired *model.Table) []string {
 	return stmts
 }
 
-// commentOnSQL returns COMMENT ON target setting comment, or clearing it when
-// comment is nil.
-func commentOnSQL(target string, comment *string) string {
-	if comment == nil {
-		return "COMMENT ON " + target + " IS NULL;"
-	}
-	return "COMMENT ON " + target + " IS " + model.QuoteLiteral(*comment) + ";"
-}
-
-func equalPtr[T comparable](a, b *T) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
 // parseIndexDef parses a CREATE INDEX statement and returns the parse
 // result plus the embedded IndexStmt. Callers may mutate the IndexStmt
 // (e.g. canonicalise sort/nulls, normalize sub-expressions) before
