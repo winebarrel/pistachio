@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pgstub"
 	"github.com/winebarrel/pistachio"
-	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/test/testutil"
 )
 
 // dsqlRecording holds what an Aurora DSQL cluster answered to TestDSQL. The

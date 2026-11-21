@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/catalog"
-	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/test/testutil"
 )
 
 func TestListTriggers(t *testing.T) {

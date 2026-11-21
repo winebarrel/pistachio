@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/format"
-	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/test/testutil"
 )
 
 type dumpTestCase struct {

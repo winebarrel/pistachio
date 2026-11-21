@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/cmd/command"
-	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/test/testutil"
 )
 
 func TestDump_Run(t *testing.T) {

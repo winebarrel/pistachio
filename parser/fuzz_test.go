@@ -4,8 +4,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/winebarrel/pistachio/internal/testutil/fuzzseed"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/test/testutil/fuzzseed"
 )
 
 // FuzzParseSQLWithSchema feeds arbitrary text to the parser and renders

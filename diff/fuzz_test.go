@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/winebarrel/pistachio/diff"
-	"github.com/winebarrel/pistachio/internal/testutil/fuzzseed"
 	"github.com/winebarrel/pistachio/parser"
+	"github.com/winebarrel/pistachio/test/testutil/fuzzseed"
 )
 
 // FuzzDiffSelf checks the property the whole tool rests on: a schema diffed
