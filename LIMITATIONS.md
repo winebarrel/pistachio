@@ -747,25 +747,6 @@ arguments, and pg_query does not do that.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
-## View drift on a target alias the catalog writes differently
-
-Priority: low.
-
-PostgreSQL names a sub-select's output column on its own, and `pg_get_viewdef`
-prints the name it chose. So a view whose body holds
-`COALESCE((SELECT max(s.n) FROM t s WHERE s.a = t.a), 0)` comes back with
-`SELECT max(s.n) AS max` inside. The written form carries no alias there. The
-two `ResTarget` names disagree, and `CREATE OR REPLACE VIEW` is re-emitted on
-every plan. Reproducing the name means reimplementing `FigureColname`. That
-function walks the expression to pick a function name, a column name or
-`?column?`. `figureIndexColname` (`parser/parser.go`) already walks an
-expression this way for an index element. So the shared half of the work is
-in the tree.
-
-Workaround: write the alias the way `pista dump` emits it.
-
-Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
-
 ## View drift on a constant a set operation resolves to another type
 
 Priority: low.
