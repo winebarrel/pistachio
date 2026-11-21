@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/test/testutil"
 )
 
 type applyTestCase struct {

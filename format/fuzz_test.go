@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/winebarrel/pistachio/format"
-	"github.com/winebarrel/pistachio/internal/testutil/fuzzseed"
+	"github.com/winebarrel/pistachio/test/testutil/fuzzseed"
 )
 
 // FuzzFormat feeds arbitrary text to the formatter and holds it to the two

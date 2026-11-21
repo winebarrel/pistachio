@@ -10,7 +10,6 @@ set -euo pipefail
 # The packages only the tests may import. A pattern ending in /... takes the
 # packages under it too.
 test_only=$(go list \
-    ./internal/testutil/... \
     ./test/...)
 
 status=0

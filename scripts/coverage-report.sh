@@ -26,7 +26,7 @@ mkdir -p "$outdir"
 
 # Test helpers and tools that are not part of pista.
 module=$(go list -m)
-ignore="^$module/(internal/testutil|cmd/gen-json-schema|test)/"
+ignore="^$module/(cmd/gen-json-schema|test)/"
 
 # A block is keyed on its position and statement count. In set mode its
 # count is 0 or 1, so a block covered by any profile counts as covered; in
