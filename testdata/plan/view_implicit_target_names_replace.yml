@@ -1,0 +1,11 @@
+# A change to a view whose targets have no alias keeps the names PostgreSQL
+# gave them, so the view is replaced rather than dropped and created.
+init: |
+  CREATE TABLE public.u (id integer PRIMARY KEY, m text, n integer);
+  CREATE VIEW public.v AS SELECT m, count(*) FROM public.u GROUP BY m;
+desired: |
+  CREATE TABLE public.u (id integer PRIMARY KEY, m text, n integer);
+  CREATE VIEW public.v AS SELECT m, count(*), max(n) FROM public.u WHERE n > 0 GROUP BY m;
+plan: |
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT m, count(*), max(n) FROM public.u WHERE n > 0 GROUP BY m;

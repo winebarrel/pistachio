@@ -1359,18 +1359,29 @@ func autoNameConstraint(tableName string, cols []string, contype pg_query.Constr
 	}
 }
 
-// figureIndexColname picks the name PostgreSQL gives an index element written
-// as an expression, following FigureIndexColname and FigureColnameInternal
-// (src/backend/parser/parse_target.c). The second return is PostgreSQL's
-// strength: a name found deeper in the tree wins over one an enclosing cast or
-// CASE falls back to, so `(a + b)::text` is named after the type while
-// `coalesce(a, b)::text` keeps the function name. An empty name means
-// PostgreSQL finds none and the element is called "expr".
+// FigureColname returns the name PostgreSQL gives a SELECT target written
+// without an alias, following FigureColname (src/backend/parser/parse_target.c).
+// A target PostgreSQL finds no name for is called "?column?".
+func FigureColname(node *pg_query.Node) string {
+	if name, _ := figureColname(node); name != "" {
+		return name
+	}
+	return "?column?"
+}
+
+// figureColname picks the name PostgreSQL gives an expression, following
+// FigureColnameInternal (src/backend/parser/parse_target.c). A SELECT target
+// and an index element are both named this way. The second return is
+// PostgreSQL's strength: a name found deeper in the tree wins over one an
+// enclosing cast or CASE falls back to, so `(a + b)::text` is named after the
+// type while `coalesce(a, b)::text` keeps the function name. An empty name
+// means PostgreSQL finds none: a target is then called "?column?" and an index
+// element "expr".
 //
-// The node kinds below are the ones an index expression realistically holds.
-// Anything else takes "expr", which is also what PostgreSQL does for every
-// kind it has no name for.
-func figureIndexColname(node *pg_query.Node) (string, int) {
+// The node kinds below are the ones a view target or an index expression
+// realistically holds. Anything else gets no name, which is also what
+// PostgreSQL does for every kind it has no name for.
+func figureColname(node *pg_query.Node) (string, int) {
 	if node == nil {
 		return "", 0
 	}
@@ -1394,13 +1405,23 @@ func figureIndexColname(node *pg_query.Node) (string, int) {
 		return "greatest", 2
 	case *pg_query.Node_AArrayExpr:
 		return "array", 2
+	case *pg_query.Node_RowExpr:
+		return "row", 2
+	case *pg_query.Node_GroupingFunc:
+		return "grouping", 2
+	case *pg_query.Node_SqlvalueFunction:
+		// SVFOP_CURRENT_TIME_N is current_time with a precision.
+		op := strings.TrimPrefix(n.SqlvalueFunction.Op.String(), "SVFOP_")
+		return strings.ToLower(strings.TrimSuffix(op, "_N")), 2
+	case *pg_query.Node_SubLink:
+		return figureSubLinkColname(n.SubLink)
 	case *pg_query.Node_CaseExpr:
-		if name, strength := figureIndexColname(n.CaseExpr.Defresult); strength > 1 {
+		if name, strength := figureColname(n.CaseExpr.Defresult); strength > 1 {
 			return name, strength
 		}
 		return "case", 1
 	case *pg_query.Node_TypeCast:
-		if name, strength := figureIndexColname(n.TypeCast.Arg); strength > 1 {
+		if name, strength := figureColname(n.TypeCast.Arg); strength > 1 {
 			return name, strength
 		}
 		if n.TypeCast.TypeName != nil {
@@ -1409,16 +1430,43 @@ func figureIndexColname(node *pg_query.Node) (string, int) {
 			}
 		}
 	case *pg_query.Node_CollateClause:
-		return figureIndexColname(n.CollateClause.Arg)
+		return figureColname(n.CollateClause.Arg)
 	case *pg_query.Node_AIndirection:
 		// A field selection is named after the field. A subscript carries no
 		// name of its own, so the argument is named instead.
 		if name := lastNodeName(n.AIndirection.Indirection); name != "" {
 			return name, 2
 		}
-		return figureIndexColname(n.AIndirection.Arg)
+		return figureColname(n.AIndirection.Arg)
 	}
 
+	return "", 0
+}
+
+// figureSubLinkColname names a sub-select used as an expression. EXISTS and
+// ARRAY name it after themselves, and a scalar sub-select takes the name of its
+// one output column. The other kinds, such as IN, get no name.
+func figureSubLinkColname(sl *pg_query.SubLink) (string, int) {
+	switch sl.SubLinkType {
+	case pg_query.SubLinkType_EXISTS_SUBLINK:
+		return "exists", 2
+	case pg_query.SubLinkType_ARRAY_SUBLINK:
+		return "array", 2
+	case pg_query.SubLinkType_EXPR_SUBLINK:
+		ss := sl.Subselect.GetSelectStmt()
+		// A set operation takes the names of its leftmost SELECT.
+		for ss != nil && ss.Op != pg_query.SetOperation_SETOP_NONE {
+			ss = ss.Larg
+		}
+		if ss == nil || len(ss.TargetList) == 0 {
+			return "", 0
+		}
+		rt := ss.TargetList[0].GetResTarget()
+		if rt.GetName() != "" {
+			return rt.GetName(), 2
+		}
+		return FigureColname(rt.GetVal()), 2
+	}
 	return "", 0
 }
 
@@ -1459,7 +1507,7 @@ func chooseIndexElemNames(lists ...[]*pg_query.Node) []string {
 
 			origname := ie.GetName()
 			if origname == "" {
-				origname, _ = figureIndexColname(ie.GetExpr())
+				origname, _ = figureColname(ie.GetExpr())
 				if origname == "" {
 					origname = "expr"
 				}

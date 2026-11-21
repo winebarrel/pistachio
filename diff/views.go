@@ -9,6 +9,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 // equalViewDef compares two view definitions by parsing each side once,
@@ -18,6 +19,7 @@ import (
 // same query has different formatting.
 //
 // Normalizations applied:
+//   - an unnamed target is given the name PostgreSQL gives it, see nameTargets,
 //   - schema/column qualification stripping (pg_get_viewdef adds
 //     table-qualified columns and omits the default schema, parsed SQL is
 //     the opposite); a column keeps its prefix when FROM has more than one
@@ -50,12 +52,14 @@ func equalViewDef(current, desired string) bool {
 		return false
 	}
 	for _, stmt := range curResult.Stmts {
+		nameTargets(stmt.Stmt, catalogTargetName)
 		stripQualifications(stmt.Stmt)
 		stripSetOpBranchNames(stmt.Stmt)
 		normalizeFromFunctions(stmt.Stmt)
 		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	for _, stmt := range desResult.Stmts {
+		nameTargets(stmt.Stmt, parser.FigureColname)
 		stripQualifications(stmt.Stmt)
 		stripSetOpBranchNames(stmt.Stmt)
 		normalizeFromFunctions(stmt.Stmt)
@@ -81,10 +85,10 @@ func equalViewDef(current, desired string) bool {
 // names its leading output columns in place of the query.
 //
 // Returns false when either side's output columns can't be determined
-// statically (SELECT *, target-list expressions without an alias, parse
-// error). That conservatively routes uncertain cases through DROP +
-// CREATE, which always works at the cost of briefly dropping privileges /
-// dependent views; strictly better than leaving the bug in place.
+// statically (SELECT *, parse error). That conservatively routes uncertain
+// cases through DROP + CREATE, which always works at the cost of briefly
+// dropping privileges / dependent views; strictly better than leaving the
+// bug in place.
 //
 // Known limitation: type-only changes on a same-named column (e.g.
 // `SELECT n FROM t` -> `SELECT n::bigint AS n FROM t`) are reported as
@@ -94,8 +98,8 @@ func equalViewDef(current, desired string) bool {
 // users who hit it can resolve manually by adjusting the source DDL or
 // dropping the view in a pre-step.
 func canCreateOrReplaceView(current, desired string, desiredNames []string) bool {
-	curCols, curOK := viewOutputColumns(current)
-	desCols, desOK := viewOutputColumns(desired)
+	curCols, curOK := viewOutputColumns(current, catalogTargetName)
+	desCols, desOK := viewOutputColumns(desired, parser.FigureColname)
 	if !curOK || !desOK || len(desiredNames) > len(desCols) {
 		return false
 	}
@@ -105,10 +109,10 @@ func canCreateOrReplaceView(current, desired string, desiredNames []string) bool
 }
 
 // viewOutputColumns parses a view definition's SELECT body and returns the
-// ordered list of output column names. Returns ok=false when any column
-// can't be named statically (SELECT *, t.*, or an expression target
-// without an alias) or when parsing fails.
-func viewOutputColumns(definition string) (cols []string, ok bool) {
+// ordered list of output column names. A target written without an alias is
+// named by name. Returns ok=false when a column can't be named statically
+// (SELECT * or t.*) or when parsing fails.
+func viewOutputColumns(definition string, name targetNamer) (cols []string, ok bool) {
 	def := strings.TrimSpace(definition)
 	def = strings.TrimSuffix(def, ";")
 	result, err := pg_query.Parse("CREATE VIEW _v AS " + def)
@@ -119,14 +123,14 @@ func viewOutputColumns(definition string) (cols []string, ok bool) {
 	if vs == nil || vs.Query == nil {
 		return nil, false
 	}
-	return selectOutputColumns(vs.Query)
+	return selectOutputColumns(vs.Query, name)
 }
 
 // selectOutputColumns walks a SelectStmt and returns the ordered names of
 // its top-level target list. For UNION / INTERSECT / EXCEPT it recurses
 // into the left arm, since PostgreSQL inherits set-operation result names
 // from the first SELECT.
-func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
+func selectOutputColumns(node *pg_query.Node, name targetNamer) ([]string, bool) {
 	ss := node.GetSelectStmt()
 	if ss == nil {
 		return nil, false
@@ -135,7 +139,7 @@ func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
 		if ss.Larg == nil {
 			return nil, false
 		}
-		return selectOutputColumns(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
+		return selectOutputColumns(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, name)
 	}
 	if len(ss.TargetList) == 0 {
 		return nil, false
@@ -150,24 +154,61 @@ func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
 			names = append(names, rt.Name)
 			continue
 		}
-		if rt.Val == nil {
+		if rt.Val == nil || isStarRef(rt.Val) {
 			return nil, false
 		}
-		cr := rt.Val.GetColumnRef()
-		if cr == nil || len(cr.Fields) == 0 {
-			return nil, false
-		}
-		last := cr.Fields[len(cr.Fields)-1]
-		if last.GetAStar() != nil {
-			return nil, false
-		}
-		s := last.GetString_()
-		if s == nil {
-			return nil, false
-		}
-		names = append(names, s.Sval)
+		names = append(names, name(rt.Val))
 	}
 	return names, true
+}
+
+// targetNamer returns the name of a SELECT target written without an alias.
+type targetNamer func(*pg_query.Node) string
+
+// catalogTargetName names a target of the pg_get_viewdef form that has no
+// alias. pg_get_viewdef writes the name of every target but two kinds: a
+// column that keeps its own name, and an expression PostgreSQL found no name
+// for, which is called "?column?". So the name of an unnamed target is not
+// figured from the expression here: the form pg_get_viewdef prints may be
+// named differently from the one PostgreSQL named, as 'x' comes back as
+// 'x'::text.
+func catalogTargetName(val *pg_query.Node) string {
+	if val.GetColumnRef() != nil {
+		return parser.FigureColname(val)
+	}
+	return "?column?"
+}
+
+// nameTargets gives every SELECT target written without an alias the name
+// PostgreSQL gives it, so `count(*)` and the `count(*) AS count` that
+// pg_get_viewdef prints for it compare equal. It reaches every SELECT, a
+// sub-query or CTE included. Of a set operation it names the leftmost SELECT
+// only, whose names are the output names; stripSetOpBranchNames clears the
+// names of the other branches.
+func nameTargets(node *pg_query.Node, name targetNamer) {
+	pgast.Walk(node, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		ss := n.GetSelectStmt()
+		for ss != nil && ss.Op != pg_query.SetOperation_SETOP_NONE {
+			ss = ss.Larg
+		}
+		if ss == nil {
+			return n
+		}
+		for _, t := range ss.TargetList {
+			rt := t.GetResTarget()
+			if rt == nil || rt.Name != "" || rt.Val == nil || isStarRef(rt.Val) {
+				continue
+			}
+			rt.Name = name(rt.Val)
+		}
+		return n
+	})
+}
+
+// isStarRef reports whether val is * or t.*.
+func isStarRef(val *pg_query.Node) bool {
+	cr := val.GetColumnRef()
+	return cr != nil && len(cr.Fields) > 0 && cr.Fields[len(cr.Fields)-1].GetAStar() != nil
 }
 
 // stripQualifications removes the schema from every RangeVar, and the table

@@ -1,0 +1,79 @@
+# Views whose targets have no alias apply and then plan clean.
+init: |
+  CREATE TABLE public.u (id integer PRIMARY KEY, m text, n integer);
+  CREATE VIEW public.v AS SELECT m, count(*) FROM public.u GROUP BY m;
+desired: |
+  CREATE TABLE public.u (id integer PRIMARY KEY, m text, n integer);
+  CREATE VIEW public.v AS SELECT m, count(*), max(n) FROM public.u WHERE n > 0 GROUP BY m;
+  CREATE VIEW public.v_expr AS
+    SELECT id, lower(m), COALESCE((SELECT max(s.n) FROM public.u s WHERE s.m = u.m), 0) AS top
+    FROM public.u;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT m, count(*) FROM public.u GROUP BY m;
+applied: |
+  -- public.u
+  CREATE TABLE public.u (
+      id integer NOT NULL,
+      m text,
+      n integer,
+      CONSTRAINT u_pkey PRIMARY KEY (id)
+  );
+
+  -- public.mv
+  CREATE MATERIALIZED VIEW public.mv AS
+  SELECT u.m,
+      count(*) AS count
+     FROM u
+    GROUP BY u.m;
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT u.m,
+      count(*) AS count,
+      max(u.n) AS max
+     FROM u
+    WHERE u.n > 0
+    GROUP BY u.m;
+
+  -- public.v_expr
+  CREATE OR REPLACE VIEW public.v_expr AS
+  SELECT u.id,
+      lower(u.m) AS lower,
+      COALESCE(( SELECT max(s.n) AS max
+             FROM u s
+            WHERE s.m = u.m), 0) AS top
+     FROM u;
+applied_pg16: &applied_pg16plus |
+  -- public.u
+  CREATE TABLE public.u (
+      id integer NOT NULL,
+      m text,
+      n integer,
+      CONSTRAINT u_pkey PRIMARY KEY (id)
+  );
+
+  -- public.mv
+  CREATE MATERIALIZED VIEW public.mv AS
+  SELECT m,
+      count(*) AS count
+     FROM u
+    GROUP BY m;
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT m,
+      count(*) AS count,
+      max(n) AS max
+     FROM u
+    WHERE n > 0
+    GROUP BY m;
+
+  -- public.v_expr
+  CREATE OR REPLACE VIEW public.v_expr AS
+  SELECT id,
+      lower(m) AS lower,
+      COALESCE(( SELECT max(s.n) AS max
+             FROM u s
+            WHERE s.m = u.m), 0) AS top
+     FROM u;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
