@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records TestDSQL through internal/dsqlproxy in front of a local PostgreSQL
+# Records TestDSQL through test/dsqlproxy in front of a local PostgreSQL
 # server, and fails when the recording differs from testdata/dsql/dsql.yaml,
 # which a live Aurora DSQL cluster made. A difference means the proxy does not
 # answer the way the cluster did, or the committed recording is out of date.

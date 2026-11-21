@@ -1,4 +1,4 @@
-// Command proxy serves internal/dsqlproxy, for the DSQL scenarios to run
+// Command proxy serves test/dsqlproxy, for the DSQL scenarios to run
 // against a local PostgreSQL server. It prints the address it listens on and
 // serves until it is stopped.
 package main
@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/winebarrel/pistachio/internal/dsqlproxy"
+	"github.com/winebarrel/pistachio/test/dsqlproxy"
 )
 
 func main() {
