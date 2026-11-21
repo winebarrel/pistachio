@@ -344,24 +344,26 @@ func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
 
 func TestCompareTaggedPos(t *testing.T) {
 	// Both unknown: preserve original order via stable sort
-	assert.False(t, compareTaggedPos(-1, -1, false))
-	assert.False(t, compareTaggedPos(-1, -1, true))
+	assert.Equal(t, 0, compareTaggedPos(-1, -1, false))
+	assert.Equal(t, 0, compareTaggedPos(-1, -1, true))
 
 	// Only i unknown: unknown sorts before known
-	assert.True(t, compareTaggedPos(-1, 0, false))
-	assert.True(t, compareTaggedPos(-1, 5, true))
+	assert.Equal(t, -1, compareTaggedPos(-1, 0, false))
+	assert.Equal(t, -1, compareTaggedPos(-1, 5, true))
 
 	// Only j unknown: known never precedes unknown
-	assert.False(t, compareTaggedPos(0, -1, false))
-	assert.False(t, compareTaggedPos(5, -1, true))
+	assert.Equal(t, 1, compareTaggedPos(0, -1, false))
+	assert.Equal(t, 1, compareTaggedPos(5, -1, true))
 
 	// Both known: forward sort
-	assert.True(t, compareTaggedPos(1, 2, false))
-	assert.False(t, compareTaggedPos(2, 1, false))
+	assert.Equal(t, -1, compareTaggedPos(1, 2, false))
+	assert.Equal(t, 1, compareTaggedPos(2, 1, false))
+	assert.Equal(t, 0, compareTaggedPos(1, 1, false))
 
 	// Both known: reverse sort
-	assert.True(t, compareTaggedPos(2, 1, true))
-	assert.False(t, compareTaggedPos(1, 2, true))
+	assert.Equal(t, -1, compareTaggedPos(2, 1, true))
+	assert.Equal(t, 1, compareTaggedPos(1, 2, true))
+	assert.Equal(t, 0, compareTaggedPos(1, 1, true))
 }
 
 func TestDroppedKeys(t *testing.T) {
