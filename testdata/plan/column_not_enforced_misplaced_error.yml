@@ -1,0 +1,7 @@
+# PostgreSQL takes NOT ENFORCED only on a CHECK or a foreign key.
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      email text UNIQUE NOT ENFORCED
+  );
+error: misplaced NOT ENFORCED clause
