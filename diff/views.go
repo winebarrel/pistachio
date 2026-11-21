@@ -85,8 +85,9 @@ func equalViewDef(current, desired string) bool {
 // names its leading output columns in place of the query.
 //
 // Returns false when either side's output columns can't be determined
-// statically (SELECT *, parse error). That conservatively routes uncertain cases through DROP +
-// CREATE, which always works at the cost of briefly dropping privileges /
+// statically (SELECT *, parse error). That conservatively routes uncertain
+// cases through DROP + CREATE, which always works at the cost of briefly
+// dropping privileges /
 // dependent views; strictly better than leaving the bug in place.
 //
 // Known limitation: type-only changes on a same-named column (e.g.
