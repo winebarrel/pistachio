@@ -1,11 +1,11 @@
 package pistachio
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -1299,30 +1299,26 @@ type taggedStmt struct {
 // preserving their original relative order via the stable sort.
 // This ensures RENAME and INDEX statements (which can't be mapped to a
 // posMap entry) execute before dependent creates/modifications.
-func compareTaggedPos(posI, posJ int, reverse bool) bool {
-	iUnknown := posI < 0
-	jUnknown := posJ < 0
-
-	switch {
+func compareTaggedPos(posI, posJ int, reverse bool) int {
+	switch iUnknown, jUnknown := posI < 0, posJ < 0; {
 	case iUnknown && jUnknown:
-		return false // preserve original order
+		return 0 // preserve original order
 	case iUnknown:
-		return true // unknown before known
+		return -1 // unknown before known
 	case jUnknown:
-		return false
+		return 1
+	case reverse:
+		return cmp.Compare(posJ, posI)
 	default:
-		if reverse {
-			return posI > posJ
-		}
-		return posI < posJ
+		return cmp.Compare(posI, posJ)
 	}
 }
 
 // sortedSQL stable-sorts tagged statements by position, reversed for drops,
 // and returns their SQL.
 func sortedSQL(tagged []taggedStmt, reverse bool) []string {
-	sort.SliceStable(tagged, func(i, j int) bool {
-		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
+	slices.SortStableFunc(tagged, func(a, b taggedStmt) int {
+		return compareTaggedPos(a.pos, b.pos, reverse)
 	})
 	sorted := make([]string, len(tagged))
 	for i, ts := range tagged {
