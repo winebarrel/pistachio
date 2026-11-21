@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -1321,8 +1320,14 @@ func compareTaggedPos(posI, posJ int, reverse bool) bool {
 // sortedSQL stable-sorts tagged statements by position, reversed for drops,
 // and returns their SQL.
 func sortedSQL(tagged []taggedStmt, reverse bool) []string {
-	sort.SliceStable(tagged, func(i, j int) bool {
-		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
+	slices.SortStableFunc(tagged, func(a, b taggedStmt) int {
+		if compareTaggedPos(a.pos, b.pos, reverse) {
+			return -1
+		}
+		if compareTaggedPos(b.pos, a.pos, reverse) {
+			return 1
+		}
+		return 0
 	})
 	sorted := make([]string, len(tagged))
 	for i, ts := range tagged {
