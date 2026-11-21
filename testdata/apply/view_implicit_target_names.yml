@@ -20,6 +20,39 @@ applied: |
 
   -- public.mv
   CREATE MATERIALIZED VIEW public.mv AS
+  SELECT u.m,
+      count(*) AS count
+     FROM u
+    GROUP BY u.m;
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT u.m,
+      count(*) AS count,
+      max(u.n) AS max
+     FROM u
+    WHERE u.n > 0
+    GROUP BY u.m;
+
+  -- public.v_expr
+  CREATE OR REPLACE VIEW public.v_expr AS
+  SELECT u.id,
+      lower(u.m) AS lower,
+      COALESCE(( SELECT max(s.n) AS max
+             FROM u s
+            WHERE s.m = u.m), 0) AS top
+     FROM u;
+applied_pg16: &applied_pg16plus |
+  -- public.u
+  CREATE TABLE public.u (
+      id integer NOT NULL,
+      m text,
+      n integer,
+      CONSTRAINT u_pkey PRIMARY KEY (id)
+  );
+
+  -- public.mv
+  CREATE MATERIALIZED VIEW public.mv AS
   SELECT m,
       count(*) AS count
      FROM u
@@ -42,3 +75,5 @@ applied: |
              FROM u s
             WHERE s.m = u.m), 0) AS top
      FROM u;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
