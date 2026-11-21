@@ -2,7 +2,6 @@ package command
 
 import (
 	"io"
-	"strings"
 
 	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/document"
@@ -20,13 +19,6 @@ type Parse struct {
 func (cmd *Parse) AfterApply() error {
 	trimSchemas(cmd.Schemas)
 	return nil
-}
-
-// trimSchemas trims each schema name in place.
-func trimSchemas(schemas []string) {
-	for i, s := range schemas {
-		schemas[i] = strings.TrimSpace(s)
-	}
 }
 
 func (cmd *Parse) Run(w io.Writer) error {
