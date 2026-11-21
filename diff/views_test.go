@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 func TestDiffViews_newView(t *testing.T) {
@@ -541,10 +542,62 @@ func TestEqualViewDef_subselect(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_implicitTargetNames(t *testing.T) {
+	// pg_get_viewdef writes the name PostgreSQL gave a target the user left
+	// unnamed. Each current side is what PostgreSQL 16 printed for the
+	// desired side.
+	tests := []struct {
+		name    string
+		current string
+		desired string
+	}{
+		{"aggregate", "SELECT m, count(*) AS count FROM u GROUP BY m", "SELECT m, count(*) FROM u GROUP BY m"},
+		{"function", "SELECT id, lower(m) AS lower FROM u", "SELECT id, lower(m) FROM u"},
+		{"cast of an expression", "SELECT ((a + n))::text AS text FROM u", "SELECT (a + n)::text FROM u"},
+		{"cast of a column", "SELECT (n)::character varying AS n FROM u", "SELECT n::varchar FROM u"},
+		{"coalesce", "SELECT COALESCE(m, 'z'::text) AS \"coalesce\" FROM u", "SELECT coalesce(m, 'z') FROM u"},
+		{"sql value function", "SELECT CURRENT_DATE AS \"current_date\", LOCALTIMESTAMP(2) AS \"localtimestamp\" FROM u", "SELECT current_date, localtimestamp(2) FROM u"},
+		{"current_user", "SELECT CURRENT_USER AS \"current_user\" FROM u", "SELECT current_user FROM u"},
+		{"exists", "SELECT (EXISTS ( SELECT 1 FROM u u2)) AS \"exists\" FROM u", "SELECT exists (SELECT 1 FROM u u2) FROM u"},
+		{"scalar sub-select", "SELECT ( SELECT max(u2.n) AS max FROM u u2) AS max FROM u", "SELECT (SELECT max(u2.n) FROM u u2) FROM u"},
+		{"array sub-select", "SELECT ARRAY( SELECT u_1.n FROM u u_1) AS \"array\" FROM u", "SELECT array(SELECT u_1.n FROM u u_1) FROM u"},
+		{"case without else", "SELECT CASE WHEN (a > 0) THEN m ELSE NULL::text END AS \"case\" FROM u", "SELECT CASE WHEN a > 0 THEN m END FROM u"},
+		{"case named by else", "SELECT CASE WHEN (a > 0) THEN m ELSE upper(m) END AS upper FROM u", "SELECT CASE WHEN a > 0 THEN m ELSE upper(m) END FROM u"},
+		{"nullif and greatest", "SELECT NULLIF(a, 1) AS \"nullif\", GREATEST(a, n) AS \"greatest\" FROM u", "SELECT nullif(a, 1), greatest(a, n) FROM u"},
+		{"collate", "SELECT (m COLLATE \"C\") AS m FROM u", "SELECT m COLLATE \"C\" FROM u"},
+		{"grouping", "SELECT m, GROUPING(m) AS \"grouping\", count(*) AS count FROM u GROUP BY ROLLUP(m)", "SELECT m, grouping(m), count(*) FROM u GROUP BY ROLLUP (m)"},
+		{"no name", "SELECT (a + n) AS \"?column?\" FROM u", "SELECT a + n FROM u"},
+		{"sub-select in an expression", "SELECT a, COALESCE(( SELECT max(s.n) AS max FROM t s WHERE (s.a = t.a)), 0) AS top FROM t", "SELECT a, COALESCE((SELECT max(s.n) FROM t s WHERE s.a = t.a), 0) AS top FROM t"},
+		{"sub-select in WHERE", "SELECT id FROM u WHERE ((EXISTS ( SELECT 1, lower(u2.m) AS lower FROM u u2)) AND (n = ( SELECT count(*) AS count FROM u u_1)))", "SELECT id FROM u WHERE exists (SELECT 1, lower(u2.m) FROM u u2) AND n = (SELECT count(*) FROM u u_1)"},
+		{"sub-select in FROM", "SELECT c FROM ( SELECT count(*) AS c, lower(u.m) AS lower FROM u GROUP BY u.m) s", "SELECT s.c FROM (SELECT count(*) AS c, lower(m) FROM u GROUP BY m) s"},
+		{"CTE", "WITH c AS ( SELECT lower(u.m) AS lower FROM u ) SELECT lower FROM c", "WITH c AS (SELECT lower(m) FROM u) SELECT lower FROM c"},
+		{"set operation", "SELECT u.id, count(*) AS count FROM u GROUP BY u.id UNION ALL SELECT u.id, count(*) AS count FROM u GROUP BY u.id", "SELECT id, count(*) FROM u GROUP BY id UNION ALL SELECT id, count(*) FROM u GROUP BY id"},
+		{"bare literal", "SELECT u.id, 'a'::text AS \"?column?\" FROM u UNION ALL SELECT u.id, 'b'::text FROM u", "SELECT id, 'a' FROM u UNION ALL SELECT id, 'b' FROM u"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.True(t, equalViewDef(tc.current, tc.desired))
+		})
+	}
+}
+
+func TestEqualViewDef_implicitTargetNameChanged(t *testing.T) {
+	// The written alias differs from the name PostgreSQL gave the target.
+	assert.False(t, equalViewDef(
+		"SELECT m, count(*) AS count FROM u GROUP BY m",
+		"SELECT m, count(*) AS n FROM u GROUP BY m",
+	))
+	// The written target is named after another function.
+	assert.False(t, equalViewDef(
+		"SELECT id, lower(m) AS lower FROM u",
+		"SELECT id, lower(m) AS upper FROM u",
+	))
+}
+
 func TestEqualViewDef_funcCallArgs(t *testing.T) {
 	// Covers FuncCall path
 	assert.True(t, equalViewDef(
-		"SELECT upper(users.name) FROM users",
+		"SELECT upper(users.name) AS upper FROM users",
 		"SELECT upper(name) FROM public.users",
 	))
 }
@@ -661,7 +714,7 @@ func TestEqualViewDef_inVsAnyArray_targetList(t *testing.T) {
 
 func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
 	assert.True(t, equalViewDef(
-		"SELECT x, count(*) FROM t GROUP BY x HAVING x = ANY (ARRAY['a', 'b'])",
+		"SELECT x, count(*) AS count FROM t GROUP BY x HAVING x = ANY (ARRAY['a', 'b'])",
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x IN ('a', 'b')",
 	))
 }
@@ -670,14 +723,14 @@ func TestEqualViewDef_inVsAnyArray_groupBy(t *testing.T) {
 	// GROUP BY can contain expressions (here a boolean test on status).
 	// Covers the GroupClause walker position.
 	assert.True(t, equalViewDef(
-		"SELECT count(*) FROM t GROUP BY status = ANY (ARRAY['a', 'b'])",
+		"SELECT count(*) AS count FROM t GROUP BY status = ANY (ARRAY['a', 'b'])",
 		"SELECT count(*) FROM t GROUP BY status IN ('a', 'b')",
 	))
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
 	assert.True(t, equalViewDef(
-		"SELECT count(*) FROM t GROUP BY status = 'a'::e",
+		"SELECT count(*) AS count FROM t GROUP BY status = 'a'::e",
 		"SELECT count(*) FROM t GROUP BY status = 'a'",
 	))
 }
@@ -731,7 +784,7 @@ func TestEqualViewDef_currentOnlyTypeCast_targetList(t *testing.T) {
 
 func TestEqualViewDef_currentOnlyTypeCast_having(t *testing.T) {
 	assert.True(t, equalViewDef(
-		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'::e",
+		"SELECT x, count(*) AS count FROM t GROUP BY x HAVING x = 'a'::e",
 		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'",
 	))
 }
@@ -872,7 +925,7 @@ func TestEqualViewDef_qualifiedColumnInsideTextCast(t *testing.T) {
 	// TypeCast.Arg so the inner ColumnRef is reached before
 	// normalizeSelectExprs collapses the surrounding cast.
 	assert.True(t, equalViewDef(
-		"SELECT lower(users.name::text) FROM users",
+		"SELECT lower(users.name::text) AS lower FROM users",
 		"SELECT lower(name) FROM users",
 	))
 }
@@ -1647,10 +1700,28 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 			want:    true,
 		},
 		{
-			name:    "expression without alias (unanalyzable)",
-			current: "SELECT id, length(name) FROM t",
+			name:    "expression without alias takes the name PostgreSQL gives it",
+			current: "SELECT id, upper(name) AS upper FROM t",
+			desired: "SELECT id, upper(trim(name)) FROM t",
+			want:    true,
+		},
+		{
+			name:    "expression without alias named after another function",
+			current: "SELECT id, length(name) AS length FROM t",
 			desired: "SELECT id, upper(name) FROM t",
 			want:    false,
+		},
+		{
+			name:    "expression without a name on both sides",
+			current: "SELECT id, (a + b) AS \"?column?\" FROM t",
+			desired: "SELECT id, a - b FROM t",
+			want:    true,
+		},
+		{
+			name:    "unnamed expression in the catalog form is ?column?",
+			current: "SELECT id, 'x'::text FROM t UNION ALL SELECT id, 'y'::text FROM t",
+			desired: "SELECT id, 'x' FROM t UNION ALL SELECT id, 'y' FROM t",
+			want:    true,
 		},
 		{
 			name:    "parse error on one side",
@@ -1741,14 +1812,12 @@ func TestViewOutputColumns_NegativePaths(t *testing.T) {
 		// SELECT * is unanalyzable: until the catalog expands the star
 		// to real column names there's no list to compare against.
 		{"SELECT *", "SELECT * FROM t"},
-		// Computed expression with no alias has no stable output name.
-		{"bare expression target", "SELECT a + b FROM t"},
 		// Parse failures short-circuit early.
 		{"parse error", "this is not SQL"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, ok := viewOutputColumns(tc.body)
+			_, ok := viewOutputColumns(tc.body, parser.FigureColname)
 			assert.False(t, ok)
 		})
 	}

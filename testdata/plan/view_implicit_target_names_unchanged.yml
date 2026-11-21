@@ -1,0 +1,20 @@
+# pg_get_viewdef writes the name PostgreSQL gave a target left without an
+# alias, such as `count(*) AS count`. A view written without those aliases
+# plans clean.
+init: &schema |
+  CREATE TABLE public.u (id integer PRIMARY KEY, m text, n integer);
+  CREATE VIEW public.v_agg AS SELECT m, count(*), max(n) FROM public.u GROUP BY m;
+  CREATE VIEW public.v_expr AS
+    SELECT id, lower(m), n::bigint, coalesce(m, 'z'), current_date, n + 1,
+      CASE WHEN n > 0 THEN m END,
+      EXISTS (SELECT 1 FROM public.u u2 WHERE u2.n = u.id),
+      (SELECT max(u2.n) FROM public.u u2)
+    FROM public.u;
+  CREATE VIEW public.v_sub AS
+    SELECT id, COALESCE((SELECT max(s.n) FROM public.u s WHERE s.m = u.m), 0) AS top
+    FROM public.u;
+  CREATE VIEW public.v_union AS
+    SELECT id, 'a' FROM public.u UNION ALL SELECT id, 'b' FROM public.u;
+  CREATE MATERIALIZED VIEW public.mv_agg AS SELECT m, count(*) FROM public.u GROUP BY m;
+desired: *schema
+plan: ""

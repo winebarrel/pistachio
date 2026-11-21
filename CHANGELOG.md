@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` no longer reports a change on every run for a view or materialized view with a target written without an alias, such as `count(*)` or `lower(name)`, including one in a sub-select. Such a view used to be dropped and created again. A change to it is now planned as `CREATE OR REPLACE VIEW`.
+
 ## [1.90.1] - 2026-11-15
 
 * `plan` fails on a `-- pista:execute` check that returns a value other than a `boolean`, such as `SELECT count(*) FROM ...`. It used to keep the statement with a note and leave the error to `apply`.
