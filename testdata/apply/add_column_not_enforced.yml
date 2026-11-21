@@ -1,0 +1,50 @@
+# Columns added with NOT ENFORCED on their CHECK and foreign keys get
+# constraints that are not enforced, and the re-plan is clean.
+min_pg: 18
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      score integer CHECK (score > 0) NOT ENFORCED,
+      user_id integer REFERENCES public.users (id) NOT ENFORCED,
+      editor_id integer REFERENCES public.users (id) NOT ENFORCED DEFERRABLE,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.posts ADD COLUMN score integer;
+  ALTER TABLE public.posts ADD COLUMN user_id integer;
+  ALTER TABLE public.posts ADD COLUMN editor_id integer;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_score_check CHECK (score > 0) NOT ENFORCED NOT VALID;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) NOT ENFORCED NOT VALID;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) DEFERRABLE NOT ENFORCED NOT VALID;
+applied: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      score integer,
+      user_id integer,
+      editor_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_score_check CHECK (score > 0) NOT ENFORCED NOT VALID;
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES users(id) DEFERRABLE NOT ENFORCED NOT VALID;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) NOT ENFORCED NOT VALID;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

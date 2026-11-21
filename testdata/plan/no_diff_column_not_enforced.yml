@@ -1,0 +1,24 @@
+# NOT ENFORCED written on a column reaches the CHECK or foreign key before
+# it, as it does in PostgreSQL, so the desired schema matches the catalog.
+min_pg: 18
+init: |
+  CREATE TABLE public.users (
+      id integer PRIMARY KEY
+  );
+  CREATE TABLE public.posts (
+      id integer PRIMARY KEY,
+      score integer CHECK (score > 0) NOT ENFORCED,
+      user_id integer REFERENCES public.users (id) NOT ENFORCED,
+      editor_id integer REFERENCES public.users (id) NOT ENFORCED DEFERRABLE
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer PRIMARY KEY
+  );
+  CREATE TABLE public.posts (
+      id integer PRIMARY KEY,
+      score integer CHECK (score > 0) NOT ENFORCED,
+      user_id integer REFERENCES public.users (id) NOT ENFORCED,
+      editor_id integer REFERENCES public.users (id) NOT ENFORCED DEFERRABLE
+  );
+plan: ""
