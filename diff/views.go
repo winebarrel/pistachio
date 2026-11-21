@@ -51,26 +51,24 @@ func equalViewDef(current, desired string) bool {
 	if errCur != nil || errDes != nil {
 		return false
 	}
-	for _, stmt := range curResult.Stmts {
-		nameTargets(stmt.Stmt, catalogTargetName)
-		stripQualifications(stmt.Stmt)
-		stripSetOpBranchNames(stmt.Stmt)
-		normalizeFromFunctions(stmt.Stmt)
-		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
-	}
-	for _, stmt := range desResult.Stmts {
-		nameTargets(stmt.Stmt, parser.FigureColname)
-		stripQualifications(stmt.Stmt)
-		stripSetOpBranchNames(stmt.Stmt)
-		normalizeFromFunctions(stmt.Stmt)
-		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
-	}
+	normalizeViewStmts(curResult.Stmts, catalogTargetName)
+	normalizeViewStmts(desResult.Stmts, parser.FigureColname)
 	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
 		curResult.Stmts[0].Stmt = alignCurrentCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
 	return errCur == nil && errDes == nil && curStr == desStr
+}
+
+func normalizeViewStmts(stmts []*pg_query.RawStmt, namer func(*pg_query.Node) string) {
+	for _, stmt := range stmts {
+		nameTargets(stmt.Stmt, namer)
+		stripQualifications(stmt.Stmt)
+		stripSetOpBranchNames(stmt.Stmt)
+		normalizeFromFunctions(stmt.Stmt)
+		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
+	}
 }
 
 // canCreateOrReplaceView reports whether a view definition change can be
