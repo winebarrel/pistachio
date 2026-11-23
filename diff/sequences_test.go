@@ -51,7 +51,7 @@ func TestDiffSequences_DropDenied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.DisallowedDropStmts, 1)
-	assert.Contains(t, result.DisallowedDropStmts[0], "-- skipped: DROP SEQUENCE public.s;")
+	assert.Equal(t, "-- skipped: DROP SEQUENCE public.s;", result.DisallowedDropStmts[0])
 }
 
 func TestDiffSequences_NoDiff(t *testing.T) {

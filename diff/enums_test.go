@@ -283,7 +283,7 @@ func TestDiffEnums_RenameAndAddValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 2)
 	assert.Equal(t, "ALTER TYPE public.status RENAME TO user_status;", result.Stmts[0])
-	assert.Contains(t, result.Stmts[1], "ADD VALUE 'pending'")
+	assert.Equal(t, "ALTER TYPE public.user_status ADD VALUE 'pending' AFTER 'inactive';", result.Stmts[1])
 }
 
 func TestDiffEnums_RenameSelfRename_Skipped(t *testing.T) {

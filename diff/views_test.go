@@ -1045,7 +1045,7 @@ func TestDiffViews_dropMatview(t *testing.T) {
 	result, err := DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.DropStmts, 1)
-	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW public.mv")
+	assert.Equal(t, "DROP MATERIALIZED VIEW public.mv;", result.DropStmts[0])
 }
 
 func TestDiffViews_dropMatview_denied(t *testing.T) {
@@ -1229,7 +1229,7 @@ func TestDiffViews_matviewIndexDrop(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	assert.Len(t, result.CreateStmts, 1)
-	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
+	assert.Equal(t, "DROP INDEX public.idx_mv_n;", result.CreateStmts[0])
 }
 
 func TestDiffViews_matviewIndexRename(t *testing.T) {
@@ -1356,7 +1356,7 @@ func TestDiffViews_matviewCommentDrop(t *testing.T) {
 	result, err := DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.CreateStmts, 1)
-	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW public.mv IS NULL")
+	assert.Equal(t, "COMMENT ON MATERIALIZED VIEW public.mv IS NULL;", result.CreateStmts[0])
 }
 
 func TestDiffViews_matviewIndexChange(t *testing.T) {
@@ -1386,8 +1386,8 @@ func TestDiffViews_matviewIndexChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 2)
-	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
-	assert.Contains(t, result.CreateStmts[1], "CREATE UNIQUE INDEX")
+	assert.Equal(t, "DROP INDEX public.idx_mv_n;", result.CreateStmts[0])
+	assert.Equal(t, "CREATE UNIQUE INDEX idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
 }
 
 func TestDiffViews_matviewNoChange(t *testing.T) {
@@ -1426,8 +1426,7 @@ func TestDiffViews_renameMatview(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.CreateStmts, 1)
-	assert.Contains(t, result.CreateStmts[0], "ALTER MATERIALIZED VIEW")
-	assert.Contains(t, result.CreateStmts[0], "RENAME TO new_mv")
+	assert.Equal(t, "ALTER MATERIALIZED VIEW public.old_mv RENAME TO new_mv;", result.CreateStmts[0])
 }
 
 func TestDiffViews_viewToMatview(t *testing.T) {
@@ -1445,7 +1444,7 @@ func TestDiffViews_viewToMatview(t *testing.T) {
 	result, err := DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
-	assert.Contains(t, result.DropStmts[0], "DROP VIEW public.v")
+	assert.Equal(t, "DROP VIEW public.v;", result.DropStmts[0])
 	require.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
 }
@@ -1465,7 +1464,7 @@ func TestDiffViews_matviewToView(t *testing.T) {
 	result, err := DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.DropStmts, 1)
-	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW public.v")
+	assert.Equal(t, "DROP MATERIALIZED VIEW public.v;", result.DropStmts[0])
 	require.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW")
 }
