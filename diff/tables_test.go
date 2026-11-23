@@ -1784,8 +1784,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
-	assert.NotContains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);", addStmts[0])
 }
 
 func TestDiffForeignKeys_addNotValid(t *testing.T) {
@@ -1800,8 +1799,7 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
-	assert.Contains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;", addStmts[0])
 }
 
 func TestDiffForeignKeys_drop(t *testing.T) {
@@ -1858,7 +1856,7 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
 	require.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;", addStmts[0])
 }
 
 func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
@@ -1883,8 +1881,7 @@ func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_old;"}, dropStmts)
 	require.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
-	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_new FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;", addStmts[0])
 }
 
 func TestDiffConstraints_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
@@ -1901,7 +1898,7 @@ func TestDiffConstraints_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	assert.Empty(t, disallowed)
 	require.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
-	assert.Contains(t, stmts[1], "ADD CONSTRAINT chk_new")
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_new CHECK (age >= 18);", stmts[1])
 }
 
 func TestDiffComments_tableComment_add(t *testing.T) {
@@ -1953,7 +1950,7 @@ func TestDiffComments_newColumn(t *testing.T) {
 
 	stmts := diffComments(current, desired)
 	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "COMMENT ON COLUMN")
+	assert.Equal(t, "COMMENT ON COLUMN public.users.name IS 'new col comment';", stmts[0])
 }
 
 func TestEqualTypeName(t *testing.T) {
@@ -2264,7 +2261,7 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	assert.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
 	assert.Len(t, result.FKAddStmts, 1)
-	assert.Contains(t, result.FKAddStmts[0], "ADD CONSTRAINT fk_user")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);", result.FKAddStmts[0])
 }
 
 func TestCompareFKDef_implicitPublicSchema(t *testing.T) {
@@ -2347,7 +2344,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, append(dropStmts, addStmts...), 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;", addStmts[0])
 }
 
 // A key in app referencing base: the catalog prints the reference bare when
@@ -2416,7 +2413,7 @@ func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;", addStmts[0])
 }
 
 func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
@@ -2496,8 +2493,7 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 		drop, add := run(fk(plain, false, false, true, false), fk(deferred, true, true, false, false))
 		assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, drop)
 		require.Len(t, add, 1)
-		assert.Contains(t, add[0], "ADD CONSTRAINT fk_user")
-		assert.Contains(t, add[0], "NOT VALID")
+		assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED NOT VALID;", add[0])
 	})
 
 	t.Run("partition copy is left alone", func(t *testing.T) {
@@ -2520,7 +2516,7 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 		drop, add := run(fk(plain, false, false, true, false), fk(cascade, true, true, true, false))
 		assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, drop)
 		require.Len(t, add, 1)
-		assert.Contains(t, add[0], "ADD CONSTRAINT fk_user")
+		assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;", add[0])
 	})
 }
 
@@ -2638,8 +2634,7 @@ func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
-	assert.Contains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE NOT VALID;", addStmts[0])
 }
 
 func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
@@ -2704,8 +2699,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
-	assert.Contains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_new FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;", addStmts[0])
 }
 
 func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
@@ -2729,8 +2723,7 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
-	assert.Contains(t, addStmts[0], "NOT VALID")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_new FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;", addStmts[0])
 }
 
 func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
@@ -2752,8 +2745,7 @@ func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
-	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
-	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_new FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;", addStmts[0])
 }
 
 func TestDiffTable_partitionChild(t *testing.T) {
@@ -2879,8 +2871,12 @@ func TestNotNullViaCheckSQL(t *testing.T) {
 		desired := newTable("public", "users")
 		desired.Columns.Set("mail", &model.Column{Name: "mail", TypeName: "text", NotNull: true, NotNullViaCheck: true, RenameFrom: &old})
 		stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
-		assert.Contains(t, stmts, "ALTER TABLE public.users ALTER COLUMN mail SET NOT NULL;")
-		assert.Contains(t, stmts, "ALTER TABLE public.users ADD CONSTRAINT users_mail_not_null_check CHECK (mail IS NOT NULL) NOT VALID;")
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ADD CONSTRAINT users_mail_not_null_check CHECK (mail IS NOT NULL) NOT VALID;",
+			"ALTER TABLE public.users VALIDATE CONSTRAINT users_mail_not_null_check;",
+			"ALTER TABLE public.users ALTER COLUMN mail SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT users_mail_not_null_check;",
+		}, stmts)
 	})
 
 	t.Run("long names are shortened", func(t *testing.T) {
@@ -2892,7 +2888,12 @@ func TestNotNullViaCheckSQL(t *testing.T) {
 		stmts, _, _ := notNullViaCheckSQL("public.users", current, desired)
 		name := "users_" + strings.Repeat("c", 42) + "_not_null_check"
 		assert.Len(t, name, 63)
-		assert.Contains(t, stmts, "ALTER TABLE public.users VALIDATE CONSTRAINT "+name+";")
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ADD CONSTRAINT " + name + " CHECK (" + long + " IS NOT NULL) NOT VALID;",
+			"ALTER TABLE public.users VALIDATE CONSTRAINT " + name + ";",
+			"ALTER TABLE public.users ALTER COLUMN " + long + " SET NOT NULL;",
+			"ALTER TABLE public.users DROP CONSTRAINT " + name + ";",
+		}, stmts)
 	})
 
 	t.Run("a plain SET NOT NULL when desired declares the check", func(t *testing.T) {
