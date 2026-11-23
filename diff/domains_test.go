@@ -190,7 +190,7 @@ func TestDiffDomains_DropConstraint(t *testing.T) {
 	result, err := DiffDomains(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, result.Stmts, 1)
-	assert.Contains(t, result.Stmts[0], "DROP CONSTRAINT pos_check")
+	assert.Equal(t, "ALTER DOMAIN public.pos_int DROP CONSTRAINT pos_check;", result.Stmts[0])
 }
 
 func TestDiffDomains_CollationChange_Error(t *testing.T) {

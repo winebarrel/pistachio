@@ -29,8 +29,7 @@ func TestRewriteColumnsInIndexDef_PlainColumn(t *testing.T) {
 		one("name", "display_name"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "(display_name)")
-	assert.NotContains(t, got, "(name)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (display_name)", got)
 }
 
 func TestRewriteColumnsInIndexDef_LeavesOtherColumns(t *testing.T) {
@@ -39,7 +38,7 @@ func TestRewriteColumnsInIndexDef_LeavesOtherColumns(t *testing.T) {
 		one("a", "x"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "(x, b)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (x, b)", got)
 }
 
 func TestRewriteColumnsInIndexDef_ExpressionIndex(t *testing.T) {
@@ -48,7 +47,7 @@ func TestRewriteColumnsInIndexDef_ExpressionIndex(t *testing.T) {
 		one("email", "email_addr"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "lower(email_addr)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (lower(email_addr))", got)
 }
 
 func TestRewriteColumnsInIndexDef_PartialWhere(t *testing.T) {
@@ -57,7 +56,7 @@ func TestRewriteColumnsInIndexDef_PartialWhere(t *testing.T) {
 		one("deleted_at", "removed_at"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "removed_at IS NULL")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (id) WHERE removed_at IS NULL", got)
 }
 
 func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
@@ -66,7 +65,7 @@ func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
 		one("name", "product_name"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "INCLUDE (product_name)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (sku) INCLUDE (product_name)", got)
 }
 
 func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
@@ -77,8 +76,7 @@ func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
 		map[string]string{"a": "b", "b": "c"},
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "(b, c)")
-	assert.NotContains(t, got, "(c, c)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (b, c)", got)
 }
 
 func TestRewriteColumnsInIndexDef_ParseError(t *testing.T) {
@@ -99,19 +97,19 @@ func TestRewriteColumnsInIndexDef_NotIndexStmt(t *testing.T) {
 func TestRewriteColumnsInConstraintDef_Unique(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("UNIQUE (email)", one("email", "email_addr"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "(email_addr)")
+	assert.Equal(t, "UNIQUE (email_addr)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_PrimaryKey(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("PRIMARY KEY (id)", one("id", "user_id"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "(user_id)")
+	assert.Equal(t, "PRIMARY KEY (user_id)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_Check(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("CHECK ((qty > 0))", one("qty", "quantity"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "quantity > 0")
+	assert.Equal(t, "CHECK (quantity > 0)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckBoolExpr(t *testing.T) {
@@ -120,14 +118,13 @@ func TestRewriteColumnsInConstraintDef_CheckBoolExpr(t *testing.T) {
 		one("qty", "quantity"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "quantity > 0")
-	assert.Contains(t, got, "quantity < 1000")
+	assert.Equal(t, "CHECK (quantity > 0 AND quantity < 1000)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckNullTest(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("CHECK ((deleted_at IS NULL))", one("deleted_at", "removed_at"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "removed_at IS NULL")
+	assert.Equal(t, "CHECK (removed_at IS NULL)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_FKLocalAttrs(t *testing.T) {
@@ -136,9 +133,8 @@ func TestRewriteColumnsInConstraintDef_FKLocalAttrs(t *testing.T) {
 		one("user_id", "buyer_id"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "(buyer_id)")
 	// PkAttrs (referenced columns) must NOT be rewritten
-	assert.Contains(t, got, "users (id)")
+	assert.Equal(t, "FOREIGN KEY (buyer_id) REFERENCES users (id)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_FKReferencedNotRewritten(t *testing.T) {
@@ -148,7 +144,7 @@ func TestRewriteColumnsInConstraintDef_FKReferencedNotRewritten(t *testing.T) {
 	)
 	require.NoError(t, err)
 	// PkAttrs side: "id" should stay as-is even though it matches oldName
-	assert.Contains(t, got, "users (id)")
+	assert.Equal(t, "FOREIGN KEY (user_id) REFERENCES users (id)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_Exclusion(t *testing.T) {
@@ -157,7 +153,7 @@ func TestRewriteColumnsInConstraintDef_Exclusion(t *testing.T) {
 		one("during", "time_range"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "time_range WITH")
+	assert.Equal(t, "EXCLUDE USING gist (room WITH =, time_range WITH &&)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_UniqueInclude(t *testing.T) {
@@ -166,7 +162,7 @@ func TestRewriteColumnsInConstraintDef_UniqueInclude(t *testing.T) {
 		one("name", "display_name"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "INCLUDE (display_name)")
+	assert.Equal(t, "UNIQUE (email) INCLUDE (display_name)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_ParseError(t *testing.T) {
@@ -182,14 +178,13 @@ func TestRewriteColumnsInConstraintDef_EmptyInput(t *testing.T) {
 func TestRewriteColumnsInConstraintDef_CheckTypeCast(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("CHECK ((col::text = 'x'))", one("col", "value"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "value")
-	assert.NotContains(t, got, "(col")
+	assert.Equal(t, "CHECK (value::text = 'x')", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckCoalesce(t *testing.T) {
 	got, err := rewriteColumnsInConstraintDef("CHECK ((COALESCE(col, 0) > 0))", one("col", "value"))
 	require.NoError(t, err)
-	assert.Contains(t, got, "COALESCE(value")
+	assert.Equal(t, "CHECK (COALESCE(value, 0) > 0)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckCase(t *testing.T) {
@@ -198,7 +193,7 @@ func TestRewriteColumnsInConstraintDef_CheckCase(t *testing.T) {
 		one("col", "value"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "value")
+	assert.Equal(t, "CHECK (CASE WHEN value > 0 THEN 1 ELSE 0 END = 1)", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckAnyArray(t *testing.T) {
@@ -207,7 +202,7 @@ func TestRewriteColumnsInConstraintDef_CheckAnyArray(t *testing.T) {
 		one("status", "state"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "state")
+	assert.Equal(t, "CHECK (state = ANY(ARRAY['a'::text, 'b'::text]))", got)
 }
 
 func TestRewriteColumnsInConstraintDef_CheckInList(t *testing.T) {
@@ -216,7 +211,7 @@ func TestRewriteColumnsInConstraintDef_CheckInList(t *testing.T) {
 		one("status", "state"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "state")
+	assert.Equal(t, "CHECK (state IN ('a', 'b'))", got)
 }
 
 func TestRewriteColumnsInConstraintDef_NoCascadeOnChain(t *testing.T) {
@@ -226,8 +221,7 @@ func TestRewriteColumnsInConstraintDef_NoCascadeOnChain(t *testing.T) {
 		map[string]string{"a": "b", "b": "c"},
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "(b, c)")
-	assert.NotContains(t, got, "(c, c)")
+	assert.Equal(t, "UNIQUE (b, c)", got)
 }
 
 func TestRewriteColumnRefsInIndexes_RewritesAndClones(t *testing.T) {
@@ -243,9 +237,9 @@ func TestRewriteColumnRefsInIndexes_RewritesAndClones(t *testing.T) {
 	out := rewriteColumnRefsInIndexes(in, one("name", "display_name"))
 	got, ok := out.GetOk("idx")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "(display_name)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (display_name)", got.Definition)
 	// The original input must not be mutated.
-	assert.Contains(t, original.Definition, "(name)")
+	assert.Equal(t, "CREATE INDEX idx ON public.t USING btree (name)", original.Definition)
 }
 
 func TestRewriteColumnRefsInIndexes_FallbackOnParseError(t *testing.T) {
@@ -272,8 +266,8 @@ func TestRewriteColumnRefsInConstraints_RewritesAndClones(t *testing.T) {
 	out := rewriteColumnRefsInConstraints(in, one("email", "email_addr"))
 	got, ok := out.GetOk("u")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "(email_addr)")
-	assert.Contains(t, original.Definition, "(email)")
+	assert.Equal(t, "UNIQUE (email_addr)", got.Definition)
+	assert.Equal(t, "UNIQUE (email)", original.Definition)
 }
 
 func TestRenameColumnKeys_RemapsAndPreservesOrder(t *testing.T) {
@@ -314,8 +308,7 @@ func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 	out := rewriteColumnRefsInForeignKeys(in, one("user_id", "buyer_id"))
 	got, ok := out.GetOk("fk")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "(buyer_id)")
-	assert.Contains(t, got.Definition, "users (id)")
+	assert.Equal(t, "FOREIGN KEY (buyer_id) REFERENCES users (id)", got.Definition)
 }
 
 func TestRewriteColumnRefsInForeignKeys_SelfReferenceRewritesRefAttrs(t *testing.T) {
@@ -357,11 +350,11 @@ func TestRewriteColumnRefsInTriggers_RewritesUpdateOfAndWhen(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("products_audit")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "UPDATE OF quantity")
-	assert.Contains(t, got.Definition, "new.quantity IS DISTINCT FROM old.quantity")
-	assert.NotContains(t, got.Definition, "qty")
+	assert.Equal(t, "CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON public.products "+
+		"FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION public.stamp()", got.Definition)
 	// The original input must not be mutated.
-	assert.Contains(t, original.Definition, "UPDATE OF qty")
+	assert.Equal(t, "CREATE TRIGGER products_audit AFTER UPDATE OF qty ON public.products "+
+		"FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty) EXECUTE FUNCTION public.stamp()", original.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_LeavesFunctionArgsAlone(t *testing.T) {
@@ -376,7 +369,8 @@ func TestRewriteColumnRefsInTriggers_LeavesFunctionArgsAlone(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "'qty'")
+	assert.Equal(t, "CREATE TRIGGER t AFTER UPDATE ON public.products "+
+		"FOR EACH ROW EXECUTE FUNCTION public.stamp('qty')", got.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_LeavesOtherQualifiersAlone(t *testing.T) {
@@ -391,8 +385,8 @@ func TestRewriteColumnRefsInTriggers_LeavesOtherQualifiersAlone(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "new.quantity")
-	assert.Contains(t, got.Definition, "other.qty")
+	assert.Equal(t, "CREATE TRIGGER t AFTER UPDATE ON public.products "+
+		"FOR EACH ROW WHEN (new.quantity > other.qty) EXECUTE FUNCTION public.stamp()", got.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_NoCascadeOnChain(t *testing.T) {
@@ -406,7 +400,8 @@ func TestRewriteColumnRefsInTriggers_NoCascadeOnChain(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, map[string]string{"a": "b", "b": "c"})
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, "UPDATE OF b, c")
+	assert.Equal(t, "CREATE TRIGGER t AFTER UPDATE OF b, c ON public.products "+
+		"FOR EACH ROW EXECUTE FUNCTION public.stamp()", got.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_RewritesQuotedName(t *testing.T) {
@@ -419,8 +414,8 @@ func TestRewriteColumnRefsInTriggers_RewritesQuotedName(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, one("Qty", "Quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
-	assert.Contains(t, got.Definition, `UPDATE OF "Quantity"`)
-	assert.Contains(t, got.Definition, `new."Quantity" > 0`)
+	assert.Equal(t, `CREATE TRIGGER t AFTER UPDATE OF "Quantity" ON public.products `+
+		`FOR EACH ROW WHEN (new."Quantity" > 0) EXECUTE FUNCTION public.stamp()`, got.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_FallbackOnParseError(t *testing.T) {
@@ -468,8 +463,8 @@ func TestRewriteColumnRefsInPolicies_RewritesBothClauses(t *testing.T) {
 	// The deparse lowercases CURRENT_USER. Only the comparison reads this
 	// text, and equalSelectExpr deparses both sides, so the case does not
 	// matter; the emitted ALTER POLICY comes off the desired side.
-	assert.Contains(t, *got.Using, "owner_name = current_user")
-	assert.Contains(t, *got.WithCheck, "owner_name <> 'nobody'")
+	assert.Equal(t, "owner_name = current_user", *got.Using)
+	assert.Equal(t, "owner_name <> 'nobody'::text", *got.WithCheck)
 	// The original input must not be mutated.
 	assert.Equal(t, "(owner = CURRENT_USER)", *original.Using)
 }
@@ -505,7 +500,7 @@ func TestRewriteColumnRefsInGenerated_RewritesExpression(t *testing.T) {
 	out := rewriteColumnRefsInGenerated(in, one("qty", "quantity"))
 	got, ok := out.GetOk("total")
 	require.True(t, ok)
-	assert.Contains(t, *got.Default, "quantity * 2")
+	assert.Equal(t, "quantity * 2", *got.Default)
 }
 
 func TestRewriteColumnRefsInGenerated_LeavesPlainDefaultAlone(t *testing.T) {
@@ -529,7 +524,7 @@ func TestRewriteColumnRefsInGenerated_NoCascadeOnChain(t *testing.T) {
 	out := rewriteColumnRefsInGenerated(in, map[string]string{"a": "b", "b": "c"})
 	got, ok := out.GetOk("total")
 	require.True(t, ok)
-	assert.Contains(t, *got.Default, "b + c")
+	assert.Equal(t, "b + c", *got.Default)
 }
 
 func triggersOnOldT(defs ...string) *orderedmap.Map[string, *model.Trigger] {
@@ -666,5 +661,5 @@ func TestRewriteColumnsInConstraintDef_ExclusionWhere(t *testing.T) {
 		one("canceled", "is_canceled"),
 	)
 	require.NoError(t, err)
-	assert.Contains(t, got, "NOT is_canceled")
+	assert.Equal(t, "EXCLUDE USING gist (room WITH =) WHERE (NOT is_canceled)", got)
 }
