@@ -205,31 +205,38 @@ func TestParseSQL_CreateTableOfIsError(t *testing.T) {
 	}
 }
 
-// A table marked -- pista:ignore is not read, so its LIKE clause is not an
-// error.
-func TestParseSQL_CreateTableLike_IgnoredTableIsNotError(t *testing.T) {
-	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
-
-	sql := "CREATE TABLE public.t (id integer);\n-- pista:ignore\nCREATE TABLE public.t2 (LIKE public.t);"
-	result, err := parseSQLNoFile(sql, "public")
-	require.NoError(t, err)
-	t2, ok := result.Tables.GetOk("public.t2")
-	require.True(t, ok)
-	assert.True(t, t2.Ignore)
-	assert.Empty(t, buf.String())
+// A table marked -- pista:ignore is not read, so its LIKE clause or OF type
+// is not an error.
+func TestParseSQL_CreateTableCopy_IgnoredTableIsNotError(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TABLE public.t (id integer);\n-- pista:ignore\nCREATE TABLE public.t2 (LIKE public.t);",
+		"CREATE TYPE public.p AS (id integer);\n-- pista:ignore\nCREATE TABLE public.t2 OF public.p;",
+	} {
+		var buf bytes.Buffer
+		restore := setWarnWriter(&buf)
+		result, err := parseSQLNoFile(sql, "public")
+		restore()
+		require.NoError(t, err, sql)
+		t2, ok := result.Tables.GetOk("public.t2")
+		require.True(t, ok, sql)
+		assert.True(t, t2.Ignore, sql)
+		assert.Empty(t, buf.String(), sql)
+	}
 }
 
 // A statement marked -- pista:execute is run as written, not read, so its
-// LIKE clause is not an error.
-func TestParseSQL_CreateTableLike_ExecuteIsNotError(t *testing.T) {
-	sql := "CREATE TABLE public.t (id integer);\n-- pista:execute\nCREATE TABLE public.t2 (LIKE public.t);"
-	result, err := parseSQLNoFile(sql, "public")
-	require.NoError(t, err)
-	ok := result.Tables.Has("public.t2")
-	assert.False(t, ok)
-	require.Len(t, result.ExecuteStmts, 1)
-	assert.Contains(t, result.ExecuteStmts[0].SQL, "LIKE public.t")
+// LIKE clause or OF type is not an error.
+func TestParseSQL_CreateTableCopy_ExecuteIsNotError(t *testing.T) {
+	for _, tc := range []struct{ sql, stmt string }{
+		{"CREATE TABLE public.t (id integer);\n-- pista:execute\nCREATE TABLE public.t2 (LIKE public.t);", "LIKE public.t"},
+		{"CREATE TYPE public.p AS (id integer);\n-- pista:execute\nCREATE TABLE public.t2 OF public.p;", "OF public.p"},
+	} {
+		result, err := parseSQLNoFile(tc.sql, "public")
+		require.NoError(t, err, tc.sql)
+		assert.False(t, result.Tables.Has("public.t2"), tc.sql)
+		require.Len(t, result.ExecuteStmts, 1, tc.sql)
+		assert.Contains(t, result.ExecuteStmts[0].SQL, tc.stmt)
+	}
 }
 
 // ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share ALTER TABLE's
