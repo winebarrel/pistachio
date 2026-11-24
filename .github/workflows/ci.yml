@@ -47,7 +47,7 @@ jobs:
     # `make keywords`.
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       # gen-keywords.sh reads kwlist.h out of the module cache, so the module
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       # A diff here means go.mod or go.sum is stale: run `go mod tidy` and
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v9.3.0
@@ -115,7 +115,7 @@ jobs:
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - name: Install GNU Make
@@ -200,7 +200,7 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
@@ -234,7 +234,7 @@ jobs:
     # a statement pistachio sends changed: run `make record-dsql`.
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - run: make test-dsql TEST_OPTS='-coverprofile=coverage.txt'
@@ -255,7 +255,7 @@ jobs:
     if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       # Each artifact holds a file named coverage.txt, so they are kept in a
@@ -349,7 +349,7 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - run: make test-dsql-proxy
@@ -381,7 +381,7 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       - run: make check-dsql-recording
@@ -418,7 +418,7 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
       # The discourse sample declares `CREATE EXTENSION vector`, the osm and
