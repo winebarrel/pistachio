@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.90.3] - 2026-11-24
 
 * `CREATE TABLE ... OF type_name` is an error in a desired file. The table used to be read with no columns, so it was created empty, or every column of an existing table was planned to be dropped.
 
@@ -965,7 +965,8 @@
 
 * Initial release.
 
-[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.2...HEAD
+[unreleased]: https://github.com/winebarrel/pistachio/compare/v1.90.3...HEAD
+[1.90.3]: https://github.com/winebarrel/pistachio/compare/v1.90.2...v1.90.3
 [1.90.2]: https://github.com/winebarrel/pistachio/compare/v1.90.1...v1.90.2
 [1.90.1]: https://github.com/winebarrel/pistachio/compare/v1.90.0...v1.90.1
 [1.90.0]: https://github.com/winebarrel/pistachio/compare/v1.89.5...v1.90.0
