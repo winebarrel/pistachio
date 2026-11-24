@@ -186,9 +186,7 @@ jobs:
       PGPORT: "5432"
     services:
       postgres:
-        # PostgreSQL 19 is not released yet, so its job runs the newest
-        # release candidate. Switch it to the plain tag once 19 is out.
-        image: postgres:${{ matrix.postgres == 19 && '19rc2' || matrix.postgres }}
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
