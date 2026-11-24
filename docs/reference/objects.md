@@ -82,7 +82,7 @@ The parser reads `CREATE TABLE` with these clauses:
 - `TABLESPACE`
 - `WITH (...)`
 
-`LIKE` is an error. List the columns instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) or a statement marked [`-- pista:execute`](directives.md#-pistaexecute) is not read, so it may use `LIKE`.
+`LIKE` and `OF type_name` are errors. List the columns instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) or a statement marked [`-- pista:execute`](directives.md#-pistaexecute) is not read, so it may use them.
 
 Of `ALTER TABLE`, the parser reads only these actions:
 

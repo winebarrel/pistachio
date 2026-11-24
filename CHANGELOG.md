@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `CREATE TABLE ... OF type_name` is an error in a desired file. The table used to be read with no columns, so it was created empty, or every column of an existing table was planned to be dropped.
+
 ## [1.90.2] - 2026-11-21
 
 * `plan` no longer reports a change on every run for a view or materialized view with a target written without an alias, such as `count(*)` or `lower(name)`, including one in a sub-select. Such a view used to be dropped and created again. A change to it is now planned as `CREATE OR REPLACE VIEW`.

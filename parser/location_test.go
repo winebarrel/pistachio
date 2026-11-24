@@ -414,6 +414,21 @@ func TestParseSQLFiles_CreateTableLikeErrorLocation(t *testing.T) {
   | ^`, err.Error())
 }
 
+// The OF error points at the CREATE TABLE it came from.
+func TestParseSQLFiles_CreateTableOfErrorLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": "CREATE TYPE public.item AS (id integer);\n\nCREATE TABLE public.copies\n    OF public.item;\n",
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `CREATE TABLE public.copies: OF is not supported (list the columns instead)
+ --> `+paths[0]+`:3:1
+  |
+3 | CREATE TABLE public.copies
+  | ^`, err.Error())
+}
+
 // A -- pista:backfill error points at the column it is written before.
 func TestParseSQLFiles_BackfillErrorLocation(t *testing.T) {
 	paths := writeSQLFiles(t, map[string]string{
