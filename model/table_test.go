@@ -189,6 +189,21 @@ func TestTable_SQL_generatedStored(t *testing.T) {
 	assert.Contains(t, sql, "GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED")
 }
 
+func TestTable_SQL_generatedVirtual(t *testing.T) {
+	tbl := newTable("public", "users")
+	def := "first_name || ' ' || last_name"
+	tbl.Columns.Set("full_name", &model.Column{
+		Name:      "full_name",
+		TypeName:  "text",
+		Generated: model.ColumnGenerated('v'),
+		Default:   &def,
+	})
+
+	sql := tbl.SQL()
+	assert.Contains(t, sql, "GENERATED ALWAYS AS (first_name || ' ' || last_name) VIRTUAL")
+	assert.NotContains(t, sql, "DEFAULT")
+}
+
 func TestTable_SQL_identityNotNull(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})

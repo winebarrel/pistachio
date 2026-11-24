@@ -8,6 +8,8 @@
 
 * A `NOT NULL` table constraint and a `VIRTUAL` generated column are errors in a desired file.
 
+* `dump` writes a `VIRTUAL` generated column on PostgreSQL 18 as `GENERATED ALWAYS AS (expr) VIRTUAL`. It used to write the expression as the column's `DEFAULT`.
+
 ## [1.90.3] - 2026-11-24
 
 * `CREATE TABLE ... OF type_name` is an error in a desired file. The table used to be read with no columns, so it was created empty, or every column of an existing table was planned to be dropped.
