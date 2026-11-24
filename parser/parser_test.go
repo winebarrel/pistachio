@@ -194,6 +194,17 @@ func TestParseSQL_CreateTableLikeIsError(t *testing.T) {
 	}
 }
 
+// OF type is not expanded either. The table would read as having no columns.
+func TestParseSQL_CreateTableOfIsError(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TYPE public.p AS (a integer, b text);\nCREATE TABLE public.t OF public.p;",
+		"CREATE TYPE public.p AS (a integer, b text);\nCREATE TABLE public.t OF public.p (PRIMARY KEY (a));",
+	} {
+		_, err := parseSQLNoFile(sql, "public")
+		require.EqualError(t, err, "CREATE TABLE public.t: OF is not supported (list the columns instead)", sql)
+	}
+}
+
 // A table marked -- pista:ignore is not read, so its LIKE clause is not an
 // error.
 func TestParseSQL_CreateTableLike_IgnoredTableIsNotError(t *testing.T) {

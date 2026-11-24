@@ -1,0 +1,7 @@
+init: |
+  CREATE TYPE public.pair AS (id integer, tenant text);
+  CREATE TABLE public.u2 OF public.pair;
+desired: |
+  CREATE TYPE public.pair AS (id integer, tenant text);
+  CREATE TABLE public.u2 OF public.pair;
+error: "CREATE TABLE public.u2: OF is not supported (list the columns instead)"

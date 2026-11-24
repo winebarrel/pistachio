@@ -161,11 +161,15 @@ func warnIgnoredStmt(sql string, loc *locator, rawStmt *pg_query.RawStmt) {
 	fmt.Fprintf(warnWriter, "pista: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
-// createTableLikeError rejects a LIKE clause, which the parser does not
-// expand. The columns it would copy would read as absent from the desired
-// schema, so a table created this way would plan a DROP COLUMN for each of
-// them, or be created with no columns.
-func createTableLikeError(cs *pg_query.CreateStmt, fqtn string, offset int32) error {
+// createTableCopyError rejects a LIKE clause and OF type, which the parser
+// does not expand. The columns they would copy would read as absent from the
+// desired schema, so a table created this way would plan a DROP COLUMN for
+// each of them, or be created with no columns.
+func createTableCopyError(cs *pg_query.CreateStmt, fqtn string, offset int32) error {
+	if cs.OfTypename != nil {
+		return &locatedError{msg: "CREATE TABLE " + fqtn + ": OF is not supported (list the columns instead)", offset: int(offset)}
+	}
+
 	for _, elt := range cs.TableElts {
 		if elt.GetTableLikeClause() != nil {
 			return &locatedError{msg: "CREATE TABLE " + fqtn + ": LIKE is not supported (list the columns instead)", offset: int(offset)}
@@ -666,7 +670,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 
 			table.Ignore = ignore
 			if !table.Ignore {
-				if err := createTableLikeError(node.GetCreateStmt(), table.FQTN(), stmtOffset); err != nil {
+				if err := createTableCopyError(node.GetCreateStmt(), table.FQTN(), stmtOffset); err != nil {
 					return nil, err
 				}
 			}
