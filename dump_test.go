@@ -806,6 +806,33 @@ func TestDump(t *testing.T) {
 	}
 }
 
+// A virtual generated column is dumped as one. It is not a fixture because
+// the parser refuses VIRTUAL (PG18.md), so the dump does not plan clean yet.
+func TestDump_VirtualGeneratedColumn(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	if testutil.ServerMajorVersion(t, ctx, conn) < 18 {
+		t.Skip("requires PostgreSQL 18 or later")
+	}
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.products (
+    price integer NOT NULL,
+    quantity integer NOT NULL,
+    total integer GENERATED ALWAYS AS (price * quantity) VIRTUAL
+);`)
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "total integer GENERATED ALWAYS AS ((price * quantity)) VIRTUAL")
+}
+
 // --split writes one file per routine. Two overloads share a schema-qualified
 // name, so the second one takes the same _2 suffix any other collision does.
 func TestDumpResult_Files_Routines(t *testing.T) {
