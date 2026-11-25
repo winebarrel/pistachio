@@ -47,7 +47,7 @@ func TestFigureColname(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.expr, func(t *testing.T) {
-			result, err := pg_query.Parse("SELECT " + tc.expr)
+			result, err := pg_query.Parse("SELECT "+tc.expr, pg_query.ParseDefault)
 			require.NoError(t, err)
 			target := result.Stmts[0].Stmt.GetSelectStmt().TargetList[0].GetResTarget()
 			assert.Equal(t, tc.want, parser.FigureColname(target.Val))

@@ -11,7 +11,7 @@ import (
 
 func parseStmt(t *testing.T, sql string) *pg_query.Node {
 	t.Helper()
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	return result.Stmts[0].Stmt

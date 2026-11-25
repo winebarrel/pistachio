@@ -278,7 +278,7 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 	// pg_get_viewdef returns a standalone SELECT, so it can be parsed as-is.
 	def := strings.TrimSpace(definition)
 	def = strings.TrimSuffix(def, ";")
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		// Fallback: try substring matching if parsing fails
 		return extractViewDepsFallback(definition, defaultSchema, defined)
@@ -475,7 +475,7 @@ func addRoutineDeps(
 // extractBodyDeps returns what a SQL-standard routine body names: the tables
 // and views in defined it reads, and the routines in routines it calls.
 func extractBodyDeps(body, defaultSchema string, defined, routines map[string]bool) []string {
-	result, err := pg_query.Parse("CREATE FUNCTION _f() " + body)
+	result, err := pg_query.Parse("CREATE FUNCTION _f() "+body, pg_query.ParseDefault)
 	if err != nil {
 		return nil
 	}
@@ -507,7 +507,7 @@ func extractCallDeps(definition, defaultSchema string, routines map[string]bool)
 	}
 
 	def := strings.TrimSuffix(strings.TrimSpace(definition), ";")
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return nil
 	}

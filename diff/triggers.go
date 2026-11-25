@@ -235,7 +235,7 @@ func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
 // parseCreateTrigStmt parses a definition that must hold a single CREATE
 // TRIGGER statement.
 func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -2059,7 +2059,7 @@ func dropIndexSQL(schema, name string, concurrently bool) (string, error) {
 		return base + ";", nil
 	}
 
-	result, err := pg_query.Parse(base)
+	result, err := pg_query.Parse(base, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse drop index statement: %w", err)
 	}
@@ -2086,7 +2086,7 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 		return def + ";", nil
 	}
 
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -2311,7 +2311,7 @@ func diffComments(current, desired *model.Table) []string {
 // (e.g. canonicalise sort/nulls, normalize sub-expressions) before
 // re-deparsing the result.
 func parseIndexDef(def string) (*pg_query.ParseResult, *pg_query.IndexStmt, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2554,7 +2554,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.
 func parseFKDef(def string) (*pg_query.Constraint, error) {
 	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil {
 		return nil, err
 	}

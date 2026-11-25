@@ -541,7 +541,7 @@ func replaceTokens(text string, offset int, toks []*token, sel []int) string {
 }
 
 func deparse(text string) (string, bool) {
-	tree, err := pg_query.Parse(text)
+	tree, err := pg_query.Parse(text, pg_query.ParseDefault)
 	if err != nil {
 		return "", false
 	}

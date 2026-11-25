@@ -48,7 +48,7 @@ func millis(d UnsignedDuration) string {
 // invalid index behind, so running it again fails on that index. Text the
 // parser cannot read is not known to be safe, so it is not retried either.
 func retryable(stmt string) bool {
-	result, err := pg_query.Parse(stmt)
+	result, err := pg_query.Parse(stmt, pg_query.ParseDefault)
 	if err != nil {
 		return false
 	}

@@ -1354,7 +1354,7 @@ func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 func extractObjectName(sql string) string {
 	// A statement PostgreSQL cannot read has no place in the order. These
 	// are pistachio's own statements, so the run fails on it anyway.
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil || len(result.GetStmts()) == 0 {
 		return ""
 	}

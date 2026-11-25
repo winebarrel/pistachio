@@ -89,7 +89,7 @@ func (r *defReplacer) ReplaceExpr(s string) string {
 // starts, as found by parsing prefix and s together, or nil when they do not
 // parse.
 func columnQualifiers(prefix, s string) map[int]bool {
-	result, err := pg_query.Parse(prefix + s)
+	result, err := pg_query.Parse(prefix+s, pg_query.ParseDefault)
 	if err != nil {
 		return nil
 	}

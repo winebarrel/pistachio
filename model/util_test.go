@@ -309,7 +309,7 @@ func assertParsesIn(t *testing.T, positions []string, ident string) {
 	t.Helper()
 	for _, tmpl := range positions {
 		sql := fmt.Sprintf(tmpl, ident)
-		if _, err := pg_query.Parse(sql); err != nil {
+		if _, err := pg_query.Parse(sql, pg_query.ParseDefault); err != nil {
 			t.Errorf("%s: %v", sql, err)
 		}
 	}

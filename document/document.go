@@ -250,7 +250,7 @@ func newIndexes(indexes *orderedmap.Map[string, *model.Index], fqtn string, auto
 func newIndex(idx *model.Index) *Index {
 	index := &Index{Index: idx, Columns: []*string{}, Keys: []string{}, Include: []string{}}
 
-	result, err := pg_query.Parse(idx.Definition)
+	result, err := pg_query.Parse(idx.Definition, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return index
 	}
@@ -332,7 +332,7 @@ func newForeignKey(fk *model.ForeignKey) *ForeignKey {
 
 	// The definition is only the constraint clause, so parse it inside an
 	// ALTER TABLE.
-	result, err := pg_query.Parse("ALTER TABLE t ADD CONSTRAINT c " + fk.Definition)
+	result, err := pg_query.Parse("ALTER TABLE t ADD CONSTRAINT c "+fk.Definition, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return key
 	}

@@ -54,7 +54,7 @@ func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) {
 		}
 
 		for idx := range t.Indexes.Values() {
-			result, err := pg_query.Parse(idx.Definition)
+			result, err := pg_query.Parse(idx.Definition, pg_query.ParseDefault)
 			if err != nil {
 				continue
 			}
@@ -87,7 +87,7 @@ func Split(stmts []string) []string {
 	var out []string
 
 	for _, stmt := range stmts {
-		result, err := pg_query.Parse(stmt)
+		result, err := pg_query.Parse(stmt, pg_query.ParseDefault)
 		if err != nil {
 			out = append(out, stmt)
 			continue
@@ -236,7 +236,7 @@ func Finish(stmts []string) ([]string, error) {
 	out := make([]string, 0, len(stmts))
 
 	for _, stmt := range stmts {
-		result, err := pg_query.Parse(stmt)
+		result, err := pg_query.Parse(stmt, pg_query.ParseDefault)
 		if err != nil {
 			return nil, fmt.Errorf("dsql: failed to parse %q: %w", stmt, err)
 		}
@@ -344,7 +344,7 @@ func addAsync(def string) string {
 // clause sits and nowhere else, so the layout stays as it was. SQL that does
 // not parse is returned as it is.
 func AddIdentityCache(sql string) string {
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil {
 		return sql
 	}
@@ -428,7 +428,7 @@ func UnwaitedUniqueIndex(stmts []string) (string, bool) {
 	built := map[string]bool{}
 
 	for _, stmt := range stmts {
-		result, err := pg_query.Parse(strings.Replace(stmt, " INDEX ASYNC ", " INDEX ", 1))
+		result, err := pg_query.Parse(strings.Replace(stmt, " INDEX ASYNC ", " INDEX ", 1), pg_query.ParseDefault)
 		if err != nil {
 			continue
 		}

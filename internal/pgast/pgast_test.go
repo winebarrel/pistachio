@@ -278,7 +278,7 @@ func TestParseExpr_NoTarget(t *testing.T) {
 func TestDeparseConstraintDef_NotAConstraintResult(t *testing.T) {
 	// A ParseResult that did not come from ParseConstraintDefStrict deparses
 	// without the wrapper prefix and is rejected.
-	result, err := pg_query.Parse("SELECT 1")
+	result, err := pg_query.Parse("SELECT 1", pg_query.ParseDefault)
 	require.NoError(t, err)
 	_, err = pgast.DeparseConstraintDef(result)
 	require.Error(t, err)
@@ -288,7 +288,7 @@ func TestDeparseConstraintDef_NotAConstraintResult(t *testing.T) {
 func TestParseTreeVersion(t *testing.T) {
 	stmt := parseStmt(t, "SELECT 1")
 
-	result, err := pg_query.Parse("SELECT 1")
+	result, err := pg_query.Parse("SELECT 1", pg_query.ParseDefault)
 	require.NoError(t, err)
 	assert.Equal(t, result.Version, pgast.ParseTreeVersion)
 

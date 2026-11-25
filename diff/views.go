@@ -46,8 +46,8 @@ func equalViewDef(current, desired string) bool {
 	if current == desired {
 		return true
 	}
-	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS " + current)
-	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS " + desired)
+	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS "+current, pg_query.ParseDefault)
+	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS "+desired, pg_query.ParseDefault)
 	if errCur != nil || errDes != nil {
 		return false
 	}
@@ -115,7 +115,7 @@ func canCreateOrReplaceView(current, desired string, desiredNames []string) bool
 func viewOutputColumns(definition string, name targetNamer) (cols []string, ok bool) {
 	def := strings.TrimSpace(definition)
 	def = strings.TrimSuffix(def, ";")
-	result, err := pg_query.Parse("CREATE VIEW _v AS " + def)
+	result, err := pg_query.Parse("CREATE VIEW _v AS "+def, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return nil, false
 	}

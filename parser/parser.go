@@ -220,7 +220,7 @@ func applyBackfill(cs *pg_query.CreateStmt, table *model.Table, backfill map[str
 // another clause, would change that statement. It reports false when the
 // argument is not one expression alone.
 func parseDirectiveExpr(value string) (string, bool) {
-	result, err := pg_query.Parse("SELECT " + value)
+	result, err := pg_query.Parse("SELECT "+value, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return "", false
 	}
@@ -461,7 +461,7 @@ func unterminatedEnd(sql string) int {
 		case pg_query.Token_ASCII_59:
 			return -1
 		default:
-			if _, err := pg_query.Parse(sql); err != nil {
+			if _, err := pg_query.Parse(sql, pg_query.ParseDefault); err != nil {
 				return -1
 			}
 			return int(tok.End)
@@ -2914,7 +2914,7 @@ func primaryKeyColumns(t *model.Table) []string {
 		if !ok {
 			return nil
 		}
-		result, err := pg_query.Parse(idx.Definition)
+		result, err := pg_query.Parse(idx.Definition, pg_query.ParseDefault)
 		if err != nil {
 			return nil
 		}
@@ -3154,7 +3154,7 @@ func parenthesizeDefault(def string) string {
 	}
 
 	v := def
-	tree, err := pg_query.Parse("CREATE TABLE t (c int DEFAULT " + def + ")")
+	tree, err := pg_query.Parse("CREATE TABLE t (c int DEFAULT "+def+")", pg_query.ParseDefault)
 	if err != nil || tree.Stmts[0].Stmt.GetCreateStmt().TableElts[0].GetColumnDef().CollClause != nil {
 		v = "(" + def + ")"
 	}

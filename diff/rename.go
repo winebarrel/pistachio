@@ -177,7 +177,7 @@ func renameIndexesRelation(indexes *orderedmap.Map[string, *model.Index], newNam
 // updateIndexTableName parses an index definition, updates the table name,
 // and deparses it back to canonical SQL.
 func updateIndexTableName(def string, newTableName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -201,7 +201,7 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], newName string) (*orderedmap.Map[string, *model.Trigger], error) {
 	out := orderedmap.New[string, *model.Trigger]()
 	for name, trg := range triggers.All() {
-		result, err := pg_query.Parse(trg.Definition)
+		result, err := pg_query.Parse(trg.Definition, pg_query.ParseDefault)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse trigger definition: %w", err)
 		}
@@ -425,7 +425,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 // updateIndexName parses an index definition, updates the index name, and deparses.
 func updateIndexName(def string, newName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}

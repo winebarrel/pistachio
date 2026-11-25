@@ -147,7 +147,7 @@ func constraintKindLabel(ct model.ConstraintType) string {
 // Returns nil on parse errors so validation degrades to a no-op for
 // unparsable definitions.
 func collectColumnRefsInIndexDef(def string) []string {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) == 0 {
 		return nil
 	}

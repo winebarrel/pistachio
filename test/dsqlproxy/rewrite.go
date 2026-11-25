@@ -101,7 +101,7 @@ func (s *session) rewriteStmt(stmt string, implicitTx bool) (string, string) {
 		return runJob("VALIDATE_CONSTRAINT", body), "ALTER TABLE"
 	}
 
-	result, err := pg_query.Parse(stmt)
+	result, err := pg_query.Parse(stmt, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		// The backend reports the error.
 		return stmt, ""
@@ -149,7 +149,7 @@ func (s *session) txEnded() {
 }
 
 func asyncIndexRefusal(body string) string {
-	result, err := pg_query.Parse(body)
+	result, err := pg_query.Parse(body, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return ""
 	}
@@ -167,7 +167,7 @@ func asyncIndexRefusal(body string) string {
 }
 
 func isValidate(body string) bool {
-	result, err := pg_query.Parse(body)
+	result, err := pg_query.Parse(body, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return false
 	}

@@ -15,7 +15,7 @@ import (
 // A ParseResult built by hand sets it, so that it carries the Version a
 // parsed one does. An empty string always parses.
 var ParseTreeVersion = func() int32 {
-	result, _ := pg_query.Parse("")
+	result, _ := pg_query.Parse("", pg_query.ParseDefault)
 	return result.GetVersion()
 }()
 
@@ -24,7 +24,7 @@ var ParseTreeVersion = func() int32 {
 // blank lines and comments before a statement are part of it. The directives
 // are read from there. pg_query starts a statement at its first token.
 func Parse(sql string) (*pg_query.ParseResult, error) {
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func ParseConstraintDef(def string) *pg_query.Constraint {
 // full ParseResult and a typed error, so callers that need to mutate the
 // AST and deparse it back can distinguish failure modes.
 func ParseConstraintDefStrict(def string) (*pg_query.ParseResult, *pg_query.Constraint, error) {
-	result, err := pg_query.Parse(constraintWrapPrefix + def)
+	result, err := pg_query.Parse(constraintWrapPrefix+def, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse constraint definition: %w", err)
 	}
@@ -140,7 +140,7 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 // that cannot occur. The trailing error covers a parse that produced no target
 // at all.
 func ParseExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
-	result, err := pg_query.Parse("SELECT " + expr)
+	result, err := pg_query.Parse("SELECT "+expr, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, err
 	}
