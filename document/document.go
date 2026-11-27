@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
@@ -94,9 +94,8 @@ type ForeignKey struct {
 // An unqualified domain name is looked up in schemas and then in public, the
 // search path that plan, apply and dump set.
 //
-// A definition that pg_query cannot read, such as a PostgreSQL 18 foreign key
-// with NOT ENFORCED, leaves the added fields of that index or key empty rather
-// than failing the document.
+// A definition that pg_query cannot read leaves the added fields of that index
+// or key empty rather than failing the document.
 func New(r *parser.ParseResult, schemas []string) *Document {
 	if !slices.Contains(schemas, "public") {
 		schemas = append(slices.Clip(schemas), "public")
@@ -251,7 +250,7 @@ func newIndexes(indexes *orderedmap.Map[string, *model.Index], fqtn string, auto
 func newIndex(idx *model.Index) *Index {
 	index := &Index{Index: idx, Columns: []*string{}, Keys: []string{}, Include: []string{}}
 
-	result, err := pg_query.Parse(idx.Definition)
+	result, err := pg_query.Parse(idx.Definition, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return index
 	}
@@ -333,7 +332,7 @@ func newForeignKey(fk *model.ForeignKey) *ForeignKey {
 
 	// The definition is only the constraint clause, so parse it inside an
 	// ALTER TABLE.
-	result, err := pg_query.Parse("ALTER TABLE t ADD CONSTRAINT c " + fk.Definition)
+	result, err := pg_query.Parse("ALTER TABLE t ADD CONSTRAINT c "+fk.Definition, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return key
 	}

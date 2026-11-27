@@ -3,7 +3,7 @@ package parser_test
 import (
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/parser"
@@ -47,7 +47,7 @@ func TestFigureColname(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.expr, func(t *testing.T) {
-			result, err := pg_query.Parse("SELECT " + tc.expr)
+			result, err := pg_query.Parse("SELECT "+tc.expr, pg_query.ParseDefault)
 			require.NoError(t, err)
 			target := result.Stmts[0].Stmt.GetSelectStmt().TargetList[0].GetResTarget()
 			assert.Equal(t, tc.want, parser.FigureColname(target.Val))

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
@@ -47,7 +47,7 @@ const (
 // this, so both sides of the diff go through one code path and render through
 // one model.Routine.SQL.
 func ParseRoutineDef(sql, defaultSchema string) (*model.Routine, error) {
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse routine definition: %w", err)
 	}

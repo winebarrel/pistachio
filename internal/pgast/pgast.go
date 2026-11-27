@@ -8,16 +8,42 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 )
 
 // ParseTreeVersion is the parse tree version the bundled libpg_query writes.
-// Deparse rejects a ParseResult with any other Version, so a ParseResult
-// built by hand must set it. An empty string always parses.
+// A ParseResult built by hand sets it, so that it carries the Version a
+// parsed one does. An empty string always parses.
 var ParseTreeVersion = func() int32 {
-	result, _ := pg_query.Parse("")
+	result, _ := pg_query.Parse("", pg_query.ParseDefault)
 	return result.GetVersion()
 }()
+
+// Parse parses sql like pg_query.Parse, but each statement's StmtLocation
+// starts right after the semicolon that ends the statement before it, so the
+// blank lines and comments before a statement are part of it. The directives
+// are read from there. pg_query starts a statement at its first token.
+func Parse(sql string) (*pg_query.ParseResult, error) {
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
+	if err != nil {
+		return nil, err
+	}
+
+	var start int32
+	for _, stmt := range result.Stmts {
+		end := stmt.StmtLocation + stmt.StmtLen
+		stmt.StmtLocation = start
+		// A StmtLen of 0 is a final statement with no semicolon, which runs
+		// to the end of the input.
+		if stmt.StmtLen != 0 {
+			stmt.StmtLen = end - start
+		}
+		// StmtLen stops before the semicolon.
+		start = end + 1
+	}
+
+	return result, nil
+}
 
 // constraintWrapPrefix is the wrapper used to parse a constraint definition
 // fragment (e.g. "PRIMARY KEY (id)") as part of a full statement so that
@@ -39,7 +65,7 @@ func ParseConstraintDef(def string) *pg_query.Constraint {
 // full ParseResult and a typed error, so callers that need to mutate the
 // AST and deparse it back can distinguish failure modes.
 func ParseConstraintDefStrict(def string) (*pg_query.ParseResult, *pg_query.Constraint, error) {
-	result, err := pg_query.Parse(constraintWrapPrefix + def)
+	result, err := pg_query.Parse(constraintWrapPrefix+def, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse constraint definition: %w", err)
 	}
@@ -114,7 +140,7 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 // that cannot occur. The trailing error covers a parse that produced no target
 // at all.
 func ParseExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
-	result, err := pg_query.Parse("SELECT " + expr)
+	result, err := pg_query.Parse("SELECT "+expr, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, err
 	}

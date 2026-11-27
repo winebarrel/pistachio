@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
@@ -177,7 +177,7 @@ func renameIndexesRelation(indexes *orderedmap.Map[string, *model.Index], newNam
 // updateIndexTableName parses an index definition, updates the table name,
 // and deparses it back to canonical SQL.
 func updateIndexTableName(def string, newTableName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -201,7 +201,7 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], newName string) (*orderedmap.Map[string, *model.Trigger], error) {
 	out := orderedmap.New[string, *model.Trigger]()
 	for name, trg := range triggers.All() {
-		result, err := pg_query.Parse(trg.Definition)
+		result, err := pg_query.Parse(trg.Definition, pg_query.ParseDefault)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse trigger definition: %w", err)
 		}
@@ -425,7 +425,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 // updateIndexName parses an index definition, updates the index name, and deparses.
 func updateIndexName(def string, newName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -802,9 +802,9 @@ func rewriteColumnsInExprPtr(expr *string, renames map[string]string) *string {
 // generated expression cannot be altered in place. A plain DEFAULT is left
 // alone: it cannot reference a column, so a rename never reaches it.
 //
-// STORED is the only kind the desired side reaches today, since pg_query does
-// not parse PostgreSQL 18's VIRTUAL yet. The test is on the column being
-// generated at all, so a virtual one needs nothing here once it does.
+// STORED is the only kind the desired side reaches today, since the parser
+// rejects PostgreSQL 18's VIRTUAL. The test is on the column being generated
+// at all, so a virtual one needs nothing here once it is read.
 func rewriteColumnRefsInGenerated(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
 	return cols.TransformMap(func(name string, col *model.Column) (string, *model.Column) {
 		clone := *col

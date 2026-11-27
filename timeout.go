@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 )
 
 // sqlstateLockNotAvailable is the SQLSTATE of a statement that waited for a
@@ -48,7 +48,7 @@ func millis(d UnsignedDuration) string {
 // invalid index behind, so running it again fails on that index. Text the
 // parser cannot read is not known to be safe, so it is not retried either.
 func retryable(stmt string) bool {
-	result, err := pg_query.Parse(stmt)
+	result, err := pg_query.Parse(stmt, pg_query.ParseDefault)
 	if err != nil {
 		return false
 	}

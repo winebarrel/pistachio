@@ -5,7 +5,7 @@ import (
 	"maps"
 	"slices"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -235,7 +235,7 @@ func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
 // parseCreateTrigStmt parses a definition that must hold a single CREATE
 // TRIGGER statement.
 func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pg_query.Parse(def, pg_query.ParseDefault)
 	if err != nil {
 		return nil, nil, err
 	}

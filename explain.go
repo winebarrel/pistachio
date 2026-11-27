@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/internal/pgast"
@@ -396,7 +396,7 @@ func (ex *explainer) annotate(stmts []string, effects []explainEffect, explain b
 // parse as exactly one statement is left unexplained rather than reported:
 // the plan is what matters, and the comment is an aid to reading it.
 func parseOneStmt(sql string) *pg_query.Node {
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil || len(result.Stmts) != 1 {
 		return nil
 	}

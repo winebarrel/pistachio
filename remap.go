@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
@@ -89,7 +89,7 @@ func (r *defReplacer) ReplaceExpr(s string) string {
 // starts, as found by parsing prefix and s together, or nil when they do not
 // parse.
 func columnQualifiers(prefix, s string) map[int]bool {
-	result, err := pg_query.Parse(prefix + s)
+	result, err := pg_query.Parse(prefix+s, pg_query.ParseDefault)
 	if err != nil {
 		return nil
 	}

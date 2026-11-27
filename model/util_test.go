@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -250,7 +250,7 @@ func TestIdent_allKeywords(t *testing.T) {
 	keywords := loadKeywords(t)
 	// Pinned so that a pg_query_go upgrade adding keywords fails here instead
 	// of silently leaving them untested.
-	require.Len(t, keywords, 491, "keyword corpus is stale; run make keywords")
+	require.Len(t, keywords, 494, "keyword corpus is stale; run make keywords")
 
 	seen := map[pg_query.KeywordKind]int{}
 
@@ -309,7 +309,7 @@ func assertParsesIn(t *testing.T, positions []string, ident string) {
 	t.Helper()
 	for _, tmpl := range positions {
 		sql := fmt.Sprintf(tmpl, ident)
-		if _, err := pg_query.Parse(sql); err != nil {
+		if _, err := pg_query.Parse(sql, pg_query.ParseDefault); err != nil {
 			t.Errorf("%s: %v", sql, err)
 		}
 	}

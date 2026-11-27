@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v18"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"
@@ -1354,7 +1354,7 @@ func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 func extractObjectName(sql string) string {
 	// A statement PostgreSQL cannot read has no place in the order. These
 	// are pistachio's own statements, so the run fails on it anyway.
-	result, err := pg_query.Parse(sql)
+	result, err := pg_query.Parse(sql, pg_query.ParseDefault)
 	if err != nil || len(result.GetStmts()) == 0 {
 		return ""
 	}

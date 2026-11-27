@@ -256,8 +256,9 @@ func TestRun_Version(t *testing.T) {
 	assert.Equal(t, 0, code)
 	assert.Empty(t, stderr)
 	// version is set by the linker and empty under go test. The pg_query_go
-	// version comes from the build info, which go test fills in too.
-	assert.Regexp(t, `\A\npg_query_go v\d+\.\d+\.\d+\n\z`, out.String())
+	// version comes from the build info, which go test fills in too. It may
+	// be a pseudo-version, such as v18.0.0-20261001001140-51b79d2d7669.
+	assert.Regexp(t, `\A\npg_query_go v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?\n\z`, out.String())
 }
 
 func TestRun_ParseError(t *testing.T) {
